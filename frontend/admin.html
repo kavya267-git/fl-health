@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FL-Health | Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+            padding: 30px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* HEADER */
+        .header {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 28px 32px;
+            box-shadow: 0 10px 40px rgba(2, 132, 199, 0.12);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            box-shadow: 0 6px 18px rgba(2, 132, 199, 0.3);
+        }
+
+        .header-info h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0c4a6e;
+        }
+
+        .header-info p {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .btn-logout {
+            padding: 10px 20px;
+            background: #f8fafc;
+            color: #dc2626;
+            font-size: 14px;
+            font-weight: 600;
+            border: 2px solid #fecaca;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-logout:hover {
+            background: #fef2f2;
+            border-color: #dc2626;
+        }
+
+        /* STATS ROW */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 22px;
+            box-shadow: 0 4px 20px rgba(2, 132, 199, 0.08);
+            border-left: 4px solid #0284c7;
+        }
+
+        .stat-card.pending { border-left-color: #f59e0b; }
+        .stat-card.approved { border-left-color: #10b981; }
+        .stat-card.total { border-left-color: #6366f1; }
+
+        .stat-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0c4a6e;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        /* TABS */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: #ffffff;
+            padding: 6px;
+            border-radius: 14px;
+            box-shadow: 0 4px 20px rgba(2, 132, 199, 0.08);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 14px 20px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            user-select: none;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+        }
+
+        /* HOSPITAL CARDS */
+        .hospital-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        .hospital-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(2, 132, 199, 0.08);
+            transition: all 0.25s ease;
+            border: 2px solid transparent;
+        }
+
+        .hospital-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(2, 132, 199, 0.15);
+        }
+
+        .hospital-card.pending { border-color: #fef3c7; }
+        .hospital-card.approved { border-color: #bbf7d0; }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .card-header h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #0c4a6e;
+            line-height: 1.3;
+        }
+
+        .status-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 5px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .status-badge.pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-badge.approved {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .status-badge.expired {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .info-row .label { color: #64748b; }
+        .info-row .value { color: #0f172a; font-weight: 500; }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 11px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .btn-approve {
+            background: linear-gradient(135deg, #10b981, #34d399);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-approve:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-view {
+            background: #f0f9ff;
+            color: #0284c7;
+            border: 2px solid #bae6fd;
+        }
+
+        .btn-view:hover {
+            background: #e0f2fe;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Empty state */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(2, 132, 199, 0.08);
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            color: #0c4a6e;
+            margin-bottom: 6px;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        /* Loading spinner */
+        .loader {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .loader .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e0f2fe;
+            border-top-color: #0284c7;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(12, 74, 110, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: #ffffff;
+            border-radius: 20px;
+            max-width: 480px;
+            width: 100%;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            animation: fadeInUp 0.3s ease;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal h2 {
+            font-size: 20px;
+            color: #0c4a6e;
+            margin-bottom: 8px;
+        }
+
+        .modal p {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .modal-details {
+            background: #f0f9ff;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .modal-details .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+        }
+
+        .modal-details .label { color: #64748b; }
+        .modal-details .value { color: #0f172a; font-weight: 600; }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-cancel {
+            flex: 1;
+            padding: 12px;
+            background: #f8fafc;
+            color: #64748b;
+            font-weight: 600;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-confirm {
+            flex: 1;
+            padding: 12px;
+            background: linear-gradient(135deg, #10b981, #34d399);
+            color: #ffffff;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #ffffff;
+            color: #0c4a6e;
+            padding: 16px 22px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(2, 132, 199, 0.2);
+            border-left: 4px solid #10b981;
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+            z-index: 200;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.error { border-left-color: #dc2626; }
+        .toast.show { display: block; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @media (max-width: 900px) {
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 600px) {
+            .header { flex-direction: column; gap: 16px; text-align: center; }
+            .stats { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo-icon">🔐</div>
+                <div class="header-info">
+                    <h1>Admin Dashboard</h1>
+                    <p>Verify hospitals and issue credentials</p>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+
+        <!-- STATS -->
+        <div class="stats">
+            <div class="stat-card pending">
+                <div class="stat-icon">⏳</div>
+                <div class="stat-value" id="statPending">0</div>
+                <div class="stat-label">Pending Approval</div>
+            </div>
+            <div class="stat-card approved">
+                <div class="stat-icon">✅</div>
+                <div class="stat-value" id="statApproved">0</div>
+                <div class="stat-label">Approved</div>
+            </div>
+            <div class="stat-card total">
+                <div class="stat-icon">🏥</div>
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">Total Hospitals</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🔐</div>
+                <div class="stat-value" id="statCreds">0</div>
+                <div class="stat-label">Credentials Issued</div>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('pending')">⏳ Pending Approval</div>
+            <div class="tab" onclick="switchTab('approved')">✅ Approved Hospitals</div>
+        </div>
+
+        <!-- HOSPITAL GRID -->
+        <div class="hospital-grid" id="hospitalGrid">
+            <div class="loader">
+                <div class="spinner"></div>
+                <p style="color: #64748b;">Loading hospitals...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <h2>Approve Hospital?</h2>
+            <p>This will instantly issue a Verifiable Credential allowing the hospital to participate in federated training.</p>
+            <div class="modal-details" id="modalDetails"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-confirm" id="confirmBtn" onclick="confirmApprove()">Approve & Issue Credential</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ============================================================
+        // CONFIG
+        // ============================================================
+        const SUPABASE_URL = "https://mncraewhqjlpuppymeyge.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uY3JhZXdocWpsdXBweW1leWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxMzUxNzEsImV4cCI6MjEwNDcxMTE3MX0.tabnSqV-LiXbcbiUMhNQFGhoxd2lkV0vhs_Vol0drPA";
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const API_URL = "http://localhost:8000";
+
+        let currentToken = null;
+        let currentTab = "pending";
+        let allHospitals = [];
+        let selectedHospitalId = null;
+
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
+        async function init() {
+            const token = localStorage.getItem("fl_token") || sessionStorage.getItem("fl_token");
+            const role = localStorage.getItem("fl_role") || sessionStorage.getItem("fl_role");
+
+            if (!token || role !== "admin") {
+                window.location.href = "login.html";
+                return;
+            }
+            currentToken = token;
+
+            await loadHospitals();
+            setInterval(loadHospitals, 15000); // Auto refresh every 15s
+        }
+
+        // ============================================================
+        // LOAD HOSPITALS
+        // ============================================================
+        async function loadHospitals() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/all-hospitals`, {
+                    headers: { "Authorization": `Bearer ${currentToken}` }
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+
+                const data = await res.json();
+                allHospitals = data.hospitals || [];
+                updateStats();
+                renderHospitals();
+            } catch (err) {
+                console.error("Failed to load hospitals:", err);
+                showToast("Failed to load hospitals", "error");
+            }
+        }
+
+        // ============================================================
+        // UPDATE STATS
+        // ============================================================
+        function updateStats() {
+            const pending = allHospitals.filter(h => !h.government_approved).length;
+            const approved = allHospitals.filter(h => h.government_approved).length;
+
+            document.getElementById("statPending").textContent = pending;
+            document.getElementById("statApproved").textContent = approved;
+            document.getElementById("statTotal").textContent = allHospitals.length;
+            document.getElementById("statCreds").textContent = approved;
+        }
+
+        // ============================================================
+        // SWITCH TAB
+        // ============================================================
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll(".tab").forEach((t, i) => {
+                t.classList.toggle("active", (tab === "pending" && i === 0) || (tab === "approved" && i === 1));
+            });
+            renderHospitals();
+        }
+
+        // ============================================================
+        // RENDER HOSPITALS
+        // ============================================================
+        function renderHospitals() {
+            const grid = document.getElementById("hospitalGrid");
+            const filtered = allHospitals.filter(h =>
+                currentTab === "pending" ? !h.government_approved : h.government_approved
+            );
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">${currentTab === "pending" ? "🎉" : "🏥"}</div>
+                        <h3>${currentTab === "pending" ? "No pending hospitals" : "No approved hospitals yet"}</h3>
+                        <p>${currentTab === "pending" ? "All caught up! New registrations will appear here." : "Approved hospitals will show up here."}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(h => {
+                const isApproved = h.government_approved;
+                const credExpiry = h.credential_expires_at
+                    ? new Date(h.credential_expires_at).toLocaleDateString()
+                    : "N/A";
+
+                const cardClass = isApproved ? "approved" : "pending";
+                const badgeClass = isApproved ? "approved" : "pending";
+                const badgeText = isApproved ? "✓ Approved" : "⏳ Pending";
+
+                return `
+                    <div class="hospital-card ${cardClass}">
+                        <div class="card-header">
+                            <h3>🏥 ${escapeHtml(h.hospital_name)}</h3>
+                            <span class="status-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="info-row">
+                                <span class="label">Hospital ID</span>
+                                <span class="value">${h.hospital_id || "N/A"}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">License</span>
+                                <span class="value">${escapeHtml(h.license_number || "N/A")}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Email</span>
+                                <span class="value">${escapeHtml(h.email || "N/A")}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Registered</span>
+                                <span class="value">${new Date(h.created_at).toLocaleDateString()}</span>
+                            </div>
+                            ${isApproved ? `
+                            <div class="info-row">
+                                <span class="label">Credential Expiry</span>
+                                <span class="value">${credExpiry}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Patients</span>
+                                <span class="value">${h.total_patients || 0}</span>
+                            </div>
+                            ` : ""}
+                        </div>
+                        <div class="card-actions">
+                            ${!isApproved ? `
+                                <button class="btn btn-approve" onclick="promptApprove('${h.id}', '${escapeHtml(h.hospital_name)}', '${escapeHtml(h.license_number || "N/A")}')">
+                                    ✅ Verify & Issue Credential
+                                </button>
+                            ` : `
+                                <button class="btn btn-view" onclick="viewHospital('${h.id}')">
+                                    👁️ View Details
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        // ============================================================
+        // APPROVE FLOW
+        // ============================================================
+        function promptApprove(hospitalId, hospitalName, license) {
+            selectedHospitalId = hospitalId;
+            document.getElementById("modalDetails").innerHTML = `
+                <div class="row"><span class="label">Hospital</span><span class="value">${hospitalName}</span></div>
+                <div class="row"><span class="label">License</span><span class="value">${license}</span></div>
+                <div class="row"><span class="label">Action</span><span class="value">Issue Verifiable Credential</span></div>
+                <div class="row"><span class="label">Validity</span><span class="value">1 Year</span></div>
+            `;
+            document.getElementById("modalOverlay").classList.add("show");
+        }
+
+        function closeModal() {
+            document.getElementById("modalOverlay").classList.remove("show");
+            selectedHospitalId = null;
+        }
+
+        async function confirmApprove() {
+            if (!selectedHospitalId) return;
+
+            const btn = document.getElementById("confirmBtn");
+            btn.disabled = true;
+            btn.textContent = "Issuing...";
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/approve-hospital/${selectedHospitalId}`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${currentToken}` }
+                });
+
+                const result = await res.json();
+
+                if (!res.ok) throw new Error(result.detail || "Approval failed");
+
+                showToast("✅ Credential issued successfully!", "success");
+                closeModal();
+                await loadHospitals();
+            } catch (err) {
+                showToast(err.message || "Failed to approve", "error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Approve & Issue Credential";
+            }
+        }
+
+        // ============================================================
+        // VIEW HOSPITAL DETAILS
+        // ============================================================
+        function viewHospital(hospitalId) {
+            const h = allHospitals.find(x => x.id === hospitalId);
+            if (!h) return;
+
+            alert(
+                `🏥 ${h.hospital_name}\n\n` +
+                `Hospital ID: ${h.hospital_id}\n` +
+                `License: ${h.license_number}\n` +
+                `Email: ${h.email}\n` +
+                `Patients: ${h.total_patients || 0}\n` +
+                `Accuracy: ${((h.local_accuracy || 0) * 100).toFixed(1)}%\n` +
+                `Privacy Score: ${((h.privacy_score || 0) * 100).toFixed(1)}%\n` +
+                `Rounds: ${h.rounds_participated || 0}\n` +
+                `Credential Expires: ${h.credential_expires_at ? new Date(h.credential_expires_at).toLocaleDateString() : "N/A"}`
+            );
+        }
+
+        // ============================================================
+        // HELPERS
+        // ============================================================
+        function escapeHtml(str) {
+            return String(str || "").replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function showToast(msg, type = "success") {
+            const toast = document.getElementById("toast");
+            toast.textContent = msg;
+            toast.className = "toast " + type + " show";
+            setTimeout(() => toast.classList.remove("show"), 4000);
+        }
+
+        function logout() {
+            localStorage.clear();
+            sessionStorage.clear();
+            supabase.auth.signOut();
+            window.location.href = "login.html";
+        }
+
+        // ============================================================
+        // START
+        // ============================================================
+        init();
+    </script>
+
+</body>
+</html>

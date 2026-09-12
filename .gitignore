@@ -1,0 +1,48 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# === Virtual Environment ===
+.venv/
+venv/
+env/
+ENV/
+
+# === Environment Variables ===
+.env
+.env.local
+.env.*.local
+*.env
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === FL-Health specific ===
+# Hospital data (contains patient records — NEVER commit)
+data/hospitals/
+data/global_model/
+*.pth
+*.pt
+
+# Logs
+*.log
+logs/
+
+# Supabase local (if you ever run local dev)
+supabase/.branches/
+supabase/.temp/

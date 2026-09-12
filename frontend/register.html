@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FL-Health | Register Hospital</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+            padding: 30px 20px;
+        }
+
+        /* Decorative circles */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+        }
+        body::before {
+            width: 500px;
+            height: 500px;
+            top: -200px;
+            left: -200px;
+        }
+        body::after {
+            width: 400px;
+            height: 400px;
+            bottom: -150px;
+            right: -150px;
+        }
+
+        .register-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 540px;
+            background: #ffffff;
+            border-radius: 24px;
+            box-shadow: 
+                0 20px 60px rgba(2, 132, 199, 0.15),
+                0 4px 20px rgba(2, 132, 199, 0.08);
+            padding: 44px;
+            z-index: 1;
+            animation: fadeInUp 0.6s ease;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header */
+        .logo-section {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            margin-bottom: 16px;
+            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.3);
+        }
+
+        .logo-section h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0c4a6e;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+        }
+
+        .logo-section p {
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        /* Section divider */
+        .section-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0284c7;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin: 22px 0 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e0f2fe;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+
+        .form-group label .required {
+            color: #dc2626;
+            margin-left: 2px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+            height: 50px;
+            padding: 0 16px 0 46px;
+            font-size: 15px;
+            font-family: 'Inter', sans-serif;
+            color: #0f172a;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .input-wrapper input::placeholder {
+            color: #94a3b8;
+        }
+
+        .input-wrapper input:hover {
+            border-color: #cbd5e1;
+            background: #ffffff;
+        }
+
+        .input-wrapper input:focus {
+            border-color: #38bdf8;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15);
+        }
+
+        /* Two-column row */
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        /* Password strength bar */
+        .password-strength {
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .password-strength-fill {
+            height: 100%;
+            width: 0%;
+            transition: all 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .strength-weak { background: #ef4444; }
+        .strength-medium { background: #f59e0b; }
+        .strength-strong { background: #10b981; }
+
+        .strength-text {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        /* Password toggle */
+        .password-toggle {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            color: #94a3b8;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 4px;
+        }
+
+        .password-toggle:hover { color: #0284c7; }
+
+        /* Info box */
+        .info-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin: 18px 0;
+            font-size: 13px;
+            color: #0c4a6e;
+            line-height: 1.5;
+        }
+
+        .info-box strong {
+            color: #0284c7;
+        }
+
+        /* Terms checkbox */
+        .terms {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 13px;
+            color: #475569;
+            margin: 18px 0;
+            line-height: 1.5;
+        }
+
+        .terms input {
+            width: 16px;
+            height: 16px;
+            margin-top: 2px;
+            accent-color: #0284c7;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .terms a {
+            color: #0284c7;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        .terms a:hover { text-decoration: underline; }
+
+        /* Submit button */
+        .btn-register {
+            width: 100%;
+            height: 52px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-register:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
+        }
+
+        .btn-register:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Google button */
+        .btn-google {
+            width: 100%;
+            height: 50px;
+            background: #ffffff;
+            color: #334155;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .btn-google:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 18px 0;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e2e8f0;
+        }
+
+        .divider span { padding: 0 14px; }
+
+        /* Footer link */
+        .footer-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .footer-link a {
+            color: #0284c7;
+            font-weight: 600;
+            text-decoration: none;
+            margin-left: 4px;
+        }
+
+        .footer-link a:hover { text-decoration: underline; }
+
+        /* Alert */
+        .alert {
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .alert.error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .alert.success {
+            background: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert.show { display: block; animation: fadeInUp 0.3s ease; }
+
+        /* Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 500px) {
+            .register-wrapper { padding: 30px 22px; }
+            .row { grid-template-columns: 1fr; }
+            .input-wrapper input { height: 46px; font-size: 14px; }
+            .btn-register, .btn-google { height: 46px; font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="register-wrapper">
+
+        <!-- Logo -->
+        <div class="logo-section">
+            <div class="logo-icon">🏥</div>
+            <h1>Register Your Hospital</h1>
+            <p>Join the FL-Health federated network</p>
+        </div>
+
+        <!-- Alert -->
+        <div class="alert" id="alertBox"></div>
+
+        <!-- FORM -->
+        <form id="registerForm" onsubmit="handleRegister(event)">
+
+            <!-- HOSPITAL DETAILS -->
+            <div class="section-label">🏥 Hospital Details</div>
+
+            <div class="form-group">
+                <label>Hospital Name <span class="required">*</span></label>
+                <div class="input-wrapper">
+                    <span class="input-icon">🏢</span>
+                    <input type="text" id="hospitalName" placeholder="e.g., City General Hospital" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label>License Number <span class="required">*</span></label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">📋</span>
+                        <input type="text" id="licenseNumber" placeholder="LIC-2026-001" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Registration ID <span class="required">*</span></label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">🔖</span>
+                        <input type="text" id="registrationId" placeholder="REG-2026-001" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACCOUNT DETAILS -->
+            <div class="section-label">🔐 Account Details</div>
+
+            <div class="form-group">
+                <label>Official Email <span class="required">*</span></label>
+                <div class="input-wrapper">
+                    <span class="input-icon">📧</span>
+                    <input type="email" id="email" placeholder="hospital@example.com" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Password <span class="required">*</span></label>
+                <div class="input-wrapper">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="password" placeholder="Minimum 6 characters"
+                           oninput="checkStrength()" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('password','toggle1')" id="toggle1">👁️</button>
+                </div>
+                <div class="password-strength">
+                    <div class="password-strength-fill" id="strengthFill"></div>
+                </div>
+                <div class="strength-text" id="strengthText"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Confirm Password <span class="required">*</span></label>
+                <div class="input-wrapper">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="confirmPassword" placeholder="Re-enter password" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword','toggle2')" id="toggle2">👁️</button>
+                </div>
+            </div>
+
+            <!-- INFO BOX -->
+            <div class="info-box">
+                <strong>ℹ️ What happens next?</strong><br>
+                After registration, our admin will verify your hospital license. Once approved, you'll receive a <strong>Verifiable Credential</strong> and can begin federated training.
+            </div>
+
+            <!-- TERMS -->
+            <label class="terms">
+                <input type="checkbox" id="agreeTerms" required>
+                <span>
+                    I confirm that the information provided is accurate and I agree to the
+                    <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+                </span>
+            </label>
+
+            <!-- SUBMIT -->
+            <button type="submit" class="btn-register" id="registerBtn">
+                <span id="btnText">Register Hospital</span>
+            </button>
+        </form>
+
+        <!-- GOOGLE REGISTER -->
+        <div class="divider"><span>OR</span></div>
+
+        <button class="btn-google" onclick="registerWithGoogle()">
+            <svg width="20" height="20" viewBox="0 0 48 48">
+                <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/>
+                <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+                <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+                <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.3-.4-3.5z"/>
+            </svg>
+            Sign up with Google
+        </button>
+
+        <!-- LOGIN LINK -->
+        <div class="footer-link">
+            Already have an account?
+            <a href="login.html">Sign In</a>
+        </div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://mncraewhqjlpuppymeyge.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uY3JhZXdocWpsdXBweW1leWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxMzUxNzEsImV4cCI6MjEwNDcxMTE3MX0.tabnSqV-LiXbcbiUMhNQFGhoxd2lkV0vhs_Vol0drPA";
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const API_URL = "http://localhost:8000";
+
+        function togglePassword(fieldId, btnId) {
+            const pw = document.getElementById(fieldId);
+            const btn = document.getElementById(btnId);
+            if (pw.type === "password") {
+                pw.type = "text";
+                btn.textContent = "🙈";
+            } else {
+                pw.type = "password";
+                btn.textContent = "👁️";
+            }
+        }
+
+        function checkStrength() {
+            const pw = document.getElementById("password").value;
+            const fill = document.getElementById("strengthFill");
+            const text = document.getElementById("strengthText");
+
+            let score = 0;
+            if (pw.length >= 6) score++;
+            if (pw.length >= 10) score++;
+            if (/[A-Z]/.test(pw)) score++;
+            if (/[0-9]/.test(pw)) score++;
+            if (/[!@#$%^&*]/.test(pw)) score++;
+
+            const levels = [
+                { w: "0%",   c: "",                t: "" },
+                { w: "20%",  c: "strength-weak",   t: "Weak" },
+                { w: "40%",  c: "strength-weak",   t: "Fair" },
+                { w: "60%",  c: "strength-medium", t: "Good" },
+                { w: "80%",  c: "strength-medium", t: "Strong" },
+                { w: "100%", c: "strength-strong", t: "Very Strong" },
+            ];
+            const lvl = levels[score];
+            fill.style.width = lvl.w;
+            fill.className = "password-strength-fill " + lvl.c;
+            text.textContent = lvl.t ? `Password strength: ${lvl.t}` : "";
+        }
+
+        function showAlert(msg, type) {
+            const box = document.getElementById("alertBox");
+            box.textContent = msg;
+            box.className = "alert " + type + " show";
+            setTimeout(() => box.classList.remove("show"), 6000);
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+
+            const hospitalName = document.getElementById("hospitalName").value.trim();
+            const licenseNumber = document.getElementById("licenseNumber").value.trim();
+            const registrationId = document.getElementById("registrationId").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            const confirmPassword = document.getElementById("confirmPassword").value;
+
+            if (password !== confirmPassword) {
+                showAlert("Passwords do not match.", "error");
+                return;
+            }
+            if (password.length < 6) {
+                showAlert("Password must be at least 6 characters.", "error");
+                return;
+            }
+
+            const btn = document.getElementById("registerBtn");
+            const btnText = document.getElementById("btnText");
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span> Registering...';
+
+            try {
+                // 1. Create auth user via Supabase
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email,
+                    password
+                });
+
+                if (authError) throw authError;
+
+                const userId = authData.user.id;
+
+                // 2. Create hospital record via Backend
+                const res = await fetch(`${API_URL}/api/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        hospital_name: hospitalName,
+                        email: email,
+                        password: password,
+                        license_number: licenseNumber,
+                        registration_id: registrationId
+                    })
+                });
+
+                const result = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(result.detail || "Registration failed");
+                }
+
+                showAlert(
+                    "✅ Registration successful! Your hospital is pending admin approval. You'll be notified once verified.",
+                    "success"
+                );
+
+                setTimeout(() => {
+                    window.location.href = "login.html";
+                }, 3000);
+
+            } catch (err) {
+                showAlert(err.message || "Registration failed. Try again.", "error");
+                btn.disabled = false;
+                btnText.textContent = "Register Hospital";
+            }
+        }
+
+        async function registerWithGoogle() {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin + "/register.html"
+                }
+            });
+            if (error) showAlert(error.message, "error");
+        }
+    </script>
+
+</body>
+</html>
