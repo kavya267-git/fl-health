@@ -4,390 +4,218 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FL-Health | Login</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: column;
             background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
-            padding: 20px;
+            padding: 0;
         }
-
-        body::before,
-        body::after {
-            content: '';
-            position: fixed;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
-            pointer-events: none;
-        }
-        body::before { width: 500px; height: 500px; top: -200px; left: -200px; }
-        body::after  { width: 400px; height: 400px; bottom: -150px; right: -150px; }
-
-        .login-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 480px;
-            background: #ffffff;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(2, 132, 199, 0.15),
-                        0 4px 20px rgba(2, 132, 199, 0.08);
-            padding: 48px 44px;
-            z-index: 1;
-            animation: fadeInUp 0.6s ease;
-        }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .logo-section { text-align: center; margin-bottom: 36px; }
-
-        .logo-icon {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(135deg, #0284c7, #38bdf8);
-            border-radius: 20px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 34px;
-            margin-bottom: 18px;
-            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.3);
-        }
-
-        .logo-section h1 {
-            font-size: 26px;
-            font-weight: 700;
-            color: #0c4a6e;
-            letter-spacing: -0.5px;
-            margin-bottom: 6px;
-        }
-
-        .logo-section p { font-size: 14px; color: #64748b; }
-
-        .tabs {
-            display: flex;
-            background: #f0f9ff;
-            border-radius: 12px;
-            padding: 4px;
-            margin-bottom: 28px;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 12px;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
-            color: #64748b;
-            border-radius: 9px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            user-select: none;
-        }
-
-        .tab.active {
-            background: #ffffff;
-            color: #0284c7;
-            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.15);
-        }
-
-        .form-group { margin-bottom: 20px; }
-
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: #334155;
-            margin-bottom: 8px;
-        }
-
-        .input-wrapper { position: relative; }
-
-        .input-wrapper .input-icon {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 16px;
-            color: #94a3b8;
-            pointer-events: none;
-        }
-
-        .input-wrapper input {
-            width: 100%;
-            height: 52px;
-            padding: 0 16px 0 46px;
-            font-size: 15px;
-            font-family: 'Inter', sans-serif;
-            color: #0f172a;
-            background: #f8fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            outline: none;
-            transition: all 0.2s ease;
-        }
-
-        .input-wrapper input::placeholder { color: #94a3b8; }
-        .input-wrapper input:hover { border-color: #cbd5e1; background: #ffffff; }
-        .input-wrapper input:focus {
-            border-color: #38bdf8;
-            background: #ffffff;
-            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15);
-        }
-
-        .password-toggle {
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 16px;
-            color: #94a3b8;
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 4px;
-        }
-        .password-toggle:hover { color: #0284c7; }
-
-        .form-extras {
+        .nav {
+            padding: 20px 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
-            font-size: 13px;
+            max-width: 1300px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .nav-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+        .nav-brand-icon {
+            width: 44px; height: 44px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .nav-brand-text { font-size: 20px; font-weight: 700; color: #0c4a6e; }
+        .nav-links { display: flex; gap: 4px; align-items: center; }
+        .nav-link {
+            padding: 10px 14px; font-size: 13px; font-weight: 600;
+            color: #0c4a6e; text-decoration: none; border-radius: 10px;
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: rgba(255, 255, 255, 0.6); }
+        .nav-link.primary {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+            padding: 10px 18px;
         }
 
+        .login-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-wrapper {
+            position: relative; width: 100%; max-width: 480px;
+            background: #ffffff; border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(2, 132, 199, 0.15), 0 4px 20px rgba(2, 132, 199, 0.08);
+            padding: 48px 44px;
+            animation: fadeInUp 0.6s ease;
+        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .logo-section { text-align: center; margin-bottom: 36px; }
+        .logo-icon {
+            width: 70px; height: 70px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border-radius: 20px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 34px; margin-bottom: 18px;
+            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.3);
+        }
+        .logo-section h1 { font-size: 26px; font-weight: 700; color: #0c4a6e; letter-spacing: -0.5px; margin-bottom: 6px; }
+        .logo-section p { font-size: 14px; color: #64748b; }
+        .tabs { display: flex; background: #f0f9ff; border-radius: 12px; padding: 4px; margin-bottom: 28px; }
+        .tab {
+            flex: 1; padding: 12px; text-align: center;
+            font-size: 14px; font-weight: 600; color: #64748b;
+            border-radius: 9px; cursor: pointer;
+            transition: all 0.25s ease; user-select: none;
+        }
+        .tab.active { background: #ffffff; color: #0284c7; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.15); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px; }
+        .input-wrapper { position: relative; }
+        .input-wrapper .input-icon {
+            position: absolute; left: 16px; top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px; color: #94a3b8; pointer-events: none;
+        }
+        .input-wrapper input {
+            width: 100%; height: 52px; padding: 0 16px 0 46px;
+            font-size: 15px; font-family: 'Inter', sans-serif;
+            color: #0f172a; background: #f8fafc;
+            border: 2px solid #e2e8f0; border-radius: 12px;
+            outline: none; transition: all 0.2s ease;
+        }
+        .input-wrapper input::placeholder { color: #94a3b8; }
+        .input-wrapper input:focus { border-color: #38bdf8; background: #ffffff; box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15); }
+        .password-toggle {
+            position: absolute; right: 16px; top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px; color: #94a3b8;
+            cursor: pointer; background: none; border: none; padding: 4px;
+        }
+        .form-extras {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px; font-size: 13px;
+        }
         .remember { display: flex; align-items: center; gap: 8px; color: #475569; cursor: pointer; }
         .remember input { width: 16px; height: 16px; accent-color: #0284c7; cursor: pointer; }
         .forgot-link { color: #0284c7; text-decoration: none; font-weight: 500; }
-        .forgot-link:hover { text-decoration: underline; }
-
         .btn-login {
-            width: 100%;
-            height: 52px;
+            width: 100%; height: 52px;
             background: linear-gradient(135deg, #0284c7, #38bdf8);
-            color: #ffffff;
-            font-size: 15px;
-            font-weight: 600;
-            font-family: 'Inter', sans-serif;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
+            color: #ffffff; font-size: 15px; font-weight: 600;
+            border: none; border-radius: 12px; cursor: pointer;
             transition: all 0.25s ease;
             box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
         }
         .btn-login:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4); }
-        .btn-login:active { transform: translateY(0); }
-        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-        .divider {
-            display: flex;
-            align-items: center;
-            margin: 24px 0;
-            color: #94a3b8;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .divider::before, .divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: #e2e8f0;
-        }
-        .divider span { padding: 0 14px; }
-
-        .btn-google {
-            width: 100%;
-            height: 52px;
-            background: #ffffff;
-            color: #334155;
-            font-size: 15px;
-            font-weight: 500;
-            font-family: 'Inter', sans-serif;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .btn-google:hover { border-color: #cbd5e1; background: #f8fafc; }
-
-        .footer-link {
-            text-align: center;
-            margin-top: 24px;
-            font-size: 14px;
-            color: #64748b;
-        }
-        .footer-link a {
-            color: #0284c7;
-            font-weight: 600;
-            text-decoration: none;
-            margin-left: 4px;
-        }
-        .footer-link a:hover { text-decoration: underline; }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 10px;
-            font-size: 13px;
-            font-weight: 500;
-            margin-bottom: 18px;
-            display: none;
-        }
+        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+        .footer-link { text-align: center; margin-top: 24px; font-size: 14px; color: #64748b; }
+        .footer-link a { color: #0284c7; font-weight: 600; text-decoration: none; margin-left: 4px; }
+        .alert { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; margin-bottom: 18px; display: none; }
         .alert.error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
         .alert.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-        .alert.show { display: block; animation: fadeInUp 0.3s ease; }
-
-        .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: #ffffff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
+        .alert.show { display: block; }
         @media (max-width: 500px) {
+            .nav { padding: 15px 20px; }
+            .nav-links .nav-link:not(.primary) { display: none; }
             .login-wrapper { padding: 36px 26px; }
-            .logo-section h1 { font-size: 22px; }
-            .input-wrapper input { height: 48px; font-size: 14px; }
-            .btn-login, .btn-google { height: 48px; font-size: 14px; }
         }
     </style>
 </head>
 <body>
 
-    <div class="login-wrapper">
-
-        <div class="logo-section">
-            <div class="logo-icon">🏥</div>
-            <h1>FL-Health</h1>
-            <p>Federated Learning for Privacy-Preserving Healthcare</p>
+    <nav class="nav">
+        <a href="index.html" class="nav-brand">
+            <div class="nav-brand-icon">🏥</div>
+            <div class="nav-brand-text">FL-Health</div>
+        </a>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link">Learn FL</a>
+            <a href="privacy.html" class="nav-link">Privacy</a>
+            <a href="network.html" class="nav-link">Join</a>
+            <a href="register.html" class="nav-link primary">Register</a>
         </div>
+    </nav>
 
-        <div class="tabs">
-            <div class="tab active" id="tabHospital" onclick="switchTab('hospital')">🏥 Hospital</div>
-            <div class="tab" id="tabAdmin" onclick="switchTab('admin')">🔐 Admin</div>
-        </div>
+    <div class="login-container">
+        <div class="login-wrapper">
+            <div class="logo-section">
+                <div class="logo-icon">🏥</div>
+                <h1>Welcome Back</h1>
+                <p>Sign in to your FL-Health account</p>
+            </div>
 
-        <div class="alert" id="alertBox"></div>
+            <div class="tabs">
+                <div class="tab active" id="tabHospital" onclick="switchTab('hospital')">🏥 Hospital</div>
+                <div class="tab" id="tabAdmin" onclick="switchTab('admin')">🔐 Admin</div>
+            </div>
 
-        <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="form-group">
-                <label>Email Address</label>
-                <div class="input-wrapper">
-                    <span class="input-icon">📧</span>
-                    <input type="email" id="email" placeholder="hospital@example.com" required>
+            <div class="alert" id="alertBox"></div>
+
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">📧</span>
+                        <input type="email" id="email" placeholder="hospital@example.com" required>
+                    </div>
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label>Password</label>
-                <div class="input-wrapper">
-                    <span class="input-icon">🔒</span>
-                    <input type="password" id="password" placeholder="Enter your password" required>
-                    <button type="button" class="password-toggle" onclick="togglePassword()" id="toggleBtn">👁️</button>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">🔒</span>
+                        <input type="password" id="password" placeholder="Enter your password" required>
+                        <button type="button" class="password-toggle" onclick="togglePassword()" id="toggleBtn">👁️</button>
+                    </div>
                 </div>
-            </div>
+                <div class="form-extras">
+                    <label class="remember">
+                        <input type="checkbox" id="rememberMe">
+                        <span>Remember me</span>
+                    </label>
+                    <a href="#" class="forgot-link">Forgot password?</a>
+                </div>
+                <button type="submit" class="btn-login" id="loginBtn">Sign In</button>
+            </form>
 
-            <div class="form-extras">
-                <label class="remember">
-                    <input type="checkbox" id="rememberMe">
-                    <span>Remember me</span>
-                </label>
-                <a href="#" class="forgot-link">Forgot password?</a>
-            </div>
-
-            <button type="submit" class="btn-login" id="loginBtn">
-                <span id="btnText">Sign In</span>
-            </button>
-        </form>
-
-        <div class="divider"><span>OR</span></div>
-
-        <button class="btn-google" onclick="loginWithGoogle()">
-            <svg width="20" height="20" viewBox="0 0 48 48">
-                <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/>
-                <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-                <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-                <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.3-.4-3.5z"/>
-            </svg>
-            Continue with Google
-        </button>
-
-        <div class="footer-link">
-            Don't have an account?
-            <a href="register.html">Register Hospital</a>
+            <div class="footer-link">Don't have an account?<a href="register.html">Register Hospital</a></div>
         </div>
-
     </div>
 
     <script>
-        // ============================================================
-        // CONFIG
-        // ============================================================
-        const SUPABASE_URL = "https://mncraewhqjlpuppymeyge.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uY3JhZXdocWpsdXBweW1leWdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxMzUxNzEsImV4cCI6MjEwNDcxMTE3MX0.tabnSqV-LiXbcbiUMhNQFGhoxd2lkV0vhs_Vol0drPA";
         const API_URL = "http://localhost:8000";
-
-        // IMPORTANT: variable is called supabaseClient (not supabase) to avoid conflict
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         let currentTab = "hospital";
 
-        // ============================================================
-        // TAB SWITCHING
-        // ============================================================
         function switchTab(tab) {
             currentTab = tab;
-            const h = document.getElementById("tabHospital");
-            const a = document.getElementById("tabAdmin");
-            if (h) h.classList.toggle("active", tab === "hospital");
-            if (a) a.classList.toggle("active", tab === "admin");
-
-            const emailInput = document.getElementById("email");
-            if (emailInput) {
-                emailInput.placeholder = tab === "hospital"
-                    ? "hospital@example.com"
-                    : "admin@fl-health.com";
-            }
+            document.getElementById("tabHospital").classList.toggle("active", tab === "hospital");
+            document.getElementById("tabAdmin").classList.toggle("active", tab === "admin");
+            document.getElementById("email").placeholder = tab === "hospital"
+                ? "hospital@example.com"
+                : "admin@fl-health.com";
         }
 
-        // ============================================================
-        // PASSWORD TOGGLE
-        // ============================================================
         function togglePassword() {
             const pw = document.getElementById("password");
             const btn = document.getElementById("toggleBtn");
-            if (pw.type === "password") {
-                pw.type = "text";
-                btn.textContent = "🙈";
-            } else {
-                pw.type = "password";
-                btn.textContent = "👁️";
-            }
+            if (pw.type === "password") { pw.type = "text"; btn.textContent = "🙈"; }
+            else { pw.type = "password"; btn.textContent = "👁️"; }
         }
 
-        // ============================================================
-        // ALERT
-        // ============================================================
         function showAlert(message, type) {
             const box = document.getElementById("alertBox");
             box.textContent = message;
@@ -395,32 +223,33 @@
             setTimeout(() => box.classList.remove("show"), 5000);
         }
 
-        // ============================================================
-        // LOGIN
-        // ============================================================
         async function handleLogin(event) {
             event.preventDefault();
-
             const email = document.getElementById("email").value.trim();
             const password = document.getElementById("password").value;
             const btn = document.getElementById("loginBtn");
-            const btnText = document.getElementById("btnText");
 
             btn.disabled = true;
-            btnText.innerHTML = 'Signing in...';
+            btn.textContent = "Signing in...";
 
             try {
-                const { data, error } = await supabaseClient.auth.signInWithPassword({
-                    email, password
+                const res = await fetch(`${API_URL}/api/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
                 });
 
-                if (error) throw error;
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Login failed");
 
-                const token = data.session.access_token;
+                const token = data.access_token;
                 const userId = data.user.id;
 
-                // Verify role from backend
-                const roleCheck = await fetch(`${API_URL}/api/${currentTab}/me`, {
+                const roleEndpoint = currentTab === "admin"
+                    ? `${API_URL}/api/admin/all-hospitals`
+                    : `${API_URL}/api/hospital/me`;
+
+                const roleCheck = await fetch(roleEndpoint, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
 
@@ -428,49 +257,21 @@
                     throw new Error(`This account is not registered as ${currentTab}`);
                 }
 
-                // Store session
                 const store = document.getElementById("rememberMe").checked ? localStorage : sessionStorage;
                 store.setItem("fl_token", token);
                 store.setItem("fl_user", userId);
                 store.setItem("fl_role", currentTab);
 
                 showAlert("Login successful! Redirecting...", "success");
-
                 setTimeout(() => {
-                    window.location.href = currentTab === "admin"
-                        ? "admin.html"
-                        : "dashboard.html";
+                    window.location.href = currentTab === "admin" ? "admin.html" : "dashboard.html";
                 }, 800);
-
             } catch (err) {
-                showAlert(err.message || "Login failed. Please check your credentials.", "error");
+                showAlert(err.message || "Login failed.", "error");
                 btn.disabled = false;
-                btnText.textContent = "Sign In";
+                btn.textContent = "Sign In";
             }
         }
-
-        // ============================================================
-        // GOOGLE LOGIN
-        // ============================================================
-        async function loginWithGoogle() {
-            const { error } = await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: window.location.origin + "/dashboard.html"
-                }
-            });
-            if (error) showAlert(error.message, "error");
-        }
-
-        
-        (async () => {
-            const { data } = await supabaseClient.auth.getSession();
-            if (data && data.session) {
-                const role = localStorage.getItem("fl_role") || sessionStorage.getItem("fl_role") || "hospital";
-                window.location.href = role === "admin" ? "admin.html" : "dashboard.html";
-            }
-        })();
     </script>
-
 </body>
 </html>

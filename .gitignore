@@ -1,48 +1,37 @@
-# === Python ===
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
 .Python
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# === Virtual Environment ===
 .venv/
 venv/
 env/
-ENV/
 
-# === Environment Variables ===
+# Env
 .env
-.env.local
-.env.*.local
 *.env
 
-# === IDE ===
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# === OS ===
+# OS
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# === FL-Health specific ===
-# Hospital data (contains patient records — NEVER commit)
-data/hospitals/
-data/global_model/
+# Data — do NOT commit
+backend/data/hospitals/
+backend/data/global_model/
+backend/data/fl_health.db
+backend/uploads/
 *.pth
 *.pt
+*.db
+*.zip
 
 # Logs
 *.log
 logs/
 
-# Supabase local (if you ever run local dev)
-supabase/.branches/
-supabase/.temp/
+# Node modules (if any)
+node_modules/

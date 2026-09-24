@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FL-Health | What is Federated Learning</title>
+    <link rel="icon" href="data:,">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+            min-height: 100vh;
+            color: #0c4a6e;
+        }
+        .nav {
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .nav-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+        .nav-brand-icon {
+            width: 44px; height: 44px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .nav-brand-text { font-size: 20px; font-weight: 700; color: #0c4a6e; }
+        .nav-links { display: flex; gap: 4px; align-items: center; }
+        .nav-link {
+            padding: 10px 14px; font-size: 13px; font-weight: 600;
+            color: #0c4a6e; text-decoration: none; border-radius: 10px;
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: rgba(255, 255, 255, 0.6); }
+        .nav-link.active { background: rgba(255, 255, 255, 0.9); color: #0284c7; }
+        .nav-link.primary {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+            padding: 10px 18px;
+        }
+        .hero {
+            max-width: 900px;
+            margin: 40px auto 50px;
+            padding: 0 40px;
+            text-align: center;
+        }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid #bae6fd;
+            border-radius: 30px;
+            font-size: 13px; font-weight: 600; color: #0284c7;
+            margin-bottom: 24px;
+        }
+        .hero h1 {
+            font-size: 44px; font-weight: 800;
+            letter-spacing: -1px; margin-bottom: 18px;
+        }
+        .hero h1 .accent {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p { font-size: 17px; color: #334155; line-height: 1.7; }
+        .progress { display: flex; justify-content: center; gap: 12px; margin-bottom: 40px; }
+        .progress-dot {
+            width: 40px; height: 5px; border-radius: 3px;
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .progress-dot.active { background: #0284c7; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 0 40px; }
+        .section {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 48px;
+            margin-bottom: 32px;
+            box-shadow: 0 10px 40px rgba(2, 132, 199, 0.08);
+        }
+        .section-label {
+            display: inline-block; padding: 6px 14px;
+            background: #f0f9ff; color: #0284c7;
+            border-radius: 20px; font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;
+        }
+        .section h2 {
+            font-size: 30px; font-weight: 800;
+            color: #0c4a6e; letter-spacing: -0.5px; margin-bottom: 20px;
+        }
+        .section p {
+            font-size: 16px; color: #334155;
+            line-height: 1.7; margin-bottom: 16px;
+        }
+        .section-image {
+            width: 100%;
+            border-radius: 16px;
+            margin: 24px 0;
+            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.12);
+        }
+        .analogy-box {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border-left: 5px solid #0284c7;
+            border-radius: 16px;
+            padding: 28px;
+            margin: 24px 0;
+        }
+        .analogy-box h4 {
+            font-size: 17px; font-weight: 700;
+            color: #0284c7; margin-bottom: 12px;
+        }
+        .analogy-box p {
+            font-size: 15px; color: #334155;
+            margin: 0; line-height: 1.7;
+        }
+        .page-nav {
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 40px auto;
+            max-width: 1000px; padding: 0 40px;
+        }
+        .page-nav-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 14px 24px;
+            background: #ffffff; color: #0284c7;
+            font-size: 15px; font-weight: 700;
+            border-radius: 12px; text-decoration: none;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.15);
+            transition: all 0.2s;
+        }
+        .page-nav-btn:hover { transform: translateY(-2px); }
+        .page-nav-btn.primary {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+        }
+        footer {
+            padding: 40px; text-align: center;
+            color: #64748b; font-size: 13px;
+        }
+        @media (max-width: 900px) {
+            .section { padding: 32px 24px; }
+            .hero h1 { font-size: 32px; }
+            .nav-links .nav-link:not(.primary) { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="nav">
+        <a href="index.html" class="nav-brand">
+            <div class="nav-brand-icon">🏥</div>
+            <div class="nav-brand-text">FL-Health</div>
+        </a>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link active">Learn FL</a>
+            <a href="privacy.html" class="nav-link">Privacy</a>
+            <a href="network.html" class="nav-link">Join</a>
+            <a href="login.html" class="nav-link">Sign In</a>
+            <a href="register.html" class="nav-link primary">Register</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-badge">📚 Chapter 1 of 3</div>
+        <h1>What is <span class="accent">Federated Learning</span>?</h1>
+        <p>
+            Understand the basic idea behind FL-Health — how multiple hospitals train AI together
+            without ever sharing patient data. No ML background required.
+        </p>
+    </section>
+
+    <div class="progress">
+        <div class="progress-dot active"></div>
+        <div class="progress-dot"></div>
+        <div class="progress-dot"></div>
+    </div>
+
+    <div class="container">
+
+        <div class="section">
+            <div class="section-label">Section 1</div>
+            <h2>The Basic Idea</h2>
+            <p>
+                Federated Learning is a technique where multiple organizations (hospitals, in our case)
+                train a shared AI model together — <strong>without ever sharing their raw data</strong>.
+            </p>
+            <p>
+                Instead of sending patient records to a central server, each hospital trains a copy of
+                the AI on its own data. Only the <strong>mathematical updates</strong> (called "weights")
+                travel to the server. The server combines them into a better global model and sends it back.
+            </p>
+
+            <img src="assets/images/Hero Illustration for About Page.png" alt="Federated Learning Overview" class="section-image">
+
+            <div class="analogy-box">
+                <h4>🍩 Simple Analogy</h4>
+                <p>
+                    Imagine 4 friends each have a secret recipe for the best cake. They can't share
+                    their recipes. But they <em>can</em> each bake a cake, taste-test all 4 versions,
+                    and agree on a <strong>combined recipe</strong> that uses the best parts of each —
+                    without ever revealing any single original recipe.
+                </p>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Section 2</div>
+            <h2>How Does It Work? — 4 Steps</h2>
+            <p>
+                Each training round follows the same 4-step cycle. After 50-100 rounds, the global
+                model becomes significantly more accurate than any single hospital could achieve alone.
+            </p>
+
+            <img src="assets/images/Federated Learning Process Diagram.png" alt="Federated Learning Process" class="section-image">
+
+            <div class="analogy-box">
+                <h4>📚 Simple Analogy</h4>
+                <p>
+                    Think of 5 students preparing for an exam. Each has their own notes they can't
+                    share. Instead, they each solve a practice problem, then discuss <em>the method</em>
+                    they used. Everyone updates their notes with the better method. No one's notes
+                    are ever seen by anyone else — but everyone improves.
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="page-nav">
+        <a href="index.html" class="page-nav-btn">← Home</a>
+        <a href="privacy.html" class="page-nav-btn primary">Next: Privacy →</a>
+    </div>
+
+    <footer>
+        <strong>FL-Health</strong> · Data stays local. Only learning travels.
+    </footer>
+
+</body>
+</html>
