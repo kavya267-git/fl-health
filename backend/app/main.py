@@ -52,7 +52,21 @@ class RegisterRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return FileResponse("frontend/dashboard.html")
+    return {
+        "service": "FL-Health API",
+        "version": "1.0",
+        "status": "running",
+        "docs": "/docs",
+        "endpoints": {
+            "hospital_count": "/api/public/hospital-count",
+            "auth_login": "/api/auth/login",
+            "admin_hospitals": "/api/admin/all-hospitals",
+            "dashboard": "/api/dashboard/hospitals",
+            "audit_trail": "/api/audit/trail",
+            "hotspots": "/api/geospatial/hotspots",
+            "forecast": "/api/geospatial/forecast"
+        }
+    }
 
 
 @app.get("/api/public/hospital-count")
