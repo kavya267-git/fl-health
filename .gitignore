@@ -32,6 +32,3 @@ backend/uploads/
 # Logs
 *.log
 logs/
-
-# Node modules (if any)
-node_modules/
