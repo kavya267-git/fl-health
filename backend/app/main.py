@@ -7,7 +7,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, Form, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+
 from pydantic import BaseModel
 
 from app.supabase_client import supabase, get_service_client
