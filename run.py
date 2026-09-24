@@ -3,7 +3,6 @@ import sys
 import os
 import uvicorn
 
-# Add backend/ to Python path so "app" becomes importable
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 
 if __name__ == "__main__":
@@ -14,5 +13,4 @@ if __name__ == "__main__":
     print("Running at: http://localhost:8000")
     print("Docs:       http://localhost:8000/docs")
     print("=" * 60)
-
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

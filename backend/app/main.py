@@ -1,31 +1,23 @@
 # backend/app/main.py
-"""
-FL-Health Server — FastAPI backend
-Handles:
-  - Public auth (register / login)
-  - Admin routes (approve hospitals, issue credentials)
-  - Hospital routes (upload data, train, view dashboard)
-  - Dashboard analytics
-"""
-
 import os
+import hashlib
 import shutil
+import zipfile
 from datetime import datetime
 
 from fastapi import FastAPI, Form, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import pandas as pd
 
 from app.supabase_client import supabase, get_service_client
 from app.auth import require_role
 from app.credential_manager import issue_credential, validate_credential
 from app.fl_engine import FLEngine
+from app.audit import append_audit_entry, verify_chain, get_audit_trail
+from app.geospatial import detect_hotspots, forecast_outbreak
+from app.encoders import encode_file
 
-# ============================================================
-# APP SETUP
-# ============================================================
 app = FastAPI(title="FL-Health Server", version="1.0")
 
 app.add_middleware(
@@ -37,15 +29,10 @@ app.add_middleware(
 )
 
 fl_engine = FLEngine()
-
-# Ensure base directories exist
 os.makedirs("data/hospitals", exist_ok=True)
 os.makedirs("data/global_model", exist_ok=True)
 
 
-# ============================================================
-# PYDANTIC MODELS
-# ============================================================
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -57,24 +44,19 @@ class RegisterRequest(BaseModel):
     password: str
     license_number: str
     registration_id: str
+    city: str = "Unknown"
+    state: str = "Unknown"
+    latitude: float = 0.0
+    longitude: float = 0.0
 
 
-# ============================================================
-# ROOT
-# ============================================================
 @app.get("/")
 async def root():
-    """Serve the dashboard (or landing page)."""
     return FileResponse("frontend/dashboard.html")
 
 
-# ============================================================
-# PUBLIC ROUTES
-# ============================================================
-
 @app.get("/api/public/hospital-count")
 async def public_hospital_count():
-    """Used on the landing page."""
     service = get_service_client()
     res = service.table("hospitals").select("id").execute()
     return {"count": len(res.data)}
@@ -82,39 +64,46 @@ async def public_hospital_count():
 
 @app.post("/api/auth/register")
 async def register_hospital(req: RegisterRequest):
-    """
-    Open registration — ANY hospital can register.
-    Creates Supabase auth user + hospital row.
-    Credential is NOT issued yet — admin must approve.
-    """
     service = get_service_client()
+    user_id = None
     try:
-        # Create auth user
         user = service.auth.admin.create_user({
             "email": req.email,
             "password": req.password,
-            "email_confirm": True
+            "email_confirm": True,
         })
+        user_id = user.user.id
 
-        # Create hospital record
         service.table("hospitals").insert({
-            "id": user.user.id,
+            "id": user_id,
             "hospital_name": req.hospital_name,
-            "hospital_id": f"HOSP-{user.user.id[:6].upper()}",
+            "hospital_id": f"HOSP-{user_id[:6].upper()}",
             "email": req.email,
             "license_number": req.license_number,
             "registration_id": req.registration_id,
+            "city": req.city,
+            "state": req.state,
+            "latitude": req.latitude,
+            "longitude": req.longitude,
+            "patient_cases": 0,
             "is_credential_valid": False,
-            "government_approved": False
+            "government_approved": False,
         }).execute()
 
         return {
             "success": True,
-            "user_id": user.user.id,
-            "message": "Registered. Awaiting admin approval."
+            "user_id": user_id,
+            "message": "Registered. Awaiting admin approval.",
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        if user_id:
+            try:
+                service.auth.admin.delete_user(user_id)
+            except Exception:
+                pass
+        error_msg = str(e)
+        print(f"[REGISTER ERROR] {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
 
 
 @app.post("/api/auth/login")
@@ -127,19 +116,14 @@ async def login(req: LoginRequest):
         return {
             "success": True,
             "user": {"id": resp.user.id, "email": resp.user.email},
-            "access_token": resp.session.access_token
+            "access_token": resp.session.access_token,
         }
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 
 
-# ============================================================
-# ADMIN ROUTES
-# ============================================================
-
 @app.get("/api/admin/all-hospitals")
 async def all_hospitals(admin=Depends(require_role("admin"))):
-    """Return every registered hospital (pending + approved)."""
     service = get_service_client()
     res = service.table("hospitals").select("*").order("created_at", desc=True).execute()
     return {"hospitals": res.data}
@@ -147,7 +131,6 @@ async def all_hospitals(admin=Depends(require_role("admin"))):
 
 @app.get("/api/admin/pending-hospitals")
 async def pending_hospitals(admin=Depends(require_role("admin"))):
-    """Hospitals awaiting approval."""
     service = get_service_client()
     res = service.table("hospitals").select("*").eq("government_approved", False).execute()
     return {"pending": res.data}
@@ -155,72 +138,110 @@ async def pending_hospitals(admin=Depends(require_role("admin"))):
 
 @app.post("/api/admin/approve-hospital/{hospital_id}")
 async def approve_hospital(hospital_id: str, admin=Depends(require_role("admin"))):
-    """
-    Admin approves instantly. Credential is issued in the same request.
-    """
     result = issue_credential(hospital_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result.get("reason"))
+
+    service = get_service_client()
+    hosp = service.table("hospitals").select("hospital_name").eq("id", hospital_id).execute()
+    hname = hosp.data[0]["hospital_name"] if hosp.data else "Unknown"
+
+    append_audit_entry(
+        round_number=fl_engine.round,
+        hospital_id=hospital_id,
+        hospital_name=hname,
+        event_type="CREDENTIAL_ISSUE",
+        epsilon_used=0.0,
+        model_hash=result.get("credential_hash", ""),
+        metadata={"expires_at": result.get("expires_at")},
+    )
     return result
 
 
-# ============================================================
-# HOSPITAL ROUTES
-# ============================================================
-
 @app.get("/api/hospital/me")
 async def hospital_me(hospital=Depends(require_role("hospital"))):
-    """Return the logged-in hospital's record."""
     return {"hospital": hospital}
 
 
 @app.post("/api/hospital/upload-data")
 async def upload_hospital_data(
     file: UploadFile = File(...),
-    hospital=Depends(require_role("hospital"))
+    hospital=Depends(require_role("hospital")),
 ):
-    """
-    Hospital uploads their own CSV. Only CSV allowed.
-    File is saved to: data/hospitals/{hospital_id}/data.csv
-    """
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files allowed")
+    allowed_exts = (".csv", ".npy", ".npz", ".png", ".jpg", ".jpeg",
+                    ".bmp", ".wav", ".txt", ".json", ".dat", ".zip")
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400,
+                            detail=f"Unsupported format. Allowed: {', '.join(allowed_exts)}")
 
     hospital_id = hospital["id"]
     folder = f"data/hospitals/{hospital_id}"
     os.makedirs(folder, exist_ok=True)
-    dest = os.path.join(folder, "data.csv")
 
-    # Save file
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    if ext == ".zip":
+        zip_path = os.path.join(folder, "upload.zip")
+        with open(zip_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(folder)
+    else:
+        dest = os.path.join(folder, file.filename)
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(file.file, f)
 
-    # Count rows
-    try:
-        row_count = len(pd.read_csv(dest, header=None))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid CSV format")
+    ehr_count = ecg_count = xray_count = other_count = 0
+    for root, _, files in os.walk(folder):
+        for fname in files:
+            fl = fname.lower()
+            if fl.endswith(".csv"):
+                ehr_count += 1
+            elif fl.endswith((".npy", ".dat", ".wav", ".npz")):
+                ecg_count += 1
+            elif fl.endswith((".png", ".jpg", ".jpeg", ".bmp")):
+                xray_count += 1
+            else:
+                other_count += 1
 
-    # Update hospital metrics
+    total = ehr_count + ecg_count + xray_count + other_count
+
     service = get_service_client()
     service.table("hospitals").update({
-        "total_patients": row_count,
-        "last_active": datetime.utcnow().isoformat()
+        "total_patients": total,
+        "patient_cases": total,
+        "feature_count": ehr_count,
+        "data_type": f"ehr={ehr_count},ecg={ecg_count},xray={xray_count}",
+        "data_file_path": folder,
+        "ecg_count": ecg_count,
+        "xray_count": xray_count,
+        "last_active": datetime.utcnow().isoformat(),
     }).eq("id", hospital_id).execute()
+
+    append_audit_entry(
+        round_number=fl_engine.round,
+        hospital_id=hospital_id,
+        hospital_name=hospital.get("hospital_name", "Unknown"),
+        event_type="UPLOAD",
+        epsilon_used=0.0,
+        model_hash="",
+        metadata={"ehr": ehr_count, "ecg": ecg_count, "xray": xray_count, "total": total},
+    )
 
     return {
         "success": True,
-        "message": f"Uploaded {row_count} patient records",
-        "rows": row_count
+        "message": f"Uploaded {total} files (EHR:{ehr_count}, ECG:{ecg_count}, X-ray:{xray_count})",
+        "total": total,
+        "ehr": ehr_count,
+        "ecg": ecg_count,
+        "xray": xray_count,
     }
 
 
 @app.post("/api/hospital/validate-credential")
 async def hospital_validate_credential(
     hospital_id: str = Form(...),
-    credential_hash: str = Form(...)
+    credential_hash: str = Form(...),
 ):
-    """Hospital presents credential. Server validates."""
     return validate_credential(hospital_id, credential_hash)
 
 
@@ -229,45 +250,50 @@ async def hospital_train(
     credential_hash: str = Form(...),
     epochs: int = Form(5),
     epsilon: float = Form(1.0),
-    hospital=Depends(require_role("hospital"))
+    hospital=Depends(require_role("hospital")),
 ):
-    """
-    Hospital trains locally. Requires:
-      - Valid credential
-      - Uploaded data
-    """
     hospital_id = hospital["id"]
 
-    # 1. Validate credential
     val = validate_credential(hospital_id, credential_hash)
     if not val["valid"]:
-        raise HTTPException(status_code=403, detail="Invalid or expired credential")
+        raise HTTPException(status_code=403, detail="Invalid credential")
 
-    # 2. Check uploaded data exists
-    data_path = f"data/hospitals/{hospital_id}/data.csv"
-    if not os.path.exists(data_path):
+    folder = f"data/hospitals/{hospital_id}"
+    if not os.path.exists(folder):
         raise HTTPException(status_code=400, detail="Upload your data first")
 
-    # 3. Local training
-    global_weights = fl_engine.get_global_model()
-    result = fl_engine.train_local(data_path, global_weights, epochs=epochs)
+    data_file = None
+    priority = (".csv", ".npy", ".dat", ".jpg", ".png")
+    for ext in priority:
+        for root, _, files in os.walk(folder):
+            for fname in files:
+                if fname.lower().endswith(ext) and fname.lower() != "upload.zip":
+                    data_file = os.path.join(root, fname)
+                    break
+            if data_file:
+                break
+        if data_file:
+            break
 
-    # 4. Apply Differential Privacy
-    _ = fl_engine.add_differential_privacy(result["weights"], epsilon=epsilon)
+    if not data_file:
+        raise HTTPException(status_code=400, detail="No valid data files found")
 
-    # 5. Compute privacy score
+    result = fl_engine.train_local(data_file, epochs=epochs)
+    noisy_weights = fl_engine.add_differential_privacy(result["weights"], epsilon=epsilon)
+    fl_engine.store_update(hospital_id, noisy_weights, result["data_size"])
+
     privacy_score = fl_engine.calculate_privacy_score(
         result["data_size"], result["accuracy"], epsilon
     )
+    model_hash = hashlib.sha256(str(noisy_weights).encode()).hexdigest()
 
-    # 6. Log training round + update hospital metrics
     service = get_service_client()
     service.table("training_history").insert({
         "hospital_id": hospital_id,
         "round_number": fl_engine.round + 1,
         "accuracy": result["accuracy"],
         "epsilon_used": epsilon,
-        "data_size": result["data_size"]
+        "data_size": result["data_size"],
     }).execute()
 
     service.table("hospitals").update({
@@ -275,47 +301,60 @@ async def hospital_train(
         "privacy_score": privacy_score,
         "epsilon_used": epsilon,
         "total_patients": result["data_size"],
-        "rounds_participated": hospital.get("rounds_participated", 0) + 1,
-        "last_active": datetime.utcnow().isoformat()
+        "patient_cases": result["data_size"],
+        "rounds_participated": (hospital.get("rounds_participated") or 0) + 1,
+        "last_active": datetime.utcnow().isoformat(),
     }).eq("id", hospital_id).execute()
+
+    append_audit_entry(
+        round_number=fl_engine.round + 1,
+        hospital_id=hospital_id,
+        hospital_name=hospital.get("hospital_name", "Unknown"),
+        event_type="TRAIN",
+        epsilon_used=epsilon,
+        model_hash=model_hash,
+        metadata={
+            "accuracy": result["accuracy"],
+            "data_type": result["data_type"],
+            "features": result["feature_count"],
+            "data_size": result["data_size"],
+        },
+    )
 
     return {
         "success": True,
         "accuracy": result["accuracy"],
         "privacy_score": privacy_score,
         "data_size": result["data_size"],
+        "data_type": result["data_type"],
+        "feature_count": result["feature_count"],
         "epsilon_used": epsilon,
-        "round": fl_engine.round + 1
+        "round": fl_engine.round + 1,
     }
+
+
+@app.post("/api/hospital/aggregate")
+async def trigger_aggregation(hospital=Depends(require_role("hospital"))):
+    result = fl_engine.aggregate()
+    return {"success": True, "round": fl_engine.round, "hospitals": result}
 
 
 @app.get("/api/hospital/history")
 async def hospital_history(hospital=Depends(require_role("hospital"))):
-    """Return this hospital's training history."""
     service = get_service_client()
-    res = service.table("training_history").select("*") \
-        .eq("hospital_id", hospital["id"]) \
-        .order("round_number").execute()
+    res = service.table("training_history").select("*").eq("hospital_id", hospital["id"]).order("round_number").execute()
     return {"history": res.data}
 
 
-# ============================================================
-# DASHBOARD ROUTES (public read for dashboard)
-# ============================================================
-
 @app.get("/api/dashboard/convergence")
 async def dashboard_convergence():
-    """Accuracy per round across all hospitals."""
     service = get_service_client()
-    res = service.table("training_history") \
-        .select("round_number, accuracy") \
-        .order("round_number").execute()
+    res = service.table("training_history").select("round_number, accuracy").order("round_number").execute()
     return {"history": res.data}
 
 
 @app.get("/api/dashboard/privacy-budget")
 async def dashboard_privacy_budget():
-    """Total ε used (capped at 1.0)."""
     service = get_service_client()
     res = service.table("hospitals").select("epsilon_used").execute()
     total_eps = sum([h.get("epsilon_used") or 0 for h in res.data])
@@ -324,17 +363,33 @@ async def dashboard_privacy_budget():
 
 @app.get("/api/dashboard/hospitals")
 async def dashboard_hospitals():
-    """Hospital status for dashboard."""
     service = get_service_client()
     res = service.table("hospitals").select(
-        "hospital_name, local_accuracy, rounds_participated, last_active, government_approved"
+        "hospital_name, local_accuracy, rounds_participated, last_active, government_approved, data_type, city, state"
     ).execute()
     return {"hospitals": res.data}
 
 
-# ============================================================
-# RUN
-# ============================================================
+@app.get("/api/audit/trail")
+async def audit_trail():
+    return {"trail": get_audit_trail(limit=100)}
+
+
+@app.get("/api/audit/verify")
+async def audit_verify():
+    return verify_chain()
+
+
+@app.get("/api/geospatial/hotspots")
+async def geospatial_hotspots():
+    return detect_hotspots()
+
+
+@app.get("/api/geospatial/forecast")
+async def geospatial_forecast():
+    return forecast_outbreak()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

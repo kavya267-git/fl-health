@@ -11,8 +11,6 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+
 def get_service_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-def get_supabase() -> Client:
-    return supabase
