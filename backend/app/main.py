@@ -270,7 +270,8 @@ async def hospital_train(
 
     val = validate_credential(hospital_id, credential_hash)
     if not val["valid"]:
-        raise HTTPException(status_code=403, detail="Invalid credential")
+        reason = val.get("reason", "Invalid credential")
+        raise HTTPException(status_code=403, detail=reason)
 
     folder = f"data/hospitals/{hospital_id}"
     if not os.path.exists(folder):
