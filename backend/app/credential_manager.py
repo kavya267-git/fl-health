@@ -70,7 +70,8 @@ def issue_credential(hospital_id: str):
 
 
 def validate_credential(hospital_id: str, credential_hash: str):
-    result = supabase.table("hospitals").select("*").eq("id", hospital_id).execute()
+    service = get_service_client()
+    result = service.table("hospitals").select("*").eq("id", hospital_id).execute()
     if not result.data:
         return {"valid": False, "reason": "Hospital not registered"}
 
