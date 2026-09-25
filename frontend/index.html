@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FL-Health | Federated Learning for Privacy-Preserving Healthcare</title>
+    <link rel="icon" href="data:,">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+            min-height: 100vh;
+            color: #0c4a6e;
+            overflow-x: hidden;
+        }
+        body::before, body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            pointer-events: none;
+            z-index: 0;
+        }
+        body::before { width: 600px; height: 600px; top: -250px; left: -250px; }
+        body::after { width: 500px; height: 500px; bottom: -200px; right: -200px; }
+
+        .nav {
+            position: relative;
+            z-index: 10;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .nav-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+        .nav-brand-icon {
+            width: 44px; height: 44px;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .nav-brand-text { font-size: 20px; font-weight: 700; color: #0c4a6e; }
+        .nav-links { display: flex; gap: 4px; align-items: center; }
+        .nav-link {
+            padding: 10px 14px; font-size: 13px; font-weight: 600;
+            color: #0c4a6e; text-decoration: none; border-radius: 10px;
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: rgba(255, 255, 255, 0.5); }
+        .nav-link.primary {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+            padding: 10px 18px;
+        }
+
+        .hero {
+            position: relative; z-index: 5;
+            max-width: 1300px; margin: 40px auto 60px;
+            padding: 0 40px;
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+        .hero-text h1 {
+            font-size: 52px;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -1.5px;
+            margin-bottom: 20px;
+        }
+        .hero-text h1 .accent {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-text p {
+            font-size: 17px;
+            color: #334155;
+            line-height: 1.7;
+            margin-bottom: 28px;
+        }
+        .hero-quote {
+            display: inline-block;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.7);
+            border-left: 4px solid #0284c7;
+            border-radius: 8px;
+            font-size: 15px;
+            font-style: italic;
+            color: #0c4a6e;
+            font-weight: 500;
+            margin-bottom: 32px;
+        }
+        .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; }
+        .btn-primary, .btn-secondary {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 16px 32px;
+            font-size: 15px; font-weight: 600;
+            text-decoration: none; border-radius: 14px;
+            transition: all 0.25s ease; border: none; cursor: pointer;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #ffffff;
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(2, 132, 199, 0.45); }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.85);
+            color: #0284c7;
+            border: 2px solid #bae6fd;
+        }
+        .btn-secondary:hover { background: #ffffff; border-color: #0284c7; }
+
+        .hero-image { display: flex; justify-content: center; align-items: center; }
+        .hero-image img {
+            width: 100%;
+            max-width: 600px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(2, 132, 199, 0.25);
+        }
+
+        .features {
+            position: relative; z-index: 5;
+            max-width: 1200px; margin: 0 auto 80px;
+            padding: 0 40px;
+        }
+        .features-title {
+            text-align: center; font-size: 34px; font-weight: 700;
+            color: #0c4a6e; letter-spacing: -0.5px; margin-bottom: 8px;
+        }
+        .features-subtitle {
+            text-align: center; font-size: 15px; color: #64748b; margin-bottom: 44px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .feature-card {
+            background: #ffffff; border-radius: 18px; padding: 28px;
+            box-shadow: 0 4px 24px rgba(2, 132, 199, 0.08);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(2, 132, 199, 0.15);
+            border-color: #bae6fd;
+        }
+        .feature-icon {
+            width: 52px; height: 52px;
+            background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; margin-bottom: 16px;
+        }
+        .feature-card h3 { font-size: 17px; font-weight: 700; color: #0c4a6e; margin-bottom: 8px; }
+        .feature-card p { font-size: 14px; color: #64748b; line-height: 1.6; }
+
+        .map-preview {
+            position: relative; z-index: 5;
+            max-width: 1200px; margin: 0 auto 80px;
+            padding: 0 40px;
+        }
+        .map-preview-card {
+            background: linear-gradient(135deg, #0a1628, #0f2236);
+            border-radius: 24px;
+            padding: 48px;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 40px;
+            align-items: center;
+            box-shadow: 0 20px 60px rgba(10, 22, 40, 0.3);
+        }
+        .map-preview-text h2 {
+            font-size: 30px;
+            font-weight: 800;
+            color: #00d4ff;
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+        }
+        .map-preview-text p {
+            font-size: 16px;
+            color: #c0d0e0;
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+        .map-preview-text .tag {
+            display: inline-block;
+            padding: 6px 14px;
+            background: rgba(0, 255, 136, 0.15);
+            color: #00ff88;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+        .map-preview-img img {
+            width: 100%;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.15);
+        }
+
+        .cta-final {
+            position: relative; z-index: 5;
+            max-width: 700px; margin: 0 auto 80px;
+            padding: 0 40px; text-align: center;
+        }
+        .cta-final h2 {
+            font-size: 34px; font-weight: 700; color: #0c4a6e;
+            letter-spacing: -0.5px; margin-bottom: 14px;
+        }
+        .cta-final p { font-size: 16px; color: #64748b; margin-bottom: 30px; line-height: 1.6; }
+
+        footer {
+            position: relative; z-index: 5;
+            padding: 30px 40px; text-align: center;
+            color: #64748b; font-size: 13px;
+            border-top: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        footer strong { color: #0c4a6e; }
+
+        @media (max-width: 900px) {
+            .hero { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+            .hero-text h1 { font-size: 36px; }
+            .hero-cta { justify-content: center; }
+            .map-preview-card { grid-template-columns: 1fr; padding: 32px 24px; }
+            .hero-image img { max-width: 100%; }
+        }
+        @media (max-width: 600px) {
+            .nav-links .nav-link:not(.primary) { display: none; }
+            .nav-links .nav-link.primary { display: inline-block; }
+            .features-title { font-size: 26px; }
+            .map-preview-text h2 { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="nav">
+        <a href="index.html" class="nav-brand">
+            <div class="nav-brand-icon">🏥</div>
+            <div class="nav-brand-text">FL-Health</div>
+        </a>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link">Learn FL</a>
+            <a href="privacy.html" class="nav-link">Privacy</a>
+            <a href="network.html" class="nav-link">Join</a>
+            <a href="login.html" class="nav-link">Sign In</a>
+            <a href="register.html" class="nav-link primary">Register</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-text">
+            <h1>Healthcare AI that<br><span class="accent">never moves patient data</span></h1>
+            <p>
+                FL-Health enables hospitals to train disease prediction models together —
+                without ever sharing patient records. Each hospital trains locally.
+                Only encrypted model updates travel.
+            </p>
+            <div class="hero-quote">"Data stays local. Only learning travels."</div>
+            <div class="hero-cta">
+                <a href="register.html" class="btn-primary">🏥 Register Your Hospital</a>
+                <a href="about.html" class="btn-secondary">📚 Learn How It Works</a>
+            </div>
+        </div>
+        <div class="hero-image">
+            <img src="assets/images/Hero Illustration for Home Page.png" alt="Federated Learning Hero">
+        </div>
+    </section>
+
+    <section class="features">
+        <h2 class="features-title">6 Integrated Modules</h2>
+        <p class="features-subtitle">Every module works together to deliver privacy-preserving collaborative learning</p>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🧠</div>
+                <h3>Multi-Modal Federated Learning</h3>
+                <p>Combines EHR, ECG, and medical images. Each hospital trains locally using FedAvg aggregation.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔐</div>
+                <h3>Adaptive Differential Privacy</h3>
+                <p>Quality-based noise allocation. Better data gets less noise, weaker data gets more protection. ε = 1.0.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>Dynamic Masking & Recovery</h3>
+                <p>Hospitals can disconnect mid-training. KNN imputation keeps the network learning without restarts.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⛓️</div>
+                <h3>Blockchain Audit Trail</h3>
+                <p>Every training round is logged immutably with SHA-256 chain linking. HIPAA and GDPR ready.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🗺️</div>
+                <h3>Geospatial Disease Surveillance</h3>
+                <p>K-means clustering detects disease hotspots. Ensemble forecasting gives 7-21 day early warning.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Real-Time Dashboard</h3>
+                <p>SHAP explainability, privacy budget tracking, accuracy charts, and outbreak forecasts — all live.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="map-preview">
+        <div class="map-preview-card">
+            <div class="map-preview-text">
+                <div class="tag">Live Outbreak Detection</div>
+                <h2>Real-Time Disease Surveillance</h2>
+                <p>
+                    Hospitals across India report disease case counts to the federated network.
+                    Our geospatial engine clusters this data by location — detecting hotspots
+                    and predicting outbreaks 2-4 weeks before they peak.
+                </p>
+                <p>
+                    No individual patient data is exposed. Only aggregate counts and model weights travel.
+                </p>
+            </div>
+            <div class="map-preview-img">
+                <img src="assets/images/Disease Outbreak Map Illustration.png" alt="Disease Outbreak Map of India">
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-final">
+        <h2>Ready to join the network?</h2>
+        <p>Register your hospital today and start training AI that respects patient privacy by design.</p>
+        <a href="register.html" class="btn-primary" style="display: inline-flex;">🏥 Register Hospital</a>
+    </section>
+
+    <footer>
+        <strong>FL-Health</strong> · Federated Learning Based Privacy-Preserving Healthcare System<br>
+        Data stays local. Only learning travels.
+    </footer>
+
+</body>
+</html>

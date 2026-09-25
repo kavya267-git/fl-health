@@ -1,0 +1,104 @@
+# backend/app/credential_manager.py
+import hashlib
+import json
+from datetime import datetime, timedelta
+from app.supabase_client import supabase, get_service_client
+
+
+def generate_credential(hospital_id: str, hospital_name: str, license_number: str):
+    issued_at = datetime.utcnow()
+    expires_at = issued_at + timedelta(days=365)
+
+    credential = {
+        "id": f"cred:{hospital_id}",
+        "type": ["VerifiableCredential", "HospitalCredential"],
+        "issuer": "FL-Health Government Authority (Simulated)",
+        "issuanceDate": issued_at.isoformat(),
+        "expirationDate": expires_at.isoformat(),
+        "credentialSubject": {
+            "id": hospital_id,
+            "hospital_name": hospital_name,
+            "license_number": license_number,
+            "approved_training": ["Heart Disease", "Diabetes", "Breast Cancer"],
+            "privacy_level": "epsilon=1.0",
+        },
+        "proof": {
+            "type": "Ed25519Signature2020",
+            "created": issued_at.isoformat(),
+            "verificationMethod": "did:fl-health:gov#keys-1",
+            "proofPurpose": "assertionMethod",
+        },
+    }
+    credential["proof"]["proofValue"] = hashlib.sha256(
+        json.dumps(credential["credentialSubject"], sort_keys=True).encode()
+    ).hexdigest()
+    return credential, issued_at, expires_at
+
+
+def issue_credential(hospital_id: str):
+    service = get_service_client()
+    result = service.table("hospitals").select("*").eq("id", hospital_id).execute()
+    if not result.data:
+        return {"success": False, "reason": "Hospital not found"}
+
+    hospital = result.data[0]
+    credential, issued_at, expires_at = generate_credential(
+        hospital_id=hospital_id,
+        hospital_name=hospital["hospital_name"],
+        license_number=hospital.get("license_number", "N/A"),
+    )
+
+    credential_hash = hashlib.sha256(
+        json.dumps(credential, sort_keys=True).encode()
+    ).hexdigest()
+
+    service.table("hospitals").update({
+        "is_credential_valid": True,
+        "government_approved": True,
+        "credential_issued_at": issued_at.isoformat(),
+        "credential_expires_at": expires_at.isoformat(),
+        "credential_hash": credential_hash,
+        "credential_metadata": credential,
+    }).eq("id", hospital_id).execute()
+
+    return {
+        "success": True,
+        "message": "Credential issued successfully",
+        "credential_hash": credential_hash,
+        "expires_at": expires_at.isoformat(),
+    }
+
+
+def validate_credential(hospital_id: str, credential_hash: str):
+    service = get_service_client()
+    result = service.table("hospitals").select("*").eq("id", hospital_id).execute()
+    if not result.data:
+        return {"valid": False, "reason": "Hospital not registered"}
+
+    hospital = result.data[0]
+    expires = hospital.get("credential_expires_at")
+
+    # Use proper datetime comparison for expiry
+    not_expired = False
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00").replace("+00:00", ""))
+            not_expired = datetime.utcnow() < exp_dt
+        except Exception:
+            not_expired = False
+
+    checks = {
+        "hash_match": credential_hash == hospital.get("credential_hash"),
+        "not_expired": not_expired,
+        "government_approved": hospital.get("government_approved", False),
+        "credential_valid": hospital.get("is_credential_valid", False),
+    }
+
+    # Log which checks failed for debugging
+    failed = [k for k, v in checks.items() if not v]
+    if failed:
+        print(f"[CREDENTIAL] Hospital {hospital_id}: failed checks = {failed}")
+        print(f"[CREDENTIAL] Sent hash: {credential_hash[:16]}... DB hash: {str(hospital.get('credential_hash', ''))[:16]}...")
+
+    reason = f"Failed checks: {', '.join(failed)}" if failed else None
+    return {"valid": all(checks.values()), "checks": checks, "reason": reason}
