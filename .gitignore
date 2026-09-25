@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# Env
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data uploads — do NOT commit patient data
+data/hospitals/
+# Keep the folder structure tracked by git
+!data/hospitals/.gitkeep
+!data/global_model/.gitkeep
+
+# Model weights — regenerated on server
+*.pth
+*.pt
+*.db
+*.zip
+
+# Logs
+*.log
