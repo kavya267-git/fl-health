@@ -161,6 +161,7 @@
             background: #0a1628; z-index: 1;
         }
         .leaflet-container { background: #0a1628 !important; border-radius: 8px; }
+        .dark-tiles { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
         .leaflet-popup-content-wrapper { background: #0f2236 !important; color: #ffffff !important; border-radius: 8px !important; }
         .leaflet-popup-tip { background: #0f2236 !important; }
         .leaflet-popup-content { margin: 12px 16px !important; font-family: 'Inter', sans-serif; font-size: 13px; }
@@ -640,10 +641,11 @@ function initLeafletMap() {
         attributionControl: false
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap © CartoDB',
-        subdomains: 'abcd',
-        maxZoom: 19
+    // Using default OpenStreetMap with CSS inversion for dark mode
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+        className: 'dark-tiles'
     }).addTo(leafletMap);
 
     loadHotspots();
