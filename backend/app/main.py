@@ -5,6 +5,10 @@ import shutil
 import zipfile
 from datetime import datetime
 
+# Absolute base path so data/ always resolves correctly regardless of CWD
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+
 from fastapi import FastAPI, Form, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -29,8 +33,8 @@ app.add_middleware(
 )
 
 fl_engine = FLEngine()
-os.makedirs("data/hospitals", exist_ok=True)
-os.makedirs("data/global_model", exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "hospitals"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "global_model"), exist_ok=True)
 
 
 class LoginRequest(BaseModel):
@@ -190,7 +194,7 @@ async def upload_hospital_data(
                             detail=f"Unsupported format. Allowed: {', '.join(allowed_exts)}")
 
     hospital_id = hospital["id"]
-    folder = f"data/hospitals/{hospital_id}"
+    folder = os.path.join(DATA_DIR, "hospitals", hospital_id)
     os.makedirs(folder, exist_ok=True)
 
     if ext == ".zip":
@@ -203,6 +207,17 @@ async def upload_hospital_data(
         dest = os.path.join(folder, file.filename)
         with open(dest, "wb") as f:
             shutil.copyfileobj(file.file, f)
+
+    return {"message": "Files processed", "status": "success"}
+
+@app.delete("/api/hospital/clear-data")
+async def clear_hospital_data(hospital=Depends(require_role("hospital"))):
+    hospital_id = hospital["id"]
+    folder = os.path.join(DATA_DIR, "hospitals", hospital_id)
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+        os.makedirs(folder, exist_ok=True)
+    return {"message": "Data cleared"}
 
     ehr_count = ecg_count = xray_count = other_count = 0
     for root, _, files in os.walk(folder):
@@ -273,7 +288,7 @@ async def hospital_train(
         reason = val.get("reason", "Invalid credential")
         raise HTTPException(status_code=403, detail=reason)
 
-    folder = f"data/hospitals/{hospital_id}"
+    folder = os.path.join(DATA_DIR, "hospitals", hospital_id)
     if not os.path.exists(folder):
         raise HTTPException(status_code=400, detail="Upload your data first")
 

@@ -24,12 +24,14 @@ class FLEngine:
         self.global_classifier = SharedClassifier(embedding_size=32)
         self.client_updates = {}
         self.round = 0
-        self.model_dir = "data/global_model"
+        # Absolute path so model persists correctly regardless of CWD
+        _base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.model_dir = os.path.join(_base, "data", "global_model")
         os.makedirs(self.model_dir, exist_ok=True)
 
         path = os.path.join(self.model_dir, "classifier.pth")
         if os.path.exists(path):
-            self.global_classifier.load_state_dict(torch.load(path))
+            self.global_classifier.load_state_dict(torch.load(path, weights_only=True))
 
     def get_global_classifier(self):
         return self.global_classifier.state_dict()
@@ -50,15 +52,15 @@ class FLEngine:
         opt = optim.Adam(classifier.parameters(), lr=lr)
         loss_fn = nn.BCELoss()
 
-        # Optimize for Render Free Tier: Cap samples and increase batch size to prevent timeouts
-        max_samples = 2048
+        # Cap samples for free-tier hosting (Render 30s request timeout)
+        max_samples = 512
         if len(embeddings) > max_samples:
             indices = torch.randperm(len(embeddings))[:max_samples]
             embeddings = embeddings[indices]
             labels = labels[indices]
 
         classifier.train()
-        batch_size = 128
+        batch_size = 256
         for _ in range(epochs):
             for i in range(0, len(embeddings), batch_size):
                 bx = embeddings[i:i + batch_size]
