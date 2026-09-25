@@ -220,15 +220,34 @@
         .prediction-badge.low { background: rgba(0,255,136,0.2); color: #00ff88; }
 
         .alert-banner {
-            background: linear-gradient(90deg, rgba(255,68,68,0.15), rgba(255,68,68,0.05));
-            border: 1px solid rgba(255,68,68,0.4);
-            border-left: 4px solid #ff4444;
-            border-radius: 10px; padding: 14px 20px;
-            margin-bottom: 20px; display: none; align-items: center; gap: 12px;
+            background: linear-gradient(135deg, rgba(255,68,68,0.15), rgba(10,22,40,0.8));
+            border: 1px solid rgba(255,68,68,0.4); border-left: 4px solid #ff4444;
+            border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;
+            display: none; align-items: flex-start; gap: 16px;
+            box-shadow: 0 8px 32px rgba(255,68,68,0.15);
+            position: relative; overflow: hidden; animation: slideDown 0.4s ease-out;
+            backdrop-filter: blur(10px);
         }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .alert-banner.show { display: flex; }
-        .alert-banner .icon { font-size: 1.5em; }
-        .alert-banner .text strong { color: #ff6b6b; }
+        .alert-banner .icon-wrapper {
+            background: rgba(255,68,68,0.2); padding: 12px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(255,68,68,0.3); animation: pulseAlert 2s infinite;
+        }
+        @keyframes pulseAlert { 0%,100%{box-shadow:0 0 0 0 rgba(255,68,68,0.4);} 50%{box-shadow:0 0 0 10px rgba(255,68,68,0);} }
+        .alert-banner .icon { font-size: 1.6em; }
+        .alert-banner .text-content { flex: 1; }
+        .alert-banner .alert-title { color: #ff6b6b; font-size: 1.1em; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .alert-banner .text { color: #c0d0e0; font-size: 0.95em; line-height: 1.5; }
+        .alert-banner .text strong { color: #ffffff; font-weight: 600; }
+        .alert-action {
+            padding: 8px 16px; background: rgba(255,68,68,0.15); color: #ff6b6b;
+            border: 1px solid rgba(255,68,68,0.4); border-radius: 6px;
+            font-size: 0.85em; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            margin-top: 12px; display: inline-block; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .alert-action:hover { background: rgba(255,68,68,0.25); color: #ffffff; }
 
         @media (max-width: 900px) {
             .grid-2x2, .action-bar, .bottom-kpis { grid-template-columns: 1fr; }
@@ -248,9 +267,15 @@
         </div>
     </div>
 
-    <div class="alert-banner" id="alertBanner">
-        <div class="icon">🚨</div>
-        <div class="text" id="alertText">Disease outbreak alert detected</div>
+    <div class="alert-banner show" id="alertBanner">
+        <div class="icon-wrapper">
+            <div class="icon">🚨</div>
+        </div>
+        <div class="text-content">
+            <div class="alert-title">Critical High Alert</div>
+            <div class="text" id="alertText">Disease outbreak alert detected. Immediate action is recommended.</div>
+            <div class="alert-action" onclick="document.getElementById('alertBanner').classList.remove('show')">Acknowledge Alert</div>
+        </div>
     </div>
 
     <div class="action-bar" id="actionBar" style="display:none;">
