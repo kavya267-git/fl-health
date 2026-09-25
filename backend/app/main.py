@@ -277,7 +277,7 @@ async def hospital_train(
         reason = val.get("reason", "Invalid credential")
         raise HTTPException(status_code=403, detail=reason)
 
-    folder = f"data/hospitals/{hospital_id}"
+    folder = os.path.join(DATA_DIR, "hospitals", hospital_id)
     if not os.path.exists(folder):
         raise HTTPException(status_code=400, detail="Upload your data first")
 
