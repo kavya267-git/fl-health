@@ -290,13 +290,13 @@
         <div class="action-card">
             <h3>🚀 Train Local Model</h3>
             <div class="row">
-                <label style="color:#6b8aa8;font-size:0.85em;">Epochs</label>
-                <input type="number" id="epochs" value="5" min="1" max="20" class="input-small">
+                <label style="color:#6b8aa8;font-size:0.85em;" title="Keep low (2-3) to avoid server timeout">Epochs</label>
+                <input type="number" id="epochs" value="3" min="1" max="10" class="input-small" title="Recommended: 2-3 epochs on free-tier server">
                 <label style="color:#6b8aa8;font-size:0.85em;">ε</label>
                 <input type="number" id="epsilon" value="1.0" step="0.1" min="0.1" max="10" class="input-small">
                 <button class="btn-action train" id="trainBtn" onclick="trainModel()">Start Training</button>
             </div>
-            <div class="status-msg" id="trainStatus">Ensure your data is uploaded first.</div>
+            <div class="status-msg" id="trainStatus">Ensure your data is uploaded first. Keep epochs low (2-3) on free hosting.</div>
         </div>
     </div>
 
@@ -410,8 +410,10 @@
         </div>
     </div>
 
+<script src="config.js"></script>
 <script>
-const API_URL = "https://fl-health-y7k0.onrender.com";
+// API_URL is defined in config.js
+
 
 let currentToken = null;
 let currentUser = null;
@@ -510,7 +512,7 @@ async function trainModel() {
     const status = document.getElementById("trainStatus");
     const btn = document.getElementById("trainBtn");
     if (!credentialHash) {
-        status.textContent = "❌ No valid credential.";
+        status.textContent = "❌ No valid credential. Awaiting admin approval.";
         status.className = "status-msg error";
         return;
     }
@@ -521,24 +523,37 @@ async function trainModel() {
     formData.append("epsilon", document.getElementById("epsilon").value);
 
     btn.disabled = true;
-    status.textContent = "⏳ Training locally...";
+    status.textContent = "⏳ Training in progress — this may take up to 2 minutes...";
     status.className = "status-msg";
+
+    // Use AbortController with 120s timeout (training with PyTorch takes time on free servers)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     try {
         const res = await fetch(`${API_URL}/api/hospital/train`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${currentToken}` },
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Training failed");
-        status.textContent = `✅ Trained! Accuracy: ${(data.accuracy * 100).toFixed(1)}% | ε=${data.epsilon_used}`;
+        status.textContent = `✅ Trained! Accuracy: ${(data.accuracy * 100).toFixed(1)}% | Privacy Score: ${(data.privacy_score * 100).toFixed(0)}% | ε=${data.epsilon_used}`;
         status.className = "status-msg success";
         await loadDashboard();
         await loadAuditTrail();
         await loadGeospatial();
     } catch (e) {
-        status.textContent = `❌ ${e.message}`;
+        clearTimeout(timeoutId);
+        if (e.name === "AbortError") {
+            status.textContent = "❌ Training timed out. The server is taking too long — try reducing Epochs to 2 and retry.";
+        } else if (e.message === "Failed to fetch") {
+            status.textContent = "❌ Cannot reach the server. The backend may be sleeping (Render free tier). Wait 30 seconds and try again, or check your data was uploaded after the server woke up.";
+        } else {
+            status.textContent = `❌ ${e.message}`;
+        }
         status.className = "status-msg error";
     } finally { btn.disabled = false; }
 }
