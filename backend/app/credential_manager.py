@@ -78,13 +78,27 @@ def validate_credential(hospital_id: str, credential_hash: str):
     hospital = result.data[0]
     expires = hospital.get("credential_expires_at")
 
+    # Use proper datetime comparison for expiry
+    not_expired = False
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00").replace("+00:00", ""))
+            not_expired = datetime.utcnow() < exp_dt
+        except Exception:
+            not_expired = False
+
     checks = {
         "hash_match": credential_hash == hospital.get("credential_hash"),
-        "not_expired": (
-            expires is not None and datetime.utcnow().isoformat() < expires
-        ),
+        "not_expired": not_expired,
         "government_approved": hospital.get("government_approved", False),
         "credential_valid": hospital.get("is_credential_valid", False),
     }
 
-    return {"valid": all(checks.values()), "checks": checks}
+    # Log which checks failed for debugging
+    failed = [k for k, v in checks.items() if not v]
+    if failed:
+        print(f"[CREDENTIAL] Hospital {hospital_id}: failed checks = {failed}")
+        print(f"[CREDENTIAL] Sent hash: {credential_hash[:16]}... DB hash: {str(hospital.get('credential_hash', ''))[:16]}...")
+
+    reason = f"Failed checks: {', '.join(failed)}" if failed else None
+    return {"valid": all(checks.values()), "checks": checks, "reason": reason}
