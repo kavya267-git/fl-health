@@ -208,6 +208,17 @@ async def upload_hospital_data(
         with open(dest, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
+    return {"message": "Files processed", "status": "success"}
+
+@app.delete("/api/hospital/clear-data")
+async def clear_hospital_data(hospital=Depends(require_role("hospital"))):
+    hospital_id = hospital["id"]
+    folder = os.path.join(DATA_DIR, "hospitals", hospital_id)
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+        os.makedirs(folder, exist_ok=True)
+    return {"message": "Data cleared"}
+
     ehr_count = ecg_count = xray_count = other_count = 0
     for root, _, files in os.walk(folder):
         for fname in files:
