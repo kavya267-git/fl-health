@@ -50,11 +50,19 @@ class FLEngine:
         opt = optim.Adam(classifier.parameters(), lr=lr)
         loss_fn = nn.BCELoss()
 
+        # Optimize for Render Free Tier: Cap samples and increase batch size to prevent timeouts
+        max_samples = 2048
+        if len(embeddings) > max_samples:
+            indices = torch.randperm(len(embeddings))[:max_samples]
+            embeddings = embeddings[indices]
+            labels = labels[indices]
+
         classifier.train()
+        batch_size = 128
         for _ in range(epochs):
-            for i in range(0, len(embeddings), 16):
-                bx = embeddings[i:i + 16]
-                by = labels[i:i + 16]
+            for i in range(0, len(embeddings), batch_size):
+                bx = embeddings[i:i + batch_size]
+                by = labels[i:i + batch_size]
                 opt.zero_grad()
                 out = classifier(bx)
                 loss = loss_fn(out, by)
