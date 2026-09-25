@@ -83,7 +83,16 @@ def encode_file(filepath: str, target_embedding_size: int = 32):
     data_type = detect_data_type(filepath)
 
     if data_type == "ehr":
-        df = pd.read_csv(filepath, header=None)
+        try:
+            df = pd.read_csv(filepath, header=None)
+            df.iloc[0].astype(np.float32)
+        except ValueError:
+            df = pd.read_csv(filepath, header=0)
+            
+        df = df.select_dtypes(include=[np.number])
+        if df.shape[1] < 2:
+            raise ValueError("CSV must contain at least 2 numeric columns for training.")
+
         n_features = df.shape[1] - 1
         last_col = df.iloc[:, -1]
         if last_col.nunique() <= 2:

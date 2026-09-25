@@ -292,14 +292,17 @@ async def hospital_train(
     if not data_file:
         raise HTTPException(status_code=400, detail="No valid data files found")
 
-    result = fl_engine.train_local(data_file, epochs=epochs)
-    noisy_weights = fl_engine.add_differential_privacy(result["weights"], epsilon=epsilon)
-    fl_engine.store_update(hospital_id, noisy_weights, result["data_size"])
+    try:
+        result = fl_engine.train_local(data_file, epochs=epochs)
+        noisy_weights = fl_engine.add_differential_privacy(result["weights"], epsilon=epsilon)
+        fl_engine.store_update(hospital_id, noisy_weights, result["data_size"])
 
-    privacy_score = fl_engine.calculate_privacy_score(
-        result["data_size"], result["accuracy"], epsilon
-    )
-    model_hash = hashlib.sha256(str(noisy_weights).encode()).hexdigest()
+        privacy_score = fl_engine.calculate_privacy_score(
+            result["data_size"], result["accuracy"], epsilon
+        )
+        model_hash = hashlib.sha256(str(noisy_weights).encode()).hexdigest()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Training error: {str(e)}")
 
     service = get_service_client()
     service.table("training_history").insert({
