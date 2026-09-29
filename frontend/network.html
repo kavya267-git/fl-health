@@ -200,11 +200,41 @@
             padding: 40px; text-align: center;
             color: #64748b; font-size: 13px;
         }
+        /* LIVE STATS BAR */
+        .live-bar {
+            display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+            max-width: 1000px; margin: 0 auto 32px; padding: 0 40px;
+        }
+        .live-stat {
+            background: rgba(255,255,255,0.85); border-radius: 14px; padding: 16px 12px;
+            text-align: center; box-shadow: 0 4px 20px rgba(2,132,199,0.1);
+            border: 1px solid rgba(2,132,199,0.15);
+            backdrop-filter: blur(10px);
+        }
+        .live-stat .val { font-size: 22px; font-weight: 800; color: #0284c7; }
+        .live-stat .lbl { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+        .round-bar { background: #e0f2fe; border-radius: 4px; height: 4px; margin-top: 6px; overflow: hidden; }
+        .round-fill { background: linear-gradient(90deg, #0284c7, #38bdf8); height: 100%; border-radius: 4px; transition: width 0.5s; }
+        /* EARLY DETECTION */
+        .detection-panel {
+            background: linear-gradient(135deg, #fff7ed, #fef3c7);
+            border: 2px solid #f59e0b; border-radius: 20px;
+            padding: 32px; margin-bottom: 32px;
+            box-shadow: 0 4px 20px rgba(245,158,11,0.1);
+        }
+        .detection-panel h3 { font-size: 20px; font-weight: 700; color: #92400e; margin-bottom: 8px; }
+        .detection-panel p  { font-size: 14px; color: #78350f; margin-bottom: 16px; }
+        .detection-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .detection-card { background: rgba(255,255,255,0.7); border-radius: 12px; padding: 16px; text-align: center; }
+        .detection-card .d-val { font-size: 20px; font-weight: 700; color: #d97706; }
+        .detection-card .d-lbl { font-size: 11px; color: #78350f; font-weight: 600; margin-top: 2px; }
         @media (max-width: 900px) {
             .analogy-grid { grid-template-columns: 1fr; }
             .section { padding: 32px 24px; }
             .hero h1 { font-size: 32px; }
             .nav-links .nav-link:not(.primary) { display: none; }
+            .live-bar { grid-template-columns: repeat(3, 1fr); }
+            .detection-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -233,6 +263,16 @@
             and start collaborating with the federated network.
         </p>
     </section>
+
+    <!-- LIVE FL NETWORK STATUS BAR -->
+    <div class="live-bar" id="liveBar">
+        <div class="live-stat"><div class="val" id="lsRound">—</div><div class="lbl">FL Round</div><div class="round-bar"><div class="round-fill" id="lsRoundFill" style="width:0%"></div></div></div>
+        <div class="live-stat"><div class="val" id="lsHospitals">—</div><div class="lbl">Hospitals</div></div>
+        <div class="live-stat"><div class="val" id="lsActive">—</div><div class="lbl">Active (24h)</div></div>
+        <div class="live-stat"><div class="val" id="lsAcc">—</div><div class="lbl">Avg Accuracy</div></div>
+        <div class="live-stat"><div class="val" id="lsEps">ε=1.0</div><div class="lbl">Privacy Budget</div></div>
+        <div class="live-stat"><div class="val" id="lsByz">30%+</div><div class="lbl">Dropout Tolerance</div></div>
+    </div>
 
     <div class="progress">
         <div class="progress-dot"></div>
@@ -341,12 +381,64 @@
             </div>
         </div>
 
+        <!-- EARLY DETECTION PANEL -->
+        <div class="detection-panel" id="detectionPanel" style="display:none;">
+            <h3>🚨 7-21 Day Early Detection Alert</h3>
+            <p id="detectionMsg">Loading disease surveillance data…</p>
+            <div class="detection-grid" id="detectionGrid"></div>
+        </div>
+
         <div class="cta-box">
             <h2>Ready to join the network?</h2>
             <p>Register your hospital and start training AI that respects patient privacy.</p>
             <a href="register.html" class="btn-white">🏥 Register Hospital</a>
         </div>
     </div>
+
+    <script src="config.js"></script>
+    <script>
+    async function loadLiveStats() {
+        try {
+            const data = await fetch(`${API_URL}/api/public/fl-status`).then(r => r.json());
+            document.getElementById("lsRound").textContent     = `R${data.current_round}`;
+            document.getElementById("lsHospitals").textContent = data.approved_hospitals;
+            document.getElementById("lsActive").textContent    = data.active_last_24h;
+            document.getElementById("lsAcc").textContent       = data.avg_accuracy > 0 ? data.avg_accuracy + "%" : "—";
+            document.getElementById("lsEps").textContent       = `ε=${data.privacy_budget}`;
+            document.getElementById("lsByz").textContent       = data.dropout_tolerance;
+            document.getElementById("lsRoundFill").style.width = data.round_progress_pct + "%";
+        } catch (e) { console.warn("Live stats unavailable"); }
+    }
+
+    async function loadEarlyDetection() {
+        try {
+            const data = await fetch(`${API_URL}/api/geospatial/early-alerts`).then(r => r.json());
+            const ed = data.early_detection || {};
+            const panel = document.getElementById("detectionPanel");
+            const alerts = data.early_alerts || [];
+
+            if (alerts.length > 0 || ed["7day_growth_pct"] > 0) {
+                panel.style.display = "block";
+                const alertLevel = data.alert_level || "GREEN";
+                const alertColor = alertLevel === "RED" ? "#dc2626" : alertLevel === "YELLOW" ? "#d97706" : "#16a34a";
+                document.getElementById("detectionMsg").innerHTML =
+                    `Alert Level: <strong style="color:${alertColor}">${alertLevel}</strong> · ` +
+                    `Detection window: ${data.detection_window} · ` +
+                    `${alerts.length} hospital(s) with recent activity`;
+
+                document.getElementById("detectionGrid").innerHTML = [
+                    { label: "7-Day Growth",  val: (ed["7day_growth_pct"]  || 0) + "%" },
+                    { label: "14-Day Growth", val: (ed["14day_growth_pct"] || 0) + "%" },
+                    { label: "21-Day Growth", val: (ed["21day_growth_pct"] || 0) + "%" },
+                ].map(c => `<div class="detection-card"><div class="d-val">${c.val}</div><div class="d-lbl">${c.label}</div></div>`).join("");
+            }
+        } catch (e) { /* non-fatal */ }
+    }
+
+    loadLiveStats();
+    loadEarlyDetection();
+    setInterval(loadLiveStats, 30000);
+    </script>
 
     <div class="page-nav">
         <a href="privacy.html" class="page-nav-btn">← Back: Privacy</a>

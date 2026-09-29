@@ -219,6 +219,41 @@
         .prediction-badge.medium { background: rgba(255,170,0,0.2); color: #ffaa00; }
         .prediction-badge.low { background: rgba(0,255,136,0.2); color: #00ff88; }
 
+        /* Upload / Training history tables */
+        .history-table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+        .history-table th {
+            color: #6b8aa8; text-align: left; padding: 8px 10px;
+            border-bottom: 1px solid #1a3555; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.8em;
+        }
+        .history-table td {
+            padding: 9px 10px; border-bottom: 1px solid rgba(26,53,85,0.5);
+            color: #c0d0e0; vertical-align: middle;
+        }
+        .history-table tr:last-child td { border-bottom: none; }
+        .history-table tr:hover td { background: rgba(0,212,255,0.04); }
+        .tag {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 0.78em; font-weight: 700; text-transform: uppercase;
+        }
+        .tag.ehr  { background: rgba(0,212,255,0.15); color: #00d4ff; }
+        .tag.ecg  { background: rgba(255,170,0,0.15);  color: #ffaa00; }
+        .tag.image{ background: rgba(0,255,136,0.15);  color: #00ff88; }
+        .tag.zip  { background: rgba(150,80,255,0.15); color: #aa80ff; }
+        .tag.completed { background: rgba(0,255,136,0.12); color: #00ff88; }
+        .tag.cleared   { background: rgba(255,68,68,0.12);  color: #ff6b6b; }
+        .dataset-bar {
+            display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+        }
+        .dataset-pill {
+            padding: 4px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 600;
+        }
+        .dataset-pill.ehr   { background: rgba(0,212,255,0.15); color: #00d4ff; border: 1px solid rgba(0,212,255,0.3); }
+        .dataset-pill.ecg   { background: rgba(255,170,0,0.15);  color: #ffaa00; border: 1px solid rgba(255,170,0,0.3); }
+        .dataset-pill.xray  { background: rgba(0,255,136,0.15);  color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+        .dataset-pill.other { background: rgba(150,80,255,0.15); color: #aa80ff; border: 1px solid rgba(150,80,255,0.3); }
+        .empty-state { color: #6b8aa8; font-size: 0.85em; padding: 16px 0; text-align: center; }
+
         .alert-banner {
             background: linear-gradient(135deg, rgba(255,68,68,0.15), rgba(10,22,40,0.8));
             border: 1px solid rgba(255,68,68,0.4); border-left: 4px solid #ff4444;
@@ -263,6 +298,7 @@
         </div>
         <div class="header-actions">
             <div class="badge-live">Live</div>
+            <button id="downloadModelBtn" onclick="downloadGlobalModel()" style="display:none;padding:8px 14px;background:linear-gradient(135deg,#00d4ff,#00a3cc);color:#0a1628;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-family:'Inter',sans-serif;font-size:0.82em;" title="Download the current global model weights">⬇️ Model</button>
             <button class="btn-logout" onclick="logout()">Logout</button>
         </div>
     </div>
@@ -383,6 +419,68 @@
         </div>
     </div>
 
+    <!-- ── Upload History + Dataset Info (hospital-only) ─────────────────── -->
+    <div class="grid-2x2" id="hospitalDataSection" style="display:none;">
+        <div class="card">
+            <div class="card-title">
+                📂 Current Dataset on Server
+                <span class="badge" id="datasetFileCount">— files</span>
+            </div>
+            <div id="datasetInfo">
+                <div class="empty-state">Loading dataset info…</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">
+                📤 Upload History
+                <span class="badge" id="uploadHistoryCount">—</span>
+            </div>
+            <div style="max-height: 260px; overflow-y: auto;">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Files</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="uploadHistoryBody">
+                        <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Training History (hospital-only) ──────────────────────────────── -->
+    <div class="card" id="trainingHistorySection" style="display:none; margin-bottom: 20px;">
+        <div class="card-title">
+            🧠 Training History
+            <span class="badge" id="trainingHistoryCount">— sessions</span>
+        </div>
+        <div style="max-height: 300px; overflow-y: auto;">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Round</th>
+                        <th>File Used</th>
+                        <th>Data Type</th>
+                        <th>Samples</th>
+                        <th>Accuracy</th>
+                        <th>ε</th>
+                        <th>Privacy Score</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="trainingHistoryBody">
+                    <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="bottom-kpis">
         <div class="bottom-kpi">
             <div class="icon">📊</div>
@@ -414,7 +512,6 @@
 <script>
 // API_URL is defined in config.js
 
-
 let currentToken = null;
 let currentUser = null;
 let isHospital = false;
@@ -440,7 +537,13 @@ async function init() {
     isHospital = (role === "hospital");
     if (isHospital) {
         document.getElementById("actionBar").style.display = "grid";
+        document.getElementById("hospitalDataSection").style.display = "grid";
+        document.getElementById("trainingHistorySection").style.display = "block";
+        document.getElementById("downloadModelBtn").style.display = "inline-block";
         await loadHospitalCredentials();
+        await loadDatasetInfo();
+        await loadUploadHistory();
+        await loadTrainingHistory();
     }
 
     initConvergenceChart();
@@ -455,6 +558,11 @@ async function init() {
     setInterval(loadDashboard, 15000);
     setInterval(loadAuditTrail, 30000);
     setInterval(loadGeospatial, 30000);
+    if (isHospital) {
+        setInterval(loadUploadHistory, 30000);
+        setInterval(loadTrainingHistory, 30000);
+        setInterval(loadDatasetInfo, 30000);
+    }
 }
 
 async function loadHospitalCredentials() {
@@ -500,8 +608,13 @@ async function uploadData() {
         if (!res.ok) throw new Error(data.detail || "Upload failed");
         status.textContent = `✅ ${data.message}`;
         status.className = "status-msg success";
-        await loadDashboard();
-        await loadGeospatial();
+        // Refresh all panels after a successful upload
+        await Promise.all([
+            loadDashboard(),
+            loadGeospatial(),
+            loadUploadHistory(),
+            loadDatasetInfo(),
+        ]);
     } catch (e) {
         status.textContent = `❌ ${e.message}`;
         status.className = "status-msg error";
@@ -540,11 +653,16 @@ async function trainModel() {
         clearTimeout(timeoutId);
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Training failed");
-        status.textContent = `✅ Trained! Accuracy: ${(data.accuracy * 100).toFixed(1)}% | Privacy Score: ${(data.privacy_score * 100).toFixed(0)}% | ε=${data.epsilon_used}`;
+        const fileInfo = data.file_name ? ` | File: ${data.file_name}` : '';
+        const hashInfo = data.model_hash ? ` | Hash: ${data.model_hash}` : '';
+        status.textContent = `✅ Trained! Accuracy: ${(data.accuracy * 100).toFixed(1)}% | Privacy: ${(data.privacy_score * 100).toFixed(0)}% | ε=${data.epsilon_used}${fileInfo}${hashInfo}`;
         status.className = "status-msg success";
-        await loadDashboard();
-        await loadAuditTrail();
-        await loadGeospatial();
+        await Promise.all([
+            loadDashboard(),
+            loadAuditTrail(),
+            loadGeospatial(),
+            loadTrainingHistory(),
+        ]);
     } catch (e) {
         clearTimeout(timeoutId);
         if (e.name === "AbortError") {
@@ -824,19 +942,173 @@ async function loadAuditTrail() {
             return;
         }
 
-        container.innerHTML = trail.slice(0, 10).map(e => `
-            <div style="padding:10px;background:#0a1628;border-radius:6px;margin-bottom:6px;border-left:3px solid ${e.event_type === 'TRAIN' ? '#00ff88' : e.event_type === 'UPLOAD' ? '#00d4ff' : '#ffaa00'};">
-                <div style="display:flex;justify-content:space-between;">
-                    <strong style="color:#00d4ff;">${e.event_type}</strong>
-                    <span style="color:#6b8aa8;font-size:0.9em;">R${e.round_number}</span>
+        const colorMap = { TRAIN: '#00ff88', UPLOAD: '#00d4ff', CREDENTIAL_ISSUE: '#ffaa00', AGGREGATE: '#aa80ff' };
+        container.innerHTML = trail.slice(0, 15).map(e => {
+            const color = colorMap[e.event_type] || '#6b8aa8';
+            const meta = e.metadata || {};
+            let extraInfo = '';
+            if (e.event_type === 'UPLOAD' && meta.file_name)
+                extraInfo = `<div style="color:#6b8aa8;font-size:0.8em;margin-top:2px;">📄 ${meta.file_name} · ${meta.total || 0} files</div>`;
+            if (e.event_type === 'TRAIN' && meta.file_name)
+                extraInfo = `<div style="color:#6b8aa8;font-size:0.8em;margin-top:2px;">📄 ${meta.file_name} · Acc: ${((meta.accuracy||0)*100).toFixed(1)}%</div>`;
+            return `
+            <div style="padding:10px;background:#0a1628;border-radius:6px;margin-bottom:6px;border-left:3px solid ${color};">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <strong style="color:${color};">${e.event_type}</strong>
+                    <span style="color:#6b8aa8;font-size:0.85em;">R${e.round_number}</span>
                 </div>
-                <div style="color:#c0d0e0;margin-top:4px;">${e.hospital_name}</div>
-                <div style="color:#6b8aa8;font-size:0.85em;margin-top:4px;">
-                    ε: ${e.epsilon_used} · Hash: ${(e.current_hash || '').slice(0, 12)}...
+                <div style="color:#c0d0e0;margin-top:4px;font-size:0.9em;">${e.hospital_name}</div>
+                ${extraInfo}
+                <div style="color:#6b8aa8;font-size:0.78em;margin-top:4px;">
+                    ε: ${e.epsilon_used} · ${(e.current_hash || '').slice(0, 14)}…
                 </div>
-            </div>
-        `).join("");
+            </div>`;
+        }).join("");
     } catch (e) { console.error("Audit failed:", e); }
+}
+
+// ── Upload History ────────────────────────────────────────────────────────────
+async function loadUploadHistory() {
+    if (!isHospital || !currentToken) return;
+    try {
+        const res = await fetch(`${API_URL}/api/hospital/uploads`, {
+            headers: { "Authorization": `Bearer ${currentToken}` }
+        });
+        const data = await res.json();
+        const uploads = data.uploads || [];
+        const tbody = document.getElementById("uploadHistoryBody");
+        document.getElementById("uploadHistoryCount").textContent = `${uploads.length} uploads`;
+
+        if (!uploads.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No uploads yet. Upload your first dataset above.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = uploads.map(u => {
+            const date = u.created_at ? new Date(u.created_at).toLocaleString() : '—';
+            const typeTag = `<span class="tag ${u.file_type || 'other'}">${u.file_type || 'unknown'}</span>`;
+            const statusTag = `<span class="tag ${u.upload_status || 'completed'}">${u.upload_status || 'completed'}</span>`;
+            const sizeStr = u.file_size ? formatBytes(u.file_size) : '—';
+            return `<tr>
+                <td style="color:#ffffff;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${u.file_name}">${u.file_name}</td>
+                <td>${typeTag}</td>
+                <td style="color:#00d4ff;">${u.file_count || 0} <span style="color:#6b8aa8;font-size:0.85em;">(${sizeStr})</span></td>
+                <td style="color:#6b8aa8;font-size:0.85em;">${date}</td>
+                <td>${statusTag}</td>
+            </tr>`;
+        }).join("");
+    } catch (e) { console.error("Upload history failed:", e); }
+}
+
+// ── Dataset Info ──────────────────────────────────────────────────────────────
+async function loadDatasetInfo() {
+    if (!isHospital || !currentToken) return;
+    try {
+        const res = await fetch(`${API_URL}/api/hospital/dataset-info`, {
+            headers: { "Authorization": `Bearer ${currentToken}` }
+        });
+        const data = await res.json();
+        const container = document.getElementById("datasetInfo");
+        document.getElementById("datasetFileCount").textContent = `${data.total_files || 0} files`;
+
+        if (!data.has_data) {
+            container.innerHTML = '<div class="empty-state">No data on server. Upload a dataset to begin.</div>';
+            return;
+        }
+
+        const pills = [
+            data.ehr_files  ? `<span class="dataset-pill ehr">📋 EHR: ${data.ehr_files}</span>` : '',
+            data.ecg_files  ? `<span class="dataset-pill ecg">📈 ECG: ${data.ecg_files}</span>` : '',
+            data.xray_files ? `<span class="dataset-pill xray">🩻 X-Ray: ${data.xray_files}</span>` : '',
+            data.other_files? `<span class="dataset-pill other">📄 Other: ${data.other_files}</span>` : '',
+        ].filter(Boolean).join("");
+
+        const fileList = (data.files || []).slice(0, 10).map(f =>
+            `<div style="display:flex;justify-content:space-between;padding:6px 8px;background:#0a1628;border-radius:6px;margin-bottom:4px;font-size:0.82em;">
+                <span style="color:#c0d0e0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;" title="${f.name}">${f.name}</span>
+                <span style="color:#6b8aa8;flex-shrink:0;margin-left:8px;">${formatBytes(f.size_bytes)}</span>
+            </div>`
+        ).join("");
+
+        container.innerHTML = `
+            <div class="dataset-bar">${pills}</div>
+            <div style="margin-top: 8px; color: #6b8aa8; font-size:0.8em;">Total: ${formatBytes(data.size_bytes || 0)}</div>
+            <div style="margin-top: 12px; max-height: 160px; overflow-y: auto;">${fileList}</div>
+            ${data.total_files > 10 ? `<div style="color:#6b8aa8;font-size:0.8em;margin-top:6px;">+${data.total_files - 10} more files…</div>` : ''}
+        `;
+    } catch (e) { console.error("Dataset info failed:", e); }
+}
+
+// ── Training History ─────────────────────────────────────────────────────────
+async function loadTrainingHistory() {
+    if (!isHospital || !currentToken) return;
+    try {
+        const res = await fetch(`${API_URL}/api/hospital/history`, {
+            headers: { "Authorization": `Bearer ${currentToken}` }
+        });
+        const data = await res.json();
+        const sessions = data.history || [];
+        const tbody = document.getElementById("trainingHistoryBody");
+        document.getElementById("trainingHistoryCount").textContent = `${sessions.length} sessions`;
+
+        if (!sessions.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No training sessions yet. Upload data and click Start Training.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = sessions.map(s => {
+            const acc = s.accuracy != null ? (s.accuracy * 100).toFixed(1) + '%' : '—';
+            const ps  = s.privacy_score != null ? (s.privacy_score * 100).toFixed(0) + '%' : '—';
+            const dt  = s.data_type || '—';
+            const date = s.created_at ? new Date(s.created_at).toLocaleString() : '—';
+            const accColor = s.accuracy > 0.7 ? '#00ff88' : s.accuracy > 0.5 ? '#ffaa00' : '#ff6b6b';
+            return `<tr>
+                <td style="color:#00d4ff;font-weight:600;">R${s.round_number}</td>
+                <td style="color:#ffffff;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.file_name || '—'}">${s.file_name || '—'}</td>
+                <td><span class="tag ${dt}">${dt}</span></td>
+                <td style="color:#c0d0e0;">${s.data_size || '—'}</td>
+                <td style="color:${accColor};font-weight:600;">${acc}</td>
+                <td style="color:#ffaa00;">${s.epsilon_used ?? '—'}</td>
+                <td style="color:#6b8aa8;">${ps}</td>
+                <td style="color:#6b8aa8;font-size:0.82em;">${date}</td>
+            </tr>`;
+        }).join("");
+    } catch (e) { console.error("Training history failed:", e); }
+}
+
+// ── Download Global Model (hospital) ──────────────────────────────────────────
+async function downloadGlobalModel() {
+    const btn = document.getElementById("downloadModelBtn");
+    btn.disabled = true; btn.textContent = "⏳";
+    try {
+        const res = await fetch(`${API_URL}/api/hospital/model/download`, {
+            headers: { "Authorization": `Bearer ${currentToken}` }
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            alert("Download failed: " + (err.detail || "Unknown error"));
+            return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "fl_global_model.pth";
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert("Download failed: " + e.message);
+    } finally {
+        btn.disabled = false; btn.textContent = "⬇️ Model";
+    }
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 async function loadGeospatial() {

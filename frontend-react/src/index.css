@@ -1,0 +1,18 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow-x: hidden;
+}
+a { text-decoration: none; }
+
+/* Leaflet Map Dark Mode Inversion */
+.leaflet-container.dark-tiles .leaflet-layer {
+    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+.leaflet-container { background: #0a1628 !important; border-radius: 8px; }
+.leaflet-popup-content-wrapper { background: #0f2236 !important; color: #ffffff !important; border-radius: 8px !important; }
+.leaflet-popup-tip { background: #0f2236 !important; }
+.leaflet-popup-content { margin: 12px 16px !important; font-family: 'Inter', sans-serif; font-size: 13px; }
+.leaflet-control-zoom a {
+    background: #0f2236 !important; color: #00d4ff !important; border-color: #1a3555 !important;
+}
