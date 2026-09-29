@@ -37,7 +37,7 @@ export default function About() {
             travel to the server. The server combines them into a better global model and sends it back.
           </p>
 
-          <img src="/assets/images/Hero Illustration for About Page.png" alt="Federated Learning Overview" className={styles.sectionImage} />
+          <img src="/assets/images/about_hero.png" alt="Federated Learning Overview" className={styles.sectionImage} />
 
           <div className={styles.analogyBox}>
             <h4>🍩 Simple Analogy</h4>
@@ -58,7 +58,7 @@ export default function About() {
             model becomes significantly more accurate than any single hospital could achieve alone.
           </p>
 
-          <img src="/assets/images/Federated Learning Process Diagram.png" alt="Federated Learning Process" className={styles.sectionImage} />
+          <img src="/assets/images/fl_process.png" alt="Federated Learning Process" className={styles.sectionImage} />
 
           <div className={styles.analogyBox}>
             <h4>📚 Simple Analogy</h4>

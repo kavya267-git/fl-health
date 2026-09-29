@@ -32,7 +32,7 @@ export default function Privacy() {
             to one server. That creates serious problems:
           </p>
 
-          <img src="/assets/images/Privacy-Preserving Analogy.png" alt="Locked Data Vault Analogy" className={styles.sectionImage} />
+          <img src="/assets/images/privacy_analogy.png" alt="Locked Data Vault Analogy" className={styles.sectionImage} />
 
           <div className={styles.analogyGrid}>
             <div className={`${styles.analogyCard} ${styles.bad}`}>
@@ -80,7 +80,7 @@ export default function Privacy() {
             Lower ε = more noise = stronger privacy, but less accuracy.
           </p>
 
-          <img src="/assets/images/Privacy Budget Explanation.png" alt="Privacy Budget Scale" className={styles.sectionImage} />
+          <img src="/assets/images/privacy_budget.png" alt="Privacy Budget Scale" className={styles.sectionImage} />
 
           <div className={styles.analogyBox}>
             <h4>📊 Why ε = 1.0?</h4>

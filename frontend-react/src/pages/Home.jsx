@@ -23,7 +23,7 @@ export default function Home() {
             </div>
         </div>
           <div className={styles.heroImage}>
-            <img src="/assets/images/Hero Illustration for Home Page.png" alt="Federated Learning Hero" />
+            <img src="/assets/images/home_hero.png" alt="Federated Learning Hero" />
           </div>
         </section>
 
@@ -80,7 +80,7 @@ export default function Home() {
               </p>
             </div>
             <div className={styles.mapPreviewImg}>
-              <img src="/assets/images/Disease Outbreak Map Illustration.png" alt="Disease Outbreak Map of India" />
+              <img src="/assets/images/disease_outbreak_map.png" alt="Disease Outbreak Map of India" />
             </div>
           </div>
         </section>
