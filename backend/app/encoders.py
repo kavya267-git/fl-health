@@ -89,18 +89,21 @@ def encode_file(filepath: str, target_embedding_size: int = 32):
         except ValueError:
             df = pd.read_csv(filepath, header=0)
             
-        df = df.select_dtypes(include=[np.number])
-        if df.shape[1] < 2:
-            raise ValueError("CSV must contain at least 2 numeric columns for training.")
-
-        n_features = df.shape[1] - 1
         last_col = df.iloc[:, -1]
-        if last_col.nunique() <= 2:
-            X = df.iloc[:, :-1].values.astype(np.float32)
-            y = last_col.values.astype(np.float32)
+        df_features = df.iloc[:, :-1].select_dtypes(include=[np.number])
+        
+        if df_features.shape[1] < 1:
+            raise ValueError("CSV must contain at least 1 numeric column for features.")
+
+        n_features = df_features.shape[1]
+        X = df_features.values.astype(np.float32)
+        
+        unique_vals = last_col.dropna().unique()
+        if len(unique_vals) >= 2:
+            val_map = {val: float(i % 2) for i, val in enumerate(unique_vals)}
+            y = last_col.map(val_map).fillna(0.0).values.astype(np.float32)
         else:
-            X = df.values.astype(np.float32)
-            y = None
+            y = np.zeros(X.shape[0], dtype=np.float32)
 
         X = np.nan_to_num(X)
         X_min, X_max = X.min(0, keepdims=True), X.max(0, keepdims=True)
