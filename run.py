@@ -11,8 +11,8 @@ if __name__ == "__main__":
     print("FL-HEALTH SERVER")
     print("Data stays local. Only learning travels.")
     print("=" * 60)
-    print(f"Running at: http://0.0.0.0:{port}")
-    print(f"Docs:       http://0.0.0.0:{port}/docs")
+    print(f"Running at: http://127.0.0.1:{port}")
+    print(f"Docs:       http://127.0.0.1:{port}/docs")
     print("=" * 60)
     uvicorn.run(
         "app.main:app",

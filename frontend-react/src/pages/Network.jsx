@@ -14,7 +14,7 @@ export default function Network() {
         const res = await fetch(`${API_URL}/api/public/fl-status`);
         const data = await res.json();
         setStats(data);
-      } catch (e) { console.warn("Live stats unavailable"); }
+      } catch { console.warn("Live stats unavailable"); }
     };
 
     const loadEarlyDetection = async () => {
@@ -22,7 +22,7 @@ export default function Network() {
         const res = await fetch(`${API_URL}/api/geospatial/early-alerts`);
         const data = await res.json();
         setAlerts(data);
-      } catch (e) { console.warn("Alerts unavailable"); }
+      } catch { console.warn("Alerts unavailable"); }
     };
 
     loadLiveStats();

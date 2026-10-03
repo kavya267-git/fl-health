@@ -15,13 +15,13 @@ from fastapi.responses import FileResponse
 
 from pydantic import BaseModel
 
+
 from app.supabase_client import supabase, get_service_client
 from app.auth import require_role
 from app.credential_manager import issue_credential, validate_credential
 from app.fl_engine import FLEngine
 from app.audit import append_audit_entry, verify_chain, get_audit_trail
 from app.geospatial import detect_hotspots, forecast_outbreak
-from app.encoders import encode_file
 
 app = FastAPI(title="FL-Health Server", version="1.0")
 
@@ -220,29 +220,34 @@ async def all_hospitals(admin=Depends(require_role("admin"))):
 @app.post("/api/admin/revoke-hospital/{hospital_id}")
 async def revoke_hospital(hospital_id: str, admin=Depends(require_role("admin"))):
     """Revoke a hospital's credential — blocks them from training until re-approved."""
-    service = get_service_client()
-    hosp = service.table("hospitals").select("hospital_name").eq("id", hospital_id).execute()
-    if not hosp.data:
-        raise HTTPException(status_code=404, detail="Hospital not found")
-    hname = hosp.data[0]["hospital_name"]
+    try:
+        service = get_service_client()
+        hosp = service.table("hospitals").select("hospital_name").eq("id", hospital_id).execute()
+        if not hosp.data:
+            raise HTTPException(status_code=404, detail="Hospital not found")
+        hname = hosp.data[0]["hospital_name"]
 
-    service.table("hospitals").update({
-        "is_credential_valid": False,
-        "government_approved": False,
-        "credential_hash": None,
-    }).eq("id", hospital_id).execute()
+        service.table("hospitals").update({
+            "is_credential_valid": False,
+            "government_approved": False,
+            "credential_hash": None,
+        }).eq("id", hospital_id).execute()
 
-    current_round = _get_current_round()
-    append_audit_entry(
-        round_number=current_round,
-        hospital_id=hospital_id,
-        hospital_name=hname,
-        event_type="CREDENTIAL_REVOKE",
-        epsilon_used=0.0,
-        model_hash="",
-        metadata={"revoked_by": "admin"},
-    )
-    return {"success": True, "message": f"Credential revoked for {hname}"}
+        current_round = _get_current_round()
+        append_audit_entry(
+            round_number=current_round,
+            hospital_id=hospital_id,
+            hospital_name=hname,
+            event_type="CREDENTIAL_REVOKE",
+            epsilon_used=0.0,
+            model_hash="",
+            metadata={"revoked_by": "admin"},
+        )
+        return {"success": True, "message": f"Credential revoked for {hname}"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Revoke failed: {str(e)}")
 
 
 @app.get("/api/admin/pending-hospitals")
@@ -273,6 +278,17 @@ async def approve_hospital(hospital_id: str, admin=Depends(require_role("admin")
         metadata={"expires_at": result.get("expires_at")},
     )
     return result
+
+
+@app.get("/api/admin/all-history")
+async def all_history(admin=Depends(require_role("admin"))):
+    """Return all training history for admin."""
+    service = get_service_client()
+    try:
+        res = service.table("training_history").select("*").order("created_at", desc=True).limit(100).execute()
+        return {"history": res.data}
+    except Exception as e:
+        return {"history": [], "error": str(e)}
 
 
 @app.get("/api/admin/model-versions")
@@ -446,12 +462,14 @@ async def upload_hospital_data(
     size_bytes = counts["size_bytes"]
 
     # ── Upload to Supabase Storage ─────────────────────────────────────────────
+    _zip_path = zip_path if ext == ".zip" else None
+    _dest = dest if ext != ".zip" else None
     background_tasks.add_task(
-        background_upload_to_storage, 
-        ext, 
-        zip_path if ext == ".zip" else None, 
-        dest if ext != ".zip" else None, 
-        hospital_id, 
+        background_upload_to_storage,
+        ext,
+        _zip_path,
+        _dest,
+        hospital_id,
         file.filename
     )
 
@@ -742,8 +760,13 @@ async def hospital_train(
     }
 
 
-@app.post("/api/hospital/aggregate")
-async def trigger_aggregation(hospital=Depends(require_role("hospital"))):
+# NOTE: /api/hospital/aggregate removed — hospitals must not trigger global aggregation.
+# Only admins can aggregate.
+@app.post("/api/admin/aggregate")
+async def admin_trigger_aggregation(admin=Depends(require_role("admin"))):
+    return await _do_aggregation()
+
+async def _do_aggregation():
     result = fl_engine.aggregate()
 
     # ── Persist the new round number ──────────────────────────────────────────
@@ -760,11 +783,12 @@ async def trigger_aggregation(hospital=Depends(require_role("hospital"))):
         service = get_service_client()
         service.table("model_versions").insert({
             "round_number": fl_engine.round,
-            "hospitals_contributed": result.get("hospitals", 0),
+            # Use both column names for compatibility with different schema versions
+            "hospitals_participated": result.get("hospitals", 0),
             "byzantine_excluded": result.get("byzantine_excluded", 0),
             "dropout_rate": result.get("dropout_rate", 0.0),
             "model_hash": model_hash,
-            "storage_path": "global_model/classifier.pth",  # path in Supabase Storage
+            "storage_path": "global_model/classifier.pth",
             "created_at": datetime.utcnow().isoformat(),
         }).execute()
     except Exception as ex:
@@ -823,40 +847,61 @@ async def hospital_uploads(hospital=Depends(require_role("hospital"))):
 
 @app.get("/api/hospital/dataset-info")
 async def hospital_dataset_info(hospital=Depends(require_role("hospital"))):
-    """Return dataset summary from Supabase Storage for the logged-in hospital."""
+    """Return dataset summary from local disk (fallback: pull from Supabase Storage)."""
     hospital_id = hospital["id"]
-    service = get_service_client()
-    
-    try:
-        storage_files = service.storage.from_("fl-health-data").list(f"hospitals/{hospital_id}")
-    except Exception as e:
-        return {"has_data": False, "message": f"Storage error: {e}"}
+    folder = os.path.join(DATA_DIR, "hospitals", hospital_id)
 
-    if not storage_files or len(storage_files) == 0:
-        return {"has_data": False, "message": "No data uploaded yet"}
+    # If local folder is empty/missing, try restoring from Supabase Storage
+    if not os.path.exists(folder) or not os.listdir(folder):
+        try:
+            service = get_service_client()
+            storage_files = service.storage.from_("fl-health-data").list(f"hospitals/{hospital_id}")
+            os.makedirs(folder, exist_ok=True)
+            for sf in (storage_files or []):
+                if sf['name'] == '.emptyFolderPlaceholder':
+                    continue
+                data = service.storage.from_("fl-health-data").download(
+                    f"hospitals/{hospital_id}/{sf['name']}"
+                )
+                local_path = os.path.join(folder, sf['name'])
+                with open(local_path, "wb") as out:
+                    out.write(data)
+                if sf['name'] == "upload.zip":
+                    with zipfile.ZipFile(local_path, "r") as z:
+                        z.extractall(folder)
+        except Exception as e:
+            print(f"[DATASET-INFO] Storage restore failed: {e}")
 
     ehr_count = ecg_count = xray_count = other_count = total_bytes = 0
     files_list = []
-    
-    for f in storage_files:
-        if f['name'] == '.emptyFolderPlaceholder': continue
-        fname = f['name']
-        size = f.get('metadata', {}).get('size', 0)
-        total_bytes += size
-        fl = fname.lower()
-        if fl.endswith(".csv"): ehr_count += 1
-        elif fl.endswith((".npy", ".dat", ".wav", ".npz")): ecg_count += 1
-        elif fl.endswith((".png", ".jpg", ".jpeg", ".bmp")): xray_count += 1
-        else: other_count += 1
-        
-        files_list.append({
-            "name": fname,
-            "size_bytes": size,
-            "relative_path": fname,
-        })
-        
+
+    if os.path.exists(folder):
+        # Walk all subdirectories so ZIP-extracted files are counted
+        for root, _, files in os.walk(folder):
+            for fname in files:
+                if fname.lower() in ("upload.zip", ".emptyfolderplaceholder"):
+                    continue
+                fpath = os.path.join(root, fname)
+                if os.path.isfile(fpath):
+                    size = os.path.getsize(fpath)
+                    total_bytes += size
+                    fl = fname.lower()
+                    if fl.endswith(".csv"):
+                        ehr_count += 1
+                    elif fl.endswith((".npy", ".dat", ".wav", ".npz")):
+                        ecg_count += 1
+                    elif fl.endswith((".png", ".jpg", ".jpeg", ".bmp")):
+                        xray_count += 1
+                    else:
+                        other_count += 1
+                    rel = os.path.relpath(fpath, folder)
+                    files_list.append({
+                        "name": fname,
+                        "size_bytes": size,
+                        "relative_path": rel,
+                    })
+
     total = ehr_count + ecg_count + xray_count + other_count
-    
     return {
         "has_data": total > 0,
         "total_files": total,
@@ -865,7 +910,7 @@ async def hospital_dataset_info(hospital=Depends(require_role("hospital"))):
         "xray_files": xray_count,
         "other_files": other_count,
         "size_bytes": total_bytes,
-        "files": files_list[:100],  # cap at 100 entries
+        "files": files_list[:100],
     }
 
 
@@ -955,43 +1000,49 @@ async def geospatial_early_alerts():
 @app.get("/api/public/fl-status")
 async def fl_status():
     """Public FL network status — used by network.html live data panels."""
-    service = get_service_client()
-    hospitals = service.table("hospitals").select(
-        "government_approved, last_active, rounds_participated, local_accuracy"
-    ).execute().data or []
-
-    approved = [h for h in hospitals if h.get("government_approved")]
-    now = datetime.utcnow()
-    active_1h = [
-        h for h in approved
-        if h.get("last_active") and
-        (now - datetime.fromisoformat(h["last_active"].replace("Z", ""))).total_seconds() < 3600
-    ]
-    active_24h = [
-        h for h in approved
-        if h.get("last_active") and
-        (now - datetime.fromisoformat(h["last_active"].replace("Z", ""))).total_seconds() < 86400
-    ]
-    avg_acc = 0.0
-    accs = [h["local_accuracy"] for h in approved if h.get("local_accuracy")]
-    if accs:
-        avg_acc = sum(accs) / len(accs)
-
-    current_round = _get_current_round()
-    return {
-        "current_round":      current_round,
-        "max_rounds":         fl_engine.MAX_ROUNDS,
-        "round_progress_pct": round(min(current_round / fl_engine.MAX_ROUNDS, 1.0) * 100, 1),
-        "total_hospitals":    len(hospitals),
-        "approved_hospitals": len(approved),
-        "active_last_hour":   len(active_1h),
-        "active_last_24h":    len(active_24h),
-        "avg_accuracy":       round(avg_acc * 100, 1),
-        "accuracy_target":    f"{fl_engine.ACC_TARGET_LOW*100:.0f}-{fl_engine.ACC_TARGET_HIGH*100:.0f}%",
-        "privacy_budget":     fl_engine.PRIVACY_BUDGET,
-        "dropout_tolerance":  f"{fl_engine.DROPOUT_TOLERANCE*100:.0f}%+",
-        "min_hospitals":      fl_engine.MIN_HOSPITALS,
-    }
+    try:
+        service = get_service_client()
+        hospitals = service.table("hospitals").select(
+            "government_approved, last_active, rounds_participated, local_accuracy"
+        ).execute().data or []
+    
+        approved = [h for h in hospitals if h.get("government_approved")]
+        
+        now = datetime.utcnow()
+        
+        active_1h = [
+            h for h in approved
+            if h.get("last_active") and
+            (now - datetime.fromisoformat(h["last_active"].replace("Z", "").split("+")[0])).total_seconds() < 3600
+        ]
+        active_24h = [
+            h for h in approved
+            if h.get("last_active") and
+            (now - datetime.fromisoformat(h["last_active"].replace("Z", "").split("+")[0])).total_seconds() < 86400
+        ]
+        avg_acc = 0.0
+        accs = [h["local_accuracy"] for h in approved if h.get("local_accuracy")]
+        if accs:
+            avg_acc = sum(accs) / len(accs)
+    
+        current_round = _get_current_round()
+        return {
+            "current_round":      current_round,
+            "max_rounds":         fl_engine.MAX_ROUNDS,
+            "round_progress_pct": round(min(current_round / fl_engine.MAX_ROUNDS, 1.0) * 100, 1),
+            "total_hospitals":    len(hospitals),
+            "approved_hospitals": len(approved),
+            "active_last_hour":   len(active_1h),
+            "active_last_24h":    len(active_24h),
+            "avg_accuracy":       round(avg_acc * 100, 1),
+            "accuracy_target":    f"{fl_engine.ACC_TARGET_LOW*100:.0f}-{fl_engine.ACC_TARGET_HIGH*100:.0f}%",
+            "privacy_budget":     fl_engine.PRIVACY_BUDGET,
+            "dropout_tolerance":  f"{fl_engine.DROPOUT_TOLERANCE*100:.0f}%+",
+            "min_hospitals":      fl_engine.MIN_HOSPITALS,
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 # ─── entry point ──────────────────────────────────────────────────────────────
