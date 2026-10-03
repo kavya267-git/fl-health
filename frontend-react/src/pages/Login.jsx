@@ -35,27 +35,65 @@ export default function Login() {
 
       const token = data.access_token;
       const userId = data.user.id;
+      console.log('[Login] Auth succeeded, user:', userId, '| checking role...');
 
-      const roleEndpoint = currentTab === "admin"
-        ? `${API_URL}/api/admin/all-hospitals`
-        : `${API_URL}/api/hospital/me`;
+      // Determine role by probing both endpoints so the user doesn't need to
+      // pick the right tab manually. We check the selected tab first and fall
+      // back gracefully with a helpful error.
+      const [adminCheck, hospitalCheck] = await Promise.all([
+        fetch(`${API_URL}/api/admin/all-hospitals`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/hospital/me`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+      ]);
 
-      const roleCheck = await fetch(roleEndpoint, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const isAdmin = adminCheck.ok;
+      const isHospital = hospitalCheck.ok;
+      console.log('[Login] Role check — isAdmin:', isAdmin, '(status:', adminCheck.status, ') | isHospital:', isHospital, '(status:', hospitalCheck.status, ') | selectedTab:', currentTab);
 
-      if (!roleCheck.ok) {
-        throw new Error(`This account is not registered as ${currentTab}`);
+      let detectedRole = null;
+      if (currentTab === "admin" && isAdmin) {
+        detectedRole = "admin";
+      } else if (currentTab === "hospital" && isHospital) {
+        detectedRole = "hospital";
+      } else if (isAdmin) {
+        // User selected "hospital" tab but they're actually an admin
+        throw new Error("This is an admin account. Please select the 🔐 Admin tab and try again.");
+      } else if (isHospital) {
+        // User selected "admin" tab but they're actually a hospital
+        throw new Error("This is a hospital account. Please select the 🏥 Hospital tab and try again.");
+      } else {
+        // Neither check passed — log what the backend actually said
+        let adminErr = '', hospitalErr = '';
+        try { adminErr = await adminCheck.text(); } catch {}
+        try { hospitalErr = await hospitalCheck.text(); } catch {}
+        console.error('[Login] Both role checks failed:', { adminErr, hospitalErr });
+        throw new Error("Role verification failed. Please check your credentials or contact support.");
       }
 
-      const store = rememberMe ? localStorage : sessionStorage;
-      store.setItem("fl_token", token);
-      store.setItem("fl_user", userId);
-      store.setItem("fl_role", currentTab);
+      if (rememberMe) {
+        localStorage.setItem("fl_token", token);
+        localStorage.setItem("fl_user", userId);
+        localStorage.setItem("fl_role", detectedRole);
+        sessionStorage.removeItem("fl_token");
+        sessionStorage.removeItem("fl_user");
+        sessionStorage.removeItem("fl_role");
+      } else {
+        sessionStorage.setItem("fl_token", token);
+        sessionStorage.setItem("fl_user", userId);
+        sessionStorage.setItem("fl_role", detectedRole);
+        localStorage.removeItem("fl_token");
+        localStorage.removeItem("fl_user");
+        localStorage.removeItem("fl_role");
+      }
+      
+      console.log('[Login] Stored — role:', detectedRole, '| storage:', rememberMe ? 'localStorage' : 'sessionStorage');
 
       showAlert("Login successful! Redirecting...", "success");
       setTimeout(() => {
-        navigate(currentTab === "admin" ? "/admin" : "/dashboard");
+        navigate(detectedRole === "admin" ? "/admin" : "/dashboard");
       }, 800);
     } catch (err) {
       showAlert(err.message || "Login failed.", "error");

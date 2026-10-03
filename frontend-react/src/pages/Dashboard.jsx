@@ -18,12 +18,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  const [hospitalId, setHospitalId] = useState('');
   const [role, setRole] = useState('');
   const [token, setToken] = useState('');
   const [credentialHash, setCredentialHash] = useState(null);
-
-  const [status, setStatus] = useState(null);
   const [convergenceHistory, setConvergenceHistory] = useState([]);
   const [privacyBudget, setPrivacyBudget] = useState({ used: 0, budget: 1.0 });
   const [geospatial, setGeospatial] = useState(null);
@@ -44,7 +41,6 @@ export default function Dashboard() {
   useEffect(() => {
     const savedToken = localStorage.getItem('fl_token') || sessionStorage.getItem('fl_token');
     const savedRole = localStorage.getItem('fl_role') || sessionStorage.getItem('fl_role');
-    const savedId = localStorage.getItem('fl_user') || sessionStorage.getItem('fl_user');
 
     if (!savedToken) {
       navigate('/login');
@@ -53,7 +49,6 @@ export default function Dashboard() {
 
     setToken(savedToken);
     setRole(savedRole);
-    setHospitalId(savedId);
   }, [navigate]);
 
   useEffect(() => {
@@ -77,9 +72,9 @@ export default function Dashboard() {
       if (role !== 'hospital') return;
       try {
         const [dsRes, uhRes, thRes] = await Promise.all([
-          fetch(`${API_URL}/api/hospital/dataset-info`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${API_URL}/api/hospital/uploads`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${API_URL}/api/hospital/history`, { headers: { 'Authorization': `Bearer ${token}` } })
+          fetch(`${API_URL}/api/hospital/dataset-info`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/hospital/uploads`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/hospital/history`, { headers: { 'Authorization': `Bearer ${token}` } }).catch(err => ({ ok: false, error: err }))
         ]);
         
         if (dsRes.ok) setDatasetInfo(await dsRes.json());
@@ -90,17 +85,15 @@ export default function Dashboard() {
 
     const fetchDashboardData = async () => {
       try {
-        const [statusRes, geoRes, forecastRes, auditRes, hospRes, convRes, pbRes] = await Promise.all([
-          fetch(`${API_URL}/api/public/fl-status`),
-          fetch(`${API_URL}/api/geospatial/hotspots`),
-          fetch(`${API_URL}/api/geospatial/forecast`),
-          fetch(`${API_URL}/api/audit/trail`),
-          fetch(`${API_URL}/api/dashboard/hospitals`),
-          fetch(`${API_URL}/api/dashboard/convergence`),
-          fetch(`${API_URL}/api/dashboard/privacy-budget`)
+        const [_, geoRes, forecastRes, auditRes, hospRes, convRes, pbRes] = await Promise.all([
+          fetch(`${API_URL}/api/public/fl-status`).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/geospatial/hotspots`).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/geospatial/forecast`).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/audit/trail`).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/dashboard/hospitals`).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/dashboard/convergence`).catch(err => ({ ok: false, error: err })),
+          fetch(`${API_URL}/api/dashboard/privacy-budget`).catch(err => ({ ok: false, error: err }))
         ]);
-
-        if (statusRes.ok) setStatus(await statusRes.json());
         
         if (convRes.ok) { const convData = await convRes.json(); setConvergenceHistory(convData.history || []); }
         if (pbRes.ok) { const pbData = await pbRes.json(); setPrivacyBudget({ used: pbData.epsilon_used || 0, budget: pbData.epsilon_budget || 1.0 }); }
@@ -168,6 +161,9 @@ export default function Dashboard() {
       
       setActionMessage({ text: `✅ ${data.message}`, type: 'success' });
       
+      // Reset file input so the same file can be re-uploaded
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
       // Refresh hospital data
       const [dsRes, uhRes] = await Promise.all([
         fetch(`${API_URL}/api/hospital/dataset-info`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -180,6 +176,33 @@ export default function Dashboard() {
       setActionMessage({ text: `❌ ${err.message}`, type: 'error' });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleClearData = async () => {
+    if (!window.confirm("Are you sure you want to clear your uploaded dataset from cloud storage?")) return;
+    
+    setActionMessage({ text: 'Clearing data...', type: '' });
+    try {
+      const res = await fetch(`${API_URL}/api/hospital/clear-data`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Clear failed');
+      
+      setActionMessage({ text: `✅ ${data.message}`, type: 'success' });
+      
+      // Refresh hospital data
+      const [dsRes, uhRes] = await Promise.all([
+        fetch(`${API_URL}/api/hospital/dataset-info`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/hospital/uploads`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+      if (dsRes.ok) setDatasetInfo(await dsRes.json());
+      if (uhRes.ok) { const uhData = await uhRes.json(); setUploadHistory(uhData.uploads || []); }
+      
+    } catch (err) {
+      setActionMessage({ text: `❌ ${err.message}`, type: 'error' });
     }
   };
 
@@ -239,15 +262,19 @@ export default function Dashboard() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Unknown error');
+        const err = await res.json().catch(() => ({ detail: 'Download failed' }));
+        throw new Error(err.detail || 'Download failed');
       }
       
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'fl_global_model.pth';
-      a.click(); URL.revokeObjectURL(url);
+      a.href = url;
+      a.download = 'fl_global_model.pth';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
       alert("Download failed: " + err.message);
     }
@@ -310,6 +337,9 @@ export default function Dashboard() {
               <input type="file" ref={fileInputRef} accept=".csv,.zip,.npy,.png,.jpg,.jpeg,.dat" className={styles.fileInput} />
               <button className={styles.btnAction} onClick={handleUpload} disabled={isUploading}>
                 Upload
+              </button>
+              <button className={styles.btnAction} style={{backgroundColor: '#e74c3c', marginLeft: '8px'}} onClick={handleClearData} disabled={isUploading}>
+                Clear Data
               </button>
             </div>
             <div className={`${styles.statusMsg} ${styles[actionMessage.type === 'error' ? 'statusMsgError' : actionMessage.type === 'success' ? 'statusMsgSuccess' : '']}`}>

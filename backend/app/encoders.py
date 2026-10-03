@@ -96,6 +96,13 @@ def encode_file(filepath: str, target_embedding_size: int = 32):
             raise ValueError("CSV must contain at least 1 numeric column for features.")
 
         n_features = df_features.shape[1]
+        
+        # Cap to 1000 samples to prevent massive memory spikes and slow encoding
+        MAX_SAMPLES = 1000
+        if len(df_features) > MAX_SAMPLES:
+            df_features = df_features.sample(MAX_SAMPLES, random_state=42)
+            last_col = last_col.loc[df_features.index]
+
         X = df_features.values.astype(np.float32)
         
         unique_vals = last_col.dropna().unique()
@@ -131,6 +138,11 @@ def encode_file(filepath: str, target_embedding_size: int = 32):
         signal = np.nan_to_num(signal).astype(np.float32)
         if signal.ndim == 1:
             signal = signal.reshape(1, -1)
+            
+        # Cap to 1000 signals to prevent extreme slowdown in python loop
+        if signal.shape[0] > 1000:
+            indices = np.random.choice(signal.shape[0], 1000, replace=False)
+            signal = signal[indices]
 
         target_len = 1000
         resampled = np.zeros((signal.shape[0], target_len), dtype=np.float32)

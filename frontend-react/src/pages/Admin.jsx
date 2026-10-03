@@ -7,48 +7,87 @@ import { API_URL } from '../config';
 export default function Admin() {
   const navigate = useNavigate();
   const [token, setToken] = useState('');
+  const [authChecked, setAuthChecked] = useState(false);
   
   const [activeTab, setActiveTab] = useState('pending');
   const [status, setStatus] = useState(null);
   const [hospitals, setHospitals] = useState([]);
   const [allHistory, setAllHistory] = useState([]);
-  const [convergence, setConvergence] = useState([]);
+  const [modelVersions, setModelVersions] = useState([]);
   const [auditTrail, setAuditTrail] = useState([]);
   
   const [isApproving, setIsApproving] = useState(false);
   const [selectedHospital, setSelectedHospital] = useState(null);
   const [modalAction, setModalAction] = useState(null); // 'approve' | 'revoke'
   const [downloading, setDownloading] = useState(false);
+  const [aggregating, setAggregating] = useState(false);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('fl_token') || sessionStorage.getItem('fl_token');
     const savedRole = localStorage.getItem('fl_role') || sessionStorage.getItem('fl_role');
 
-    if (!savedToken || savedRole !== 'admin') {
+    console.log('[Admin] Auth check — token:', savedToken ? savedToken.slice(0, 20) + '...' : 'MISSING', '| role:', savedRole);
+
+    if (!savedToken) {
+      console.log('[Admin] No token found, redirecting to login');
       navigate('/login');
       return;
     }
-    setToken(savedToken);
+
+    // Verify token against the backend directly — don't rely solely on the
+    // stored role string, which may be stale or missing.
+    fetch(`${API_URL}/api/admin/all-hospitals`, {
+      headers: { 'Authorization': `Bearer ${savedToken}` }
+    }).then(res => {
+      console.log('[Admin] Backend role verification status:', res.status);
+      if (res.ok) {
+        // Token is valid and user is admin — update storage and set token
+        localStorage.setItem('fl_role', 'admin');
+        sessionStorage.setItem('fl_role', 'admin');
+        setToken(savedToken);
+        setAuthChecked(true);
+      } else {
+        console.log('[Admin] Token rejected by backend, redirecting to login');
+        // Clear stale data
+        localStorage.removeItem('fl_token');
+        localStorage.removeItem('fl_role');
+        localStorage.removeItem('fl_user');
+        sessionStorage.removeItem('fl_token');
+        sessionStorage.removeItem('fl_role');
+        sessionStorage.removeItem('fl_user');
+        navigate('/login');
+      }
+    }).catch(err => {
+      console.error('[Admin] Backend verification failed (network error):', err);
+      // On network error, fall back to the stored role to avoid locking out
+      // users when the server has a momentary hiccup.
+      if (savedRole === 'admin') {
+        setToken(savedToken);
+        setAuthChecked(true);
+      } else {
+        navigate('/login');
+      }
+    });
   }, [navigate]);
 
   const fetchData = async () => {
     if (!token) return;
     try {
-      const [hospRes, statRes, histRes, convRes, auditRes] = await Promise.all([
-        fetch(`${API_URL}/api/admin/all-hospitals`, { headers: { "Authorization": `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/public/fl-status`),
-        fetch(`${API_URL}/api/admin/all-history`, { headers: { "Authorization": `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/dashboard/convergence`),
-        fetch(`${API_URL}/api/audit/trail`)
+      const [hospRes, statRes, histRes, mvRes, auditRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/all-hospitals`, { headers: { "Authorization": `Bearer ${token}` } }).catch(err => ({ ok: false, error: err })),
+        fetch(`${API_URL}/api/public/fl-status`).catch(err => ({ ok: false, error: err })),
+        fetch(`${API_URL}/api/admin/all-history`, { headers: { "Authorization": `Bearer ${token}` } }).catch(err => ({ ok: false, error: err })),
+        fetch(`${API_URL}/api/admin/model-versions`, { headers: { "Authorization": `Bearer ${token}` } }).catch(err => ({ ok: false, error: err })),
+        fetch(`${API_URL}/api/audit/trail`).catch(err => ({ ok: false, error: err }))
       ]);
 
       if (hospRes.ok) { const d = await hospRes.json(); setHospitals(d.hospitals || []); }
       if (statRes.ok) setStatus(await statRes.json());
       if (histRes.ok) { const d = await histRes.json(); setAllHistory(d.history || []); }
-      if (convRes.ok) { const d = await convRes.json(); setConvergence(d.history || []); }
+      if (mvRes.ok) { const d = await mvRes.json(); setModelVersions(d.versions || []); }
       if (auditRes.ok) { const d = await auditRes.json(); setAuditTrail(d.trail || []); }
     } catch (e) {
-      console.error(e);
+      console.error('[Admin] fetchData error:', e);
     }
   };
 
@@ -62,15 +101,21 @@ export default function Admin() {
     if (!selectedHospital || !modalAction) return;
     setIsApproving(true);
     
-    const endpoint = modalAction === 'approve' ? '/api/admin/approve-hospital' : '/api/admin/revoke-hospital';
+    const endpoint = modalAction === 'approve' ? `/api/admin/approve-hospital/${selectedHospital.id}` : `/api/admin/revoke-hospital/${selectedHospital.id}`;
     
     try {
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ hospital_id: selectedHospital.id })
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Action failed");
+      if (!res.ok) {
+        let errStr = "Action failed";
+        try {
+          const errData = await res.json();
+          errStr = errData.detail || errStr;
+        } catch {}
+        throw new Error(errStr);
+      }
       
       setSelectedHospital(null);
       setModalAction(null);
@@ -85,10 +130,13 @@ export default function Admin() {
   const downloadModel = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(`${API_URL}/api/hospital/model/download`, {
+      const res = await fetch(`${API_URL}/api/admin/model/download`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Download failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ detail: 'Download failed' }));
+        throw new Error(errData.detail || 'Download failed');
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -101,9 +149,38 @@ export default function Admin() {
     }
   };
 
+  const triggerAggregation = async () => {
+    setAggregating(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/aggregate`, {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Aggregation failed");
+      const data = await res.json();
+      alert(`Aggregation complete for Round ${data.round}! Hospitals included: ${data.hospitals_aggregated}`);
+      fetchData();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setAggregating(false);
+    }
+  };
+
   const pendingHospitals = hospitals.filter(h => !h.government_approved);
   const approvedHospitals = hospitals.filter(h => h.government_approved);
-  const active24h = approvedHospitals.filter(h => h.last_active && (Date.now() - new Date(h.last_active).getTime()) < 24 * 60 * 60 * 1000);
+
+  if (!authChecked && !token) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ fontSize: '48px' }}>🔐</div>
+        <div style={{ fontSize: '18px', color: '#475569', fontWeight: 600 }}>Verifying admin access...</div>
+        <div style={{ width: '200px', height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{ width: '60%', height: '100%', background: '#3b82f6', borderRadius: '2px', animation: 'pulse 1.5s ease-in-out infinite' }}></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)', minHeight: '100vh' }}>
@@ -118,7 +195,21 @@ export default function Admin() {
               <p>Federated Learning · Byzantine Tolerance · Privacy-Preserving Healthcare</p>
             </div>
           </div>
-          <div className={styles.liveBadge}><div className={styles.liveDot}></div> Live</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className={styles.liveBadge}><div className={styles.liveDot}></div> Live</div>
+            <button
+              onClick={() => {
+                ['fl_token', 'fl_role', 'fl_user'].forEach(k => {
+                  localStorage.removeItem(k);
+                  sessionStorage.removeItem(k);
+                });
+                navigate('/login');
+              }}
+              style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}
+            >
+              🚪 Logout
+            </button>
+          </div>
         </div>
 
         <div className={styles.stats}>
@@ -204,10 +295,15 @@ export default function Admin() {
         {activeTab === 'models' && (
           <div className={styles.panel}>
             <div className={styles.panelTitle}>
-              <div>🧠 Global Model Version History <span className={styles.panelBadge}>{convergence.length}</span></div>
-              <button className={`${styles.btn} ${styles.btnApprove}`} style={{ flex: 'none', padding: '6px 16px', fontSize: '12px' }} onClick={downloadModel} disabled={downloading}>
-                {downloading ? 'Downloading...' : '⬇️ Download Latest Model'}
-              </button>
+              <div>🧠 Global Model Version History <span className={styles.panelBadge}>{modelVersions.length}</span></div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className={`${styles.btn} ${styles.btnApprove}`} style={{ flex: 'none', padding: '6px 16px', fontSize: '12px', background: '#8b5cf6' }} onClick={triggerAggregation} disabled={aggregating}>
+                  {aggregating ? 'Aggregating...' : '⚡ Trigger Aggregation'}
+                </button>
+                <button className={`${styles.btn} ${styles.btnApprove}`} style={{ flex: 'none', padding: '6px 16px', fontSize: '12px' }} onClick={downloadModel} disabled={downloading}>
+                  {downloading ? 'Downloading...' : '⬇️ Download Latest Model'}
+                </button>
+              </div>
             </div>
             <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto' }}>
               <table className={styles.dataTable}>
@@ -215,15 +311,15 @@ export default function Admin() {
                   <tr><th>Round</th><th>Hospitals</th><th>Byzantine Excluded</th><th>Dropout Rate</th><th>Model Hash</th><th>Date</th></tr>
                 </thead>
                 <tbody>
-                  {convergence.length === 0 ? (
-                    <tr><td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>No models yet</td></tr>
+                  {modelVersions.length === 0 ? (
+                    <tr><td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '30px' }}>No models aggregated yet — trigger aggregation above</td></tr>
                   ) : (
-                    convergence.map((m, i) => (
+                    modelVersions.map((m, i) => (
                       <tr key={i}>
                         <td style={{ fontWeight: 600 }}>R{m.round_number}</td>
-                        <td>{m.hospitals_participated || 1}</td>
-                        <td><span className={`${styles.tagSm} ${m.byzantine_excluded > 0 ? styles.yellow : styles.green}`}>{m.byzantine_excluded || 0}</span></td>
-                        <td><span className={`${styles.tagSm} ${styles.blue}`}>0%</span></td>
+                        <td>{m.hospitals_participated ?? m.hospitals_contributed ?? '—'}</td>
+                        <td><span className={`${styles.tagSm} ${(m.byzantine_excluded || 0) > 0 ? styles.yellow : styles.green}`}>{m.byzantine_excluded || 0}</span></td>
+                        <td><span className={`${styles.tagSm} ${styles.blue}`}>{m.dropout_rate ? (m.dropout_rate * 100).toFixed(1) + '%' : '0%'}</span></td>
                         <td style={{ fontFamily: 'monospace' }}>{(m.model_hash || 'none').slice(0, 16)}...</td>
                         <td>{new Date(m.created_at).toLocaleString()}</td>
                       </tr>
