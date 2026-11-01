@@ -11,7 +11,7 @@ import { api } from '../services/endpoints'
 import { MODALITIES, MODALITY_ORDER, availabilityLabel } from '../utils/constants'
 import { formatDateTime, formatNumber, timeAgo } from '../utils/format'
 
-function DataSummary({ hospital }) {
+export function DataSummary({ hospital }) {
   const rows = MODALITY_ORDER.filter((m) => hospital.data_summary[m])
   if (rows.length === 0) {
     return <EmptyState title="No local data reported" description="The node reports its record counts when it joins a round." />
@@ -55,7 +55,7 @@ function DataSummary({ hospital }) {
   )
 }
 
-function LocalMetrics({ metrics }) {
+export function LocalMetrics({ metrics }) {
   const available = MODALITY_ORDER.filter((m) => metrics.local_validation.some((row) => row.modality === m))
   const [modality, setModality] = useState(available[0] || 'ehr')
   const active = available.includes(modality) ? modality : available[0]

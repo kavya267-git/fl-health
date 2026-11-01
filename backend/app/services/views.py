@@ -34,11 +34,17 @@ def sanitize_data_summary(summary: Optional[dict]) -> Dict[str, dict]:
     return clean
 
 
-def round_detail(ctx: AppContext, round_id: str) -> Dict[str, Any]:
+def round_detail(ctx: AppContext, round_id: str, viewer: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     row = ctx.coordinator.get_round(round_id)
     participants = ctx.coordinator.participants(round_id)
+    own = viewer.get("hospital_id") if viewer and viewer.get("role") == "hospital" else None
     for participant in participants:
         participant.pop("evaluation", None)  # raw confusion matrices are available via /metrics
+        if own and participant["hospital_id"] != own:
+            # A hospital operator sees every hospital's progress, but only its own local results.
+            participant["local_metrics"] = None
+            if participant["status"] != rounds.P_DROPPED:  # deadline reasons come from the coordinator
+                participant["error"] = None
     submitted = (rounds.P_SUBMITTED, rounds.P_EVALUATED, rounds.P_EVALUATION_FAILED)
     expected = [p for p in participants if p["status"] not in (rounds.P_DROPPED, rounds.P_FAILED, rounds.P_REJECTED)]
     return {

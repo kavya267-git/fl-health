@@ -90,7 +90,11 @@ class HospitalService:
         return (now or utc_now()) - seen <= timedelta(seconds=HEARTBEAT_TIMEOUT_SECONDS)
 
     def _with_presence(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """With external nodes, a hospital is online while its node's heartbeat is fresh."""
+        """Add participation, and with external nodes, presence: online while the node's heartbeat is fresh."""
+        settings = {s["hospital_id"]: s for s in self.db.fetch_all("SELECT * FROM hospital_settings")}
+        for row in rows:
+            # Hospitals take part unless their operator has switched it off.
+            row["participating"] = bool(settings.get(row["id"], {}).get("participating", True))
         if not self.external_nodes:
             for row in rows:
                 row["node"] = None
@@ -158,7 +162,31 @@ class HospitalService:
                     "hospital": hospital["name"],
                 },
             )
-        return {"hospital_id": hospital_id, "received_at": now, "timeout_seconds": HEARTBEAT_TIMEOUT_SECONDS}
+        return {
+            "hospital_id": hospital_id,
+            "received_at": now,
+            "timeout_seconds": HEARTBEAT_TIMEOUT_SECONDS,
+            "participating": hospital["participating"],
+        }
+
+    # -------------------------------------------------------- participation
+    def set_participation(self, hospital_id: str, participating: bool, actor: str) -> Dict[str, Any]:
+        """The operator's "Take part in future rounds" switch. Audited both ways."""
+        hospital = self.get_raw(hospital_id)
+        now = utc_now_iso()
+        if hospital["participating"] != participating:
+            values = {"participating": participating, "updated_at": now, "updated_by": actor}
+            if self.db.fetch_one("SELECT hospital_id FROM hospital_settings WHERE hospital_id = :id", {"id": hospital_id}):
+                self.db.update("hospital_settings", values, {"hospital_id": hospital_id})
+            else:
+                self.db.insert("hospital_settings", {"hospital_id": hospital_id, **values})
+            self.audit.record(
+                "HOSPITAL_PARTICIPATION_CHANGED",
+                actor,
+                hospital_id=hospital_id,
+                details={"participating": participating, "hospital": hospital["name"]},
+            )
+        return self.get(hospital_id)
 
     def _enrich(self, hospital: Dict[str, Any]) -> Dict[str, Any]:
         hospital_id = hospital["id"]
@@ -190,7 +218,14 @@ class HospitalService:
             "current_round": current,
             "latest_update": latest_update,
             "rounds_completed": int(participation["n"]),
-            "fl_participation": "PARTICIPATING" if current else ("IDLE" if hospital["online"] else "UNAVAILABLE"),
+            "fl_participation": (
+                "PARTICIPATING"
+                if current
+                else "OPTED_OUT"
+                if not hospital["participating"]
+                else ("IDLE" if hospital["online"] else "UNAVAILABLE")
+            ),
+            "participating": hospital["participating"],
             "node_mode": "external" if self.external_nodes else "in-process",
             "node": hospital["node"],
         }

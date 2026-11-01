@@ -49,7 +49,9 @@ from app.utils.hashing import constant_time_equal
 from app.utils.passwords import DUMMY_HASH, hash_password, verify_password
 from app.utils.time import utc_now_iso
 
-ROLES = ("admin", "coordinator", "viewer")
+ROLES = ("admin", "coordinator", "viewer", "hospital")
+#: Roles that act for one hospital; such a user must have users.hospital_id set.
+HOSPITAL_ROLES = ("hospital",)
 #: Role of every newly created account. Never anything else.
 DEFAULT_ROLE = "viewer"
 MIN_PASSWORD_LENGTH = 8
@@ -67,6 +69,16 @@ DEMO_ACCOUNTS = [
         "role": "coordinator",
     },
     {"id": "demo-viewer", "email": "viewer@fl-healthcare.demo", "display_name": "Demo Analyst", "role": "viewer"},
+] + [
+    # One operator per simulated hospital: signs in on that hospital's own laptop.
+    {
+        "id": f"demo-hospital-{letter}",
+        "email": f"hospital_{letter}@fl-healthcare.demo",
+        "display_name": f"Hospital {letter.upper()} operator",
+        "role": "hospital",
+        "hospital_id": f"hospital_{letter}",
+    }
+    for letter in "abcd"
 ]
 _BUILT_IN_BY_EMAIL = {account["email"]: account for account in DEMO_ACCOUNTS}
 _BUILT_IN_IDS = {account["id"] for account in DEMO_ACCOUNTS}
@@ -167,10 +179,18 @@ class AuthService:
     def seed_demo_users(self) -> None:
         for account in DEMO_ACCOUNTS:
             if self.db.fetch_one("SELECT id FROM users WHERE id = :id", {"id": account["id"]}) is None:
-                self.db.insert("users", {**account, "hospital_id": None, "created_at": utc_now_iso()})
+                self.db.insert("users", {"hospital_id": None, **account, "created_at": utc_now_iso()})
 
-    def demo_accounts(self) -> List[Dict[str, str]]:
-        return [{"email": a["email"], "role": a["role"], "display_name": a["display_name"]} for a in DEMO_ACCOUNTS]
+    def demo_accounts(self) -> List[Dict[str, Optional[str]]]:
+        return [
+            {
+                "email": a["email"],
+                "role": a["role"],
+                "display_name": a["display_name"],
+                "hospital_id": a.get("hospital_id"),
+            }
+            for a in DEMO_ACCOUNTS
+        ]
 
     # --------------------------------------------------------------- login
     def _check_password(self, email: str, password: str) -> Dict[str, str]:
@@ -316,11 +336,23 @@ class AuthService:
             )
         return users
 
-    def set_role(self, actor: Dict[str, Any], user_id: str, role: str) -> Dict[str, Any]:
-        """Change another user's role. Only administrators reach this (checked by the router too)."""
+    def set_role(
+        self, actor: Dict[str, Any], user_id: str, role: str, hospital_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Change another user's role. Only administrators reach this (checked by the router too).
+
+        A hospital operator must be linked to one hospital; every other role is linked to none.
+        """
         require_role(actor, ("admin",))
         if role not in ROLES:
             raise ValidationFailed(f"Role must be one of: {', '.join(ROLES)}.")
+        if role in HOSPITAL_ROLES:
+            if not hospital_id:
+                raise ValidationFailed("Choose the hospital this operator works for.")
+            if self.db.fetch_one("SELECT id FROM hospitals WHERE id = :id", {"id": hospital_id}) is None:
+                raise ValidationFailed(f"There is no hospital '{hospital_id}'.")
+        else:
+            hospital_id = None
         target = self.db.fetch_one("SELECT * FROM users WHERE id = :id", {"id": user_id})
         if target is None:
             raise NotFoundError("No such user.")
@@ -329,13 +361,12 @@ class AuthService:
         reason = self._role_lock_reason(target)
         if reason:
             raise ConflictError(reason)
-        if target["role"] != role:
-            self.db.update("users", {"role": role}, {"id": user_id})
-            self.audit.record(
-                "USER_ROLE_CHANGED",
-                actor["email"],
-                details={"user": target["email"], "from": target["role"], "to": role},
-            )
+        if target["role"] != role or target["hospital_id"] != hospital_id:
+            self.db.update("users", {"role": role, "hospital_id": hospital_id}, {"id": user_id})
+            details = {"user": target["email"], "from": target["role"], "to": role}
+            if role in HOSPITAL_ROLES or target["hospital_id"]:
+                details.update(hospital_from=target["hospital_id"], hospital_to=hospital_id)
+            self.audit.record("USER_ROLE_CHANGED", actor["email"], details=details)
         return next(user for user in self.list_users() if user["id"] == user_id)
 
 

@@ -320,6 +320,11 @@ export default function FederatedLearning() {
   const activeRound = rounds.find(isRoundActive)
   // Keep the history table in step with a running round.
   usePolling(() => state.reload({ silent: true }), 2500, Boolean(activeRound))
+  // Hospitals connect and disconnect on their own: list them as they are now, not as at page load.
+  async function openStartDialog() {
+    await state.reload({ silent: true })
+    setDialogOpen(true)
+  }
 
   return (
     <>
@@ -331,7 +336,7 @@ export default function FederatedLearning() {
             <Button
               variant="primary"
               icon={Play}
-              onClick={() => setDialogOpen(true)}
+              onClick={openStartDialog}
               disabled={state.status !== 'success' || Boolean(activeRound)}
             >
               Start new round
@@ -392,7 +397,7 @@ export default function FederatedLearning() {
                     }
                     action={
                       canManage ? (
-                        <Button variant="primary" icon={Play} onClick={() => setDialogOpen(true)}>
+                        <Button variant="primary" icon={Play} onClick={openStartDialog}>
                           Start new round
                         </Button>
                       ) : null

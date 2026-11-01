@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { Logo } from '../components/layout/Logo'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Misc'
@@ -8,7 +8,7 @@ import { LoadingState } from '../components/ui/StateViews'
 import { useAuth } from '../context/AuthContext'
 import { useSystem } from '../context/SystemContext'
 import { toApiError } from '../services/api'
-import { MIN_PASSWORD_LENGTH, ROLE_LABELS } from '../utils/constants'
+import { MIN_PASSWORD_LENGTH, ROLE_LABELS, homePathFor } from '../utils/constants'
 
 function Message({ tone, children }) {
   const Icon = tone === 'ok' ? CircleCheck : CircleAlert
@@ -28,9 +28,8 @@ const COPY = {
 }
 
 export default function Login() {
-  const { status, provider, notice, signIn, signUp, requestPasswordReset } = useAuth()
+  const { status, user, provider, notice, signIn, signUp, requestPasswordReset } = useAuth()
   const { config } = useSystem()
-  const navigate = useNavigate()
   const location = useLocation()
   const [mode, setMode] = useState('signin') // 'signin' | 'signup' | 'reset'
   const [name, setName] = useState('')
@@ -41,11 +40,14 @@ export default function Login() {
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
 
-  if (status === 'signedIn') return <Navigate to={location.state?.from || '/'} replace />
+  // Once signed in: back to the page that asked for sign-in, or to this user's home page.
+  if (status === 'signedIn') {
+    const from = location.state?.from
+    return <Navigate to={from && from !== '/' ? from : homePathFor(user)} replace />
+  }
 
   const isDemo = provider === 'demo'
   const canSignUp = Boolean(config?.signup_enabled)
-  const destination = location.state?.from || '/'
 
   function switchMode(next) {
     setMode(next)
@@ -57,8 +59,7 @@ export default function Login() {
 
   async function handleSignIn() {
     try {
-      await signIn(email.trim(), password)
-      navigate(destination, { replace: true })
+      await signIn(email.trim(), password) // the redirect above takes over once signed in
     } catch (failure) {
       const apiError = toApiError(failure)
       setError(apiError.kind === 'unavailable' ? `Unable to sign in. ${apiError.message}` : apiError.message)
@@ -76,10 +77,7 @@ export default function Login() {
     }
     try {
       const result = await signUp(email.trim(), password, name.trim())
-      if (result.signedIn) {
-        navigate(destination, { replace: true })
-        return
-      }
+      if (result.signedIn) return
       // Supabase is set to confirm email addresses before the first sign-in.
       switchMode('signin')
       setInfo(`Account created. Open the confirmation link sent to ${email.trim()}, then sign in.`)
@@ -269,15 +267,19 @@ export default function Login() {
                 <div className="mt-8 rounded-md border border-line bg-surface p-4">
                   <p className="text-sm font-semibold text-ink">Demo accounts</p>
                   <p className="mt-1 text-xs leading-relaxed text-muted">
-                    Built-in accounts, one per role. All three use the password set by <code className="font-mono">DEMO_PASSWORD</code> on
-                    the server (default <code className="font-mono">demo-password</code>).
+                    Built-in accounts: one per role, and one operator per hospital (sign in as your hospital&rsquo;s operator
+                    on that hospital&rsquo;s laptop). All use the password set by <code className="font-mono">DEMO_PASSWORD</code> on the
+                    server (default <code className="font-mono">demo-password</code>).
                   </p>
                   <ul className="mt-3 divide-y divide-line">
                     {config.demo_accounts.map((account) => (
                       <li key={account.email} className="flex items-center justify-between gap-3 py-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm text-ink">{account.email}</p>
-                          <p className="text-xs text-muted">{ROLE_LABELS[account.role] || account.role}</p>
+                          <p className="text-xs text-muted">
+                            {ROLE_LABELS[account.role] || account.role}
+                            {account.hospital_id ? ` · ${account.hospital_id}` : ''}
+                          </p>
                         </div>
                         <Button size="sm" variant="ghost" onClick={() => setEmail(account.email)}>
                           Use

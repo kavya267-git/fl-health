@@ -210,21 +210,32 @@ const ROLE_OPTIONS = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS
 /** Administrators only: who has an account, and what each person may do. */
 function Users() {
   const { user: me } = useAuth()
-  const state = useApi(() => api.users(), [])
+  const state = useApi(async () => {
+    const [users, hospitals] = await Promise.all([api.users(), api.hospitals()])
+    return { users, hospitals }
+  }, [])
   const [saving, setSaving] = useState(null)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(null)
-  // Roles just saved, shown straight away while the list refreshes in the background.
+  // Just saved (shown at once while the list refreshes), or chosen but waiting for a hospital.
   const [changed, setChanged] = useState({})
 
-  async function changeRole(target, role) {
+  async function save(target, role, hospitalId) {
     setError(null)
     setSaved(null)
+    if (role === 'hospital' && !hospitalId) {
+      // A hospital operator needs a hospital before anything is saved.
+      setChanged((current) => ({ ...current, [target.id]: { role, hospital_id: null, pending: true } }))
+      return
+    }
     setSaving(target.id)
     try {
-      const updated = await api.setUserRole(target.id, role)
-      setChanged((current) => ({ ...current, [target.id]: updated.role }))
-      setSaved(`${target.email} is now ${ROLE_LABELS[role]}.`)
+      const updated =
+        role === 'hospital' ? await api.setUserRole(target.id, role, hospitalId) : await api.setUserRole(target.id, role)
+      setChanged((current) => ({ ...current, [target.id]: { role: updated.role, hospital_id: updated.hospital_id } }))
+      setSaved(
+        `${target.email} is now ${ROLE_LABELS[role]}${updated.hospital_id ? ` for ${updated.hospital_id}` : ''}.`,
+      )
       state.reload({ silent: true })
     } catch (failure) {
       setError(toApiError(failure).message)
@@ -237,10 +248,10 @@ function Users() {
     <Card>
       <CardHeader
         title="Users and roles"
-        description="People who sign up start as viewers. Only an administrator can change a role, and only here."
+        description="People who sign up start as viewers. Only an administrator can change a role, and only here. A hospital operator is linked to one hospital."
       />
       <AsyncView state={state} what="the user list">
-        {(users) => (
+        {({ users, hospitals }) => (
           <CardBody className="space-y-4">
             {error ? <Note tone="alert">{error}</Note> : null}
             {saved && !error ? <Note tone="ok">{saved}</Note> : null}
@@ -257,8 +268,12 @@ function Users() {
                 <tbody>
                   {users.map((user) => {
                     const isMe = user.id === me.id
-                    const role = changed[user.id] || user.role
+                    const current = changed[user.id] || { role: user.role, hospital_id: user.hospital_id }
                     const lockedReason = isMe ? 'You cannot change your own role.' : user.role_locked_reason
+                    const hospitalOptions = [
+                      ...(current.hospital_id ? [] : [{ value: '', label: 'Choose a hospital…' }]),
+                      ...hospitals.map((h) => ({ value: h.id, label: `${h.name} (${h.id})` })),
+                    ]
                     return (
                       <tr key={user.id}>
                         <Td>
@@ -270,18 +285,31 @@ function Users() {
                         <Td>
                           {lockedReason ? (
                             <>
-                              <Badge tone={role === 'admin' ? 'brand' : 'neutral'}>{ROLE_LABELS[role] || role}</Badge>
+                              <Badge tone={current.role === 'admin' ? 'brand' : 'neutral'}>{ROLE_LABELS[current.role] || current.role}</Badge>
+                              {current.hospital_id ? <p className="mt-1 text-xs text-ink">{current.hospital_id}</p> : null}
                               <p className="mt-1 text-xs text-muted">{lockedReason}</p>
                             </>
                           ) : (
-                            <div className="w-44">
+                            <div className="w-56 space-y-2">
                               <Select
                                 aria-label={`Role for ${user.email}`}
-                                value={role}
+                                value={current.role}
                                 options={ROLE_OPTIONS}
                                 disabled={saving !== null}
-                                onChange={(next) => changeRole(user, next)}
+                                onChange={(next) => save(user, next, next === 'hospital' ? current.hospital_id : null)}
                               />
+                              {current.role === 'hospital' ? (
+                                <>
+                                  <Select
+                                    aria-label={`Hospital for ${user.email}`}
+                                    value={current.hospital_id || ''}
+                                    options={hospitalOptions}
+                                    disabled={saving !== null}
+                                    onChange={(next) => next && save(user, 'hospital', next)}
+                                  />
+                                  {current.pending ? <p className="text-xs text-warn">Choose the hospital to save this role.</p> : null}
+                                </>
+                              ) : null}
                             </div>
                           )}
                         </Td>
@@ -293,7 +321,7 @@ function Users() {
                 </tbody>
               </table>
             </div>
-            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               {ROLE_ORDER.map((role) => (
                 <div key={role}>
                   <dt className="font-semibold text-ink">{ROLE_LABELS[role]}</dt>

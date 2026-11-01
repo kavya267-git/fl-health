@@ -11,13 +11,14 @@ import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
 import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { MODALITY_ORDER, PARTICIPANT_LABELS, availabilityLabel, canManageRounds } from '../utils/constants'
+import { MODALITY_ORDER, PARTICIPANT_LABELS, availabilityLabel, canManageRounds, isHospitalOperator } from '../utils/constants'
 import { DASH, formatDateTime, formatNumber, secondsAgo, timeAgo } from '../utils/format'
 
 const PARTICIPATION = {
   PARTICIPATING: { label: 'In a round now', tone: 'brand' },
   IDLE: { label: 'Ready', tone: 'ok' },
   UNAVAILABLE: { label: 'Not available', tone: 'nodata' },
+  OPTED_OUT: { label: 'Opted out of rounds', tone: 'warn' },
 }
 
 function NodeFacts({ hospital }) {
@@ -57,7 +58,7 @@ function NodeFacts({ hospital }) {
   )
 }
 
-function HospitalCard({ hospital, canManage, onToggle, busy }) {
+function HospitalCard({ hospital, canManage, canOpen, onToggle, busy }) {
   const participation = PARTICIPATION[hospital.fl_participation] || PARTICIPATION.IDLE
   const external = hospital.node_mode === 'external'
   return (
@@ -146,13 +147,15 @@ function HospitalCard({ hospital, canManage, onToggle, busy }) {
         ) : (
           <span />
         )}
-        <Link
-          to={`/hospitals/${hospital.id}`}
-          className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
-        >
-          View details
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
+        {canOpen ? (
+          <Link
+            to={`/hospitals/${hospital.id}`}
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+          >
+            View details
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : null}
       </div>
     </Card>
   )
@@ -208,6 +211,7 @@ export default function Hospitals() {
                 key={hospital.id}
                 hospital={hospital}
                 canManage={canManageRounds(user)}
+                canOpen={!isHospitalOperator(user) || user.hospital_id === hospital.id}
                 onToggle={toggle}
                 busy={busyId === hospital.id}
               />

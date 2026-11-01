@@ -7,12 +7,13 @@ import { ROLE_LABELS } from '../../utils/constants'
 import { classNames } from '../../utils/format'
 import { SimulatedTag } from '../ui/Badge'
 import { Logo } from './Logo'
-import { NAV_ITEMS } from './navigation'
+import { navItemsFor } from './navigation'
 
 function Navigation({ onNavigate }) {
+  const { user } = useAuth()
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5 px-3">
-      {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+      {navItemsFor(user).map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
           to={to}

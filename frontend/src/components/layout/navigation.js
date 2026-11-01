@@ -1,4 +1,5 @@
-import { Activity, Building2, Layers, LayoutDashboard, Lightbulb, Map as MapIcon, ScrollText, Settings, TrendingUp } from 'lucide-react'
+import { Activity, Building2, Hospital, Layers, LayoutDashboard, Lightbulb, Map as MapIcon, ScrollText, Settings, TrendingUp } from 'lucide-react'
+import { canSeeAudit, isHospitalOperator } from '../../utils/constants'
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -11,3 +12,11 @@ export const NAV_ITEMS = [
   { to: '/audit', label: 'Audit Logs', icon: ScrollText },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
+
+const MY_HOSPITAL = { to: '/my-hospital', label: 'My hospital', icon: Hospital }
+
+/** The sidebar for this user. The server enforces the same rules; this only hides what it would refuse. */
+export function navItemsFor(user) {
+  const items = NAV_ITEMS.filter((item) => item.to !== '/audit' || canSeeAudit(user))
+  return isHospitalOperator(user) ? [MY_HOSPITAL, ...items] : items
+}

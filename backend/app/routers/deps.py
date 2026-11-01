@@ -39,6 +39,24 @@ def admin_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
     return user
 
 
+def is_hospital_operator(user: Dict[str, Any]) -> bool:
+    return user.get("role") == "hospital"
+
+
+def ensure_hospital_access(user: Dict[str, Any], hospital_id: str) -> None:
+    """Hospital operators may open detailed pages only for their own hospital."""
+    if is_hospital_operator(user) and user.get("hospital_id") != hospital_id:
+        raise PermissionDenied("Hospital operators can only open their own hospital's details.")
+
+
+def hospital_operator(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    """A signed-in hospital operator who is linked to a hospital."""
+    require_role(user, ("hospital",))
+    if not user.get("hospital_id"):
+        raise PermissionDenied("Your account is not linked to a hospital yet. Ask an administrator.")
+    return user
+
+
 def verify_node(request: Request, ctx: AppContext, hospital_id: str) -> None:
     """Hospital-node endpoints are authenticated with the node's own token."""
     token = request.headers.get("x-hospital-token", "")

@@ -17,7 +17,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from analytics.privacy.dp import DPConfig
-from app.routers.deps import coordinator_user, current_user, get_ctx, verify_node
+from app.routers.deps import coordinator_user, current_user, get_ctx, is_hospital_operator, verify_node
 from app.schemas.federated import (
     EvaluationAccepted,
     EvaluationRequest,
@@ -88,12 +88,18 @@ def list_rounds(
 
 @router.get("/rounds/{round_id}", response_model=RoundDetail)
 def get_round(round_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
-    return round_detail(ctx, round_id)
+    return round_detail(ctx, round_id, viewer=user)
 
 
 @router.get("/rounds/{round_id}/metrics", response_model=RoundMetrics)
 def get_round_metrics(round_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
-    return ctx.coordinator.round_metrics(round_id)
+    metrics = ctx.coordinator.round_metrics(round_id)
+    if is_hospital_operator(user):
+        # Per-hospital figures of other hospitals are theirs; an operator sees its own and the global ones.
+        own = user.get("hospital_id")
+        metrics["local"] = [m for m in metrics["local"] if m["hospital_id"] == own]
+        metrics["global_per_hospital"] = [m for m in metrics["global_per_hospital"] if m["hospital_id"] == own]
+    return metrics
 
 
 @router.post("/rounds/{round_id}/aggregate", response_model=RoundDetail)
@@ -138,7 +144,11 @@ def node_heartbeat(body: HeartbeatRequest, request: Request, ctx: AppContext = D
 def node_pending_rounds(request: Request, hospital_id: str = Query(...), ctx: AppContext = Depends(get_ctx)):
     """Rounds this hospital is invited to and has not joined yet (polled by external nodes)."""
     verify_node(request, ctx, hospital_id)
-    return {"hospital_id": hospital_id, "round_ids": ctx.coordinator.pending_rounds_for(hospital_id)}
+    return {
+        "hospital_id": hospital_id,
+        "round_ids": ctx.coordinator.pending_rounds_for(hospital_id),
+        "participating": ctx.hospitals.get_raw(hospital_id)["participating"],
+    }
 
 
 @router.post("/rounds/{round_id}/participate", response_model=NodeRoundInfo)

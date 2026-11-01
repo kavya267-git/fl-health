@@ -65,6 +65,9 @@ class HospitalNode:
         self.data_dir = Path(data_dir)
         self.transport = transport
         self.backend = backend
+        #: Size of the last update sent and the last evaluation computed, for the node's console.
+        self.last_update_bytes: Optional[int] = None
+        self.last_evaluation = None
 
     # ------------------------------------------------------------- metadata
     def data_summary(self) -> dict:
@@ -105,10 +108,12 @@ class HospitalNode:
             "backend": adapter.backend,
             "architecture": adapter.architecture,
         }
+        payload = weights_to_bytes(private_weights)
+        self.last_update_bytes = len(payload)
         return self.transport.submit_update(
             round_id,
             self.hospital_id,
-            weights_to_bytes(private_weights),
+            payload,
             output.num_samples,
             metrics,
             dp_report,
@@ -120,6 +125,7 @@ class HospitalNode:
         adapter = get_adapter(modality, self.backend)
         weights = weights_from_bytes(self.transport.fetch_global_model(round_id, self.hospital_id, "result"))
         evaluation = evaluate_on_local_data(self.data_dir, modality, weights, self.backend)
+        self.last_evaluation = evaluation
 
         explanation = None
         if modality == "ehr" and round_info.get("explainability", {}).get("global_importance", True):

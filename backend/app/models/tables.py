@@ -182,6 +182,14 @@ TABLES: Dict[str, List[Column]] = {
         ("connected_since", "timestamp", "NOT NULL"),
         ("last_seen_at", "timestamp", "NOT NULL"),
     ],
+    # Per-hospital settings an operator controls. A separate table (not hospital columns) so that
+    # existing databases pick it up: the schema is created with CREATE TABLE IF NOT EXISTS.
+    "hospital_settings": [
+        ("hospital_id", "text", "PRIMARY KEY"),
+        ("participating", "boolean", "NOT NULL"),
+        ("updated_at", "timestamp", "NOT NULL"),
+        ("updated_by", "text", ""),
+    ],
 }
 
 UNIQUE_INDEXES = {

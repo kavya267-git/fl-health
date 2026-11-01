@@ -22,11 +22,15 @@ export const api = {
 
   // Users (administrators only)
   users: () => get('/api/users', undefined, { array: true }, 'user list'),
-  setUserRole: (id, role) => post(`/api/users/${encodeURIComponent(id)}/role`, { role }, { keys: ['id', 'role'] }, 'user'),
+  setUserRole: (id, role, hospitalId = null) =>
+    post(`/api/users/${encodeURIComponent(id)}/role`, { role, hospital_id: hospitalId }, { keys: ['id', 'role'] }, 'user'),
 
   // Hospitals
   hospitals: () => get('/api/hospitals', undefined, { array: true }, 'hospital list'),
   hospital: (id) => get(`/api/hospitals/${encodeURIComponent(id)}`, undefined, { keys: ['id', 'name', 'online'] }, 'hospital'),
+  myHospital: () => get('/api/my-hospital', undefined, { keys: ['hospital', 'metrics'] }, 'your hospital'),
+  setHospitalParticipation: (id, participating) =>
+    post(`/api/hospitals/${encodeURIComponent(id)}/participation`, { participating }, { keys: ['id', 'participating'] }, 'hospital'),
   hospitalMetrics: (id) =>
     get(`/api/hospitals/${encodeURIComponent(id)}/metrics`, undefined, { keys: ['participation'] }, 'hospital metrics'),
   setHospitalAvailability: (id, online) =>

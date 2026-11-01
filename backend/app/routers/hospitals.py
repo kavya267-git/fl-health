@@ -6,8 +6,9 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends
 
-from app.routers.deps import coordinator_user, current_user, get_ctx
-from app.schemas.hospitals import AvailabilityRequest, Hospital, HospitalMetrics
+from app.routers.deps import coordinator_user, current_user, ensure_hospital_access, get_ctx, is_hospital_operator
+from app.schemas.hospitals import AvailabilityRequest, Hospital, HospitalMetrics, ParticipationRequest
+from app.services.auth_service import require_role
 from app.services.context import AppContext
 
 router = APIRouter(prefix="/api/hospitals", tags=["hospitals"])
@@ -20,6 +21,7 @@ def list_hospitals(user: Dict[str, Any] = Depends(current_user), ctx: AppContext
 
 @router.get("/{hospital_id}", response_model=Hospital)
 def get_hospital(hospital_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
+    ensure_hospital_access(user, hospital_id)
     return ctx.hospitals.get(hospital_id)
 
 
@@ -27,6 +29,7 @@ def get_hospital(hospital_id: str, user: Dict[str, Any] = Depends(current_user),
 def hospital_metrics(
     hospital_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)
 ):
+    ensure_hospital_access(user, hospital_id)
     return ctx.hospitals.metrics(hospital_id)
 
 
@@ -39,3 +42,18 @@ def set_availability(
 ):
     """Take a hospital node offline or bring it back (to demonstrate partial participation)."""
     return ctx.hospitals.set_online(hospital_id, body.online, user["email"])
+
+
+@router.post("/{hospital_id}/participation", response_model=Hospital)
+def set_participation(
+    hospital_id: str,
+    body: ParticipationRequest,
+    user: Dict[str, Any] = Depends(current_user),
+    ctx: AppContext = Depends(get_ctx),
+):
+    """"Take part in future rounds": the hospital's own operator, or an administrator or coordinator."""
+    if is_hospital_operator(user):
+        ensure_hospital_access(user, hospital_id)
+    else:
+        require_role(user, ("admin", "coordinator"))
+    return ctx.hospitals.set_participation(hospital_id, body.participating, user["email"])
