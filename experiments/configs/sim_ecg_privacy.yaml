@@ -1,0 +1,23 @@
+title: "3. Privacy cost: ECG, simulated"
+description: >
+  The platform's prototype DP mechanism inside each hospital node: the update is clipped to an L2 norm
+  of 1.0 (the platform default, fixed for all variants) and Gaussian noise with standard deviation
+  noise_multiplier x clip_norm is added to every coordinate. Epsilon is the platform's zCDP accounting
+  over all rounds (delta = 1e-5); the protected unit is a hospital's whole update, not a patient.
+  noise_multiplier = 0 means DP off (no clipping either). The grid is the union of the first grid
+  (0.5, 1.0, 2.0, run first) and the finer grid used for MIT-BIH; no level was dropped.
+dataset: {modality: ecg, source: simulated}
+partition: {scheme: natural}
+training: {rounds: 30}
+methods: [fedavg]
+target_f1: 0.9
+variants:
+  - {label: "sigma=0 (no DP)"}
+  - {label: "sigma=0.001", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.001}}
+  - {label: "sigma=0.003", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.003}}
+  - {label: "sigma=0.01", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.01}}
+  - {label: "sigma=0.03", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.03}}
+  - {label: "sigma=0.1", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.1}}
+  - {label: "sigma=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.5}}
+  - {label: "sigma=1.0", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 1.0}}
+  - {label: "sigma=2.0", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 2.0}}

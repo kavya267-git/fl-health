@@ -1,35 +1,45 @@
 # Python
 __pycache__/
 *.py[cod]
-*.so
-.Python
+.pytest_cache/
+.ruff_cache/
 .venv/
 venv/
-env/
 
-# Env
+# Node
+node_modules/
+frontend/dist/
+
+# Secrets - never commit real keys
 .env
 *.env
+!.env.example
 
-# IDE
+# Hospital data stays with the hospital node; it is never committed
+data/hospitals/
+
+# Raw downloaded datasets (MIT-BIH, PhysioNet, ...): obtain them yourself under their own terms
+data/raw/
+
+# Coordinator runtime state (database, model weights, reference cases)
+backend/var/
+ml/checkpoints/*
+!ml/checkpoints/.gitkeep
+*.npz
+*.pt
+*.pth
+*.db
+*.sqlite*
+
+# Editors / OS
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Data uploads — do NOT commit patient data
-data/hospitals/
-# Keep the folder structure tracked by git
-!data/hospitals/.gitkeep
-!data/global_model/.gitkeep
-
-# Model weights — regenerated on server
-*.pth
-*.pt
-*.db
-*.zip
-
-# Logs
 *.log
+
+# Experiment scratch partitions (regenerated from configs)
+experiments/.work/
+
+# Browser-automation artifacts (screenshots, page snapshots)
+.playwright-mcp/

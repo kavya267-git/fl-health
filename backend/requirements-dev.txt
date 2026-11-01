@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27        # used by FastAPI's TestClient
+ruff>=0.5
+
+# Experiment runner (scripts/run_experiment.py)
+matplotlib>=3.8
+pyyaml>=6.0

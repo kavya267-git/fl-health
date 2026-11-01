@@ -1,0 +1,9 @@
+title: "1a. Baselines: ECG, simulated hospitals"
+description: >
+  Each hospital training alone, FedAvg, and a centralised model trained offline on the union of the
+  same training partitions (an upper bound, not part of the platform). The four simulated hospitals keep
+  their own data distributions ("natural" partition, as on the platform).
+dataset: {modality: ecg, source: simulated}
+partition: {scheme: natural}
+training: {rounds: 30}
+target_f1: 0.9

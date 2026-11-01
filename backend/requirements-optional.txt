@@ -1,0 +1,12 @@
+# Optional. The app detects each of these and uses it when present.
+
+# Robust region adjacency and non-GeoJSON boundary files (Shapefile, GeoPackage).
+shapely>=2.0
+geopandas>=0.14
+
+# Adds a full ARIMA(p,d,q) candidate to the forecast comparison.
+statsmodels>=0.14
+
+# Lets EXPLAINER_BACKEND=shap-library use the shap package's KernelExplainer
+# instead of the built-in Shapley estimator.
+shap>=0.45

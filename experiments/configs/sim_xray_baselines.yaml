@@ -1,0 +1,8 @@
+title: "1c. Baselines: X-ray, simulated hospitals"
+description: >
+  EfficientNet-B3 from random initialisation on 64x64 simulated phantoms. 10 rounds only: one round
+  takes about 30 s per method on CPU.
+dataset: {modality: xray, source: simulated}
+partition: {scheme: natural}
+training: {rounds: 10}
+target_f1: 0.6

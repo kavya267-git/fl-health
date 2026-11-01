@@ -1,0 +1,17 @@
+title: "1e. Baselines, patient-wise: ECG, PhysioNet MIT-BIH Arrhythmia Database (DS1 / DS2)"
+description: >
+  Inter-patient evaluation after de Chazal et al. (2004): the 4 paced records are excluded, DS1's 22
+  records are dealt to the 4 hospitals as training data and DS2's 22 records as held-out data (5 or 6
+  whole patients per hospital and side, re-dealt for each seed). No patient appears in two hospitals or
+  on both sides of a split. Beats are segmented at the database's reference R-peak annotations (no
+  detector), as in de Chazal et al., and shaped like the Kaggle export (see the beat check below).
+  All beats are used; no subsampling. 20 rounds were fixed before the first run because one round
+  processes ~100k beats (compute); this matches the Kaggle MIT-BIH experiments, while the simulated
+  experiments use 30. No FedProx or DP in this setting.
+dataset:
+  modality: ecg
+  source: mitdb
+  mitdb_dir: data/raw/mitdb
+partition: {scheme: records}
+training: {rounds: 20}
+target_f1: 0.8

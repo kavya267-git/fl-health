@@ -1,0 +1,13 @@
+title: "2. Non-IID label skew: ECG, simulated"
+description: >
+  All simulated ECG records are pooled and re-split across the four hospitals with a Dirichlet label
+  split (the same partition_groups function scripts/prepare_real_data.py uses). alpha = inf is an even
+  random split (IID); smaller alpha gives each hospital fewer classes.
+dataset: {modality: ecg, source: simulated}
+partition: {scheme: dirichlet}
+training: {rounds: 30}
+target_f1: 0.9
+variants:
+  - {label: "alpha=inf", partition: {alpha: inf}}
+  - {label: "alpha=1.0", partition: {alpha: 1.0}}
+  - {label: "alpha=0.1", partition: {alpha: 0.1}}

@@ -1,0 +1,163 @@
+# API reference
+
+Base URL: `http://localhost:8000`. Interactive documentation is served at `/docs` (Swagger UI).
+
+All requests and responses are JSON unless noted, and are described by Pydantic schemas in
+`backend/app/schemas/`. Errors always have the form `{"detail": "..."}`.
+
+| Status | Meaning |
+| --- | --- |
+| 401 | No session, or it has expired |
+| 403 | Signed in, but the role (or node token) is not allowed |
+| 404 | The round, hospital, model, region or disease does not exist |
+| 409 | The request conflicts with current state (e.g. a round is already running) |
+| 422 | The request is invalid, or a model update was rejected |
+| 503 | A dependency is unavailable (database, authentication service, unconfigured data) |
+
+**Authentication.** Dashboard endpoints need `Authorization: Bearer <access token>` (a Supabase access
+token, or a demo token from `/api/auth/demo-login`). Hospital-node endpoints need
+`X-Hospital-Token: <token>` for the hospital named in the request.
+
+Roles: **viewer** can read; **coordinator** and **admin** can also change state. Endpoints marked ✎ need
+coordinator or admin.
+
+## System
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/api/health` | none | Liveness and database check |
+| GET | `/api/system/config` | none | Mode, auth provider, whether sign-up is open, hospital node mode, `ml_backend`, active model backends with their architecture signatures (nodes compare theirs at start-up), demo accounts (never passwords) |
+
+## Authentication
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/auth/me` | The signed-in user and role |
+| POST | `/api/auth/session` | Call once after a Supabase sign-in so the login is audited (`USER_LOGIN`) |
+| POST | `/api/auth/demo-login` | `{email, password}` → `{access_token, expires_in, user}`. Built-in demo accounts and accounts created with `/register`. Only when Supabase is not configured |
+| POST | `/api/auth/register` | `{email, password, display_name?}` → same response as a sign-in. The new account is always a `viewer`; a role cannot be requested. 409 if the email is taken, 422 for an invalid email or a password under 8 characters, 403 if `ALLOW_SIGNUP=false` or Supabase is configured (the web app then signs up through Supabase Auth) |
+
+## Users (administrators only)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/users` | Every account with its role, and whether the role can be changed here |
+| POST | `/api/users/{id}/role` | `{role}` (`viewer`, `coordinator` or `admin`). 409 for your own account, a built-in demo account or an `ADMIN_EMAILS` administrator. Audited as `USER_ROLE_CHANGED` |
+
+## Hospitals
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/hospitals` | All hospitals: availability, modalities, record counts, current round, latest update |
+| GET | `/api/hospitals/{id}` | One hospital |
+| GET | `/api/hospitals/{id}/metrics` | Local training and validation metrics per round, and the global model's metrics on this hospital's data |
+| POST ✎ | `/api/hospitals/{id}/availability` | `{online: bool}` - take a node offline or bring it back |
+
+## Federated learning
+
+### Dashboard
+
+| Method | Path | Description |
+| --- | --- | --- |
+| POST ✎ | `/api/federated/rounds/start` | Create a round. Returns 201 with the round once it exists; training then proceeds in the background |
+| GET | `/api/federated/rounds` | Rounds, newest first. Query: `modality`, `limit` |
+| GET | `/api/federated/rounds/{id}` | Round with participants and progress counts |
+| GET | `/api/federated/rounds/{id}/metrics` | Local metrics per hospital, global metrics, global-on-local metrics |
+| POST ✎ | `/api/federated/rounds/{id}/aggregate` | Run FedAvg now on the valid updates received; hospitals that have not reported are dropped |
+| POST ✎ | `/api/federated/rounds/{id}/finalize` | `{allow_partial}` - complete an evaluating round with the evaluations received |
+| POST ✎ | `/api/federated/rounds/{id}/cancel` | Stop a round; it is recorded as failed |
+
+`POST /api/federated/rounds/start` body:
+
+```json
+{
+  "modality": "ehr",
+  "hospital_ids": ["hospital_a", "hospital_b", "hospital_c", "hospital_d"],
+  "local_epochs": 2,
+  "batch_size": 32,
+  "learning_rate": 0.003,
+  "min_participants": 2,
+  "auto_aggregate": true,
+  "differential_privacy": { "enabled": false, "clip_norm": 1.0, "noise_multiplier": 0.0, "delta": 1e-5 },
+  "deadline_seconds": 600
+}
+```
+
+Only `modality` is required. `hospital_ids` defaults to every online hospital that holds the modality (with
+`HOSPITAL_NODES=external`: every hospital whose node sent a heartbeat in the last 30 s).
+
+`deadline_seconds` (10 to 86400): hospitals with no update this long after the round starts are set to
+`DROPPED`; the round then aggregates if at least `min_participants` updates arrived, and fails otherwise.
+After aggregation, the same allowance applies to evaluations; hospitals that miss it are set to
+`EVALUATION_FAILED` and the round completes with the evaluations it has. The round's `config.deadline` holds
+`seconds`, `training_deadline_at` and `evaluation_deadline_at`.
+
+Round statuses: `CREATED`, `WAITING_FOR_CLIENTS`, `TRAINING`, `UPDATES_RECEIVING`, `AGGREGATING`,
+`EVALUATING`, `COMPLETED`, `FAILED`.
+
+Participant statuses: `INVITED`, `JOINED`, `TRAINING`, `UPDATE_SUBMITTED`, `UPDATE_REJECTED`, `EVALUATED`,
+`EVALUATION_FAILED`, `DROPPED`, `FAILED`.
+
+### Hospital nodes (`X-Hospital-Token`)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| POST | `/api/federated/node/heartbeat` | `{hospital_id, hostname, ml_backend, device, software_version, architectures, data_summary}`, sent every ~10 s. `data_summary` is reduced to counts and source names. The hospital is online while these arrive |
+| GET | `/api/federated/node/rounds?hospital_id=` | Open rounds this hospital is invited to and has not joined |
+| POST | `/api/federated/rounds/{id}/participate` | `{hospital_id, data_summary}` - join; returns the training configuration. `data_summary` is reduced to counts and source names |
+| GET | `/api/federated/rounds/{id}/global-model?hospital_id=&which=base\|result` | Weights as an `.npz` archive (binary): the round's base model, or the aggregate for evaluation |
+| POST | `/api/federated/rounds/{id}/updates` | Multipart: `hospital_id`, `num_samples`, `metrics` (JSON), `dp_report` (JSON), `architecture_signature`, file `weights` (`.npz`). 422 with the reason if the update is rejected |
+| POST | `/api/federated/rounds/{id}/evaluations` | `{hospital_id, evaluation: {confusion, loss_sum, num_samples}, explanation}` |
+| POST | `/api/federated/rounds/{id}/failures` | `{hospital_id, stage, message}` |
+| GET | `/api/federated/rounds/{id}/node-status?hospital_id=` | Round status, for polling between training and evaluation |
+
+## Models
+
+A model is identified by its modality: `ehr`, `ecg` or `xray`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/models` | The three models: architecture in use and target architecture, backend, version, status, latest metrics |
+| GET | `/api/models/{id}` | The model with its version history (status, round, weights hash, metrics) |
+| GET | `/api/models/{id}/metrics` | Metric series by version, task and metric definitions, dataset and evaluation split, per-class results and confusion matrix for the latest version, local training loss per hospital |
+
+`latest_metrics` is `null` until a round has completed; no placeholder numbers are returned.
+
+## Analytics
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/analytics/overview` | Dashboard summary: KPIs, model status, rounds, hospitals, surveillance and forecast highlights, recent activity |
+| GET | `/api/analytics/options` | Diseases, regions and weeks available |
+| GET | `/api/analytics/hotspots?disease=&period=` | Regional statistics and hotspot candidates for one disease and week (`period` = week start, `YYYY-MM-DD`), with GeoJSON |
+| GET | `/api/analytics/forecast?region_id=&disease=&horizon=` | Forecast (1-26 weeks) with model, MAE, RMSE, intervals and the candidates compared |
+| GET | `/api/analytics/explainability?modality=&scope=global\|individual&case_id=` | Explanation for the modality's current global model |
+| GET | `/api/analytics/privacy` | Privacy statement, what is shared, DP configuration and accounting, validation checks |
+
+Each hotspot region record contains `region_id`, `disease`, `time_period`, `case_count`, `case_rate`
+(per 100,000; `null` without a population), `anomaly_score`, `hotspot_flag` and `status`
+(`NORMAL`, `ELEVATED`, `CANDIDATE_HOTSPOT`, `INSUFFICIENT_DATA`), plus the baseline and the reason.
+
+A forecast contains `region_id`, `disease`, `forecast_horizon`, `predicted_values`, `model_name`,
+`evaluation_metrics` and `uncertainty_interval`. When the series is too short or too incomplete the
+response has `available: false` and a `reason` instead of values.
+
+An explanation response always has `available`. When it is `false`, `reason` says why (for example the
+model has not been trained yet) and `explanation` is `null`.
+
+Responses built from simulated data carry `data_status: {"simulated": true, "label": "SIMULATED / DEMONSTRATION DATA"}`.
+
+## Audit (✎)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/audit` | Entries, newest first. Query: `search`, `action`, `status`, `hospital_id`, `round_id`, `date_from`, `date_to`, `limit`, `offset` |
+| GET | `/api/audit/verify` | Recompute the hash chain; reports the first altered, removed or reordered entry |
+
+Entry fields: `timestamp`, `actor`, `action`, `hospital_id`, `round_id`, `model_version`, `status`,
+`details`, `previous_hash`, `current_hash`.
+
+Actions: `USER_LOGIN`, `FL_ROUND_CREATED`, `HOSPITAL_JOINED_ROUND`, `LOCAL_UPDATE_RECEIVED`,
+`AGGREGATION_STARTED`, `AGGREGATION_COMPLETED`, `GLOBAL_MODEL_CREATED`, `FL_ROUND_COMPLETED`,
+`FL_ROUND_FAILED`, `ANALYTICS_GENERATED`, `FORECAST_GENERATED`, `MODEL_ACCESSED`,
+`HOSPITAL_STATUS_CHANGED`.
