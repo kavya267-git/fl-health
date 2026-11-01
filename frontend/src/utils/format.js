@@ -47,6 +47,12 @@ export function timeAgo(value, now = Date.now()) {
   return `${Math.round(seconds / 86400)} d ago`
 }
 
+/** Readable size of a model update: kilobytes below 0.1 MB, so small models do not show as "0.0 MB". */
+export function formatBytes(size) {
+  if (size === null || size === undefined) return DASH
+  return size >= 100_000 ? `${(size / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1e3))} KB`
+}
+
 /** Like timeAgo, but to the second: for heartbeats that arrive every few seconds. */
 export function secondsAgo(value, now = Date.now()) {
   if (!value) return 'Never'

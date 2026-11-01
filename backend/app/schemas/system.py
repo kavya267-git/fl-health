@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -13,6 +13,7 @@ class DemoAccount(BaseModel):
     email: str
     role: str
     display_name: str
+    hospital_id: Optional[str] = None
 
 
 class SystemConfig(BaseModel):

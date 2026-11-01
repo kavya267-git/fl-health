@@ -18,7 +18,11 @@ def test_health_and_public_config(client):
     assert config["simulated_label"] == "SIMULATED / DEMONSTRATION DATA"
     assert set(config["model_backends"]) == {"ehr", "ecg", "xray"}
     assert config["model_backends"]["ehr"]["target_architecture"] == "TabNet"
-    assert len(config["demo_accounts"]) == 3
+    accounts = {a["email"]: a for a in config["demo_accounts"]}
+    assert {a["role"] for a in accounts.values()} == {"admin", "coordinator", "viewer", "hospital"}
+    operators = {e: a["hospital_id"] for e, a in accounts.items() if a["role"] == "hospital"}
+    assert operators == {f"hospital_{x}@fl-healthcare.demo": f"hospital_{x}" for x in "abcd"}
+    assert all(a["hospital_id"] is None for a in accounts.values() if a["role"] != "hospital")
     assert "password" not in json.dumps(config).lower()
 
 

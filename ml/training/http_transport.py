@@ -120,13 +120,17 @@ class HttpTransport:
         self._check(response)
         return response.json()
 
-    def pending_rounds(self, hospital_id: str) -> list:
-        """Ids of open rounds this hospital has been invited to and not yet joined."""
+    def pending(self, hospital_id: str) -> dict:
+        """Open rounds this hospital is invited to, and whether its operator lets it take part."""
         response = self.session.get(
             self._url("/node/rounds"), params={"hospital_id": hospital_id}, headers=self.headers, timeout=self.timeout
         )
         self._check(response)
-        return response.json()["round_ids"]
+        return response.json()
+
+    def pending_rounds(self, hospital_id: str) -> list:
+        """Ids of open rounds this hospital has been invited to and not yet joined."""
+        return self.pending(hospital_id)["round_ids"]
 
     def wait_for_status(
         self, round_id: str, hospital_id: str, statuses, poll_seconds: float = 2.0, max_wait: float = 3600.0

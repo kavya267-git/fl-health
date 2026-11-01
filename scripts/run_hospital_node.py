@@ -25,6 +25,8 @@ from ml.training.node_runner import NodeRunner, NodeStartupError  # noqa: E402
 
 
 def main() -> None:
+    # '·' and '…' must never crash a console with a narrow code page.
+    sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--hospital", required=True, help="Hospital id, e.g. hospital_a")
     parser.add_argument("--server", default="http://localhost:8000")

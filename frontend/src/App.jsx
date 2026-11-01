@@ -13,6 +13,7 @@ import Hospitals from './pages/Hospitals'
 import Login from './pages/Login'
 import ModelDetail from './pages/ModelDetail'
 import Models from './pages/Models'
+import MyHospital from './pages/MyHospital'
 import NotFound from './pages/NotFound'
 import SettingsPage from './pages/Settings'
 import Surveillance from './pages/Surveillance'
@@ -64,6 +65,7 @@ export function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="my-hospital" element={<MyHospital />} />
         <Route path="hospitals" element={<Hospitals />} />
         <Route path="hospitals/:hospitalId" element={<HospitalDetail />} />
         <Route path="federated" element={<FederatedLearning />} />

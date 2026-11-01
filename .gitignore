@@ -17,6 +17,8 @@ frontend/dist/
 
 # Hospital data stays with the hospital node; it is never committed
 data/hospitals/
+# Each hospital node's saved server address and token (scripts/setup_hospital.py)
+data/nodes/
 
 # Raw downloaded datasets (MIT-BIH, PhysioNet, ...): obtain them yourself under their own terms
 data/raw/

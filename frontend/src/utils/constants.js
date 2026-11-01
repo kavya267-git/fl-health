@@ -62,12 +62,16 @@ export const AUDIT_ACTION_LABELS = {
   HOSPITAL_STATUS_CHANGED: 'Hospital availability changed',
   NODE_CONNECTED: 'Hospital node connected',
   HOSPITAL_DROPPED: 'Hospital dropped from round',
+  HOSPITAL_PARTICIPATION_CHANGED: 'Hospital participation changed',
+  HOSPITAL_DECLINED_ROUND: 'Hospital declined a round',
 }
 
-export const ROLE_LABELS = { admin: 'Administrator', coordinator: 'FL coordinator', viewer: 'Viewer' }
-export const ROLE_ORDER = ['viewer', 'coordinator', 'admin']
+export const ROLE_LABELS = { admin: 'Administrator', coordinator: 'FL coordinator', viewer: 'Viewer', hospital: 'Hospital operator' }
+export const ROLE_ORDER = ['viewer', 'hospital', 'coordinator', 'admin']
 export const ROLE_DESCRIPTIONS = {
   viewer: 'Read-only: dashboards, models, surveillance, forecasts and explanations.',
+  hospital:
+    "Works for one hospital: sees the general dashboards like a viewer, plus that hospital's own page, node and participation switch. No other hospital's details.",
   coordinator: 'Everything a viewer can do, plus running rounds, hospital availability and the audit log.',
   admin: 'Everything a coordinator can do, plus managing users and their roles.',
 }
@@ -83,4 +87,11 @@ export function availabilityLabel(hospital) {
   return hospital.node ? 'Disconnected' : 'Never connected'
 }
 
-export const canManageRounds =(user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
+/** Hospital operators act for one hospital (user.hospital_id). */
+export const isHospitalOperator = (user) => Boolean(user) && user.role === 'hospital'
+/** Where a user lands after signing in: hospital operators start on their own hospital's page. */
+export const homePathFor = (user) => (isHospitalOperator(user) ? '/my-hospital' : '/')
+/** The audit log is for coordinators and administrators; the server enforces the same rule. */
+export const canSeeAudit = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
+
+export const canManageRounds = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)

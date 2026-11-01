@@ -56,6 +56,8 @@ class Hospital(BaseModel):
     fl_participation: str
     #: "in-process" (simulated inside the API) or "external" (a node on its own machine).
     node_mode: str = "in-process"
+    #: The operator's "Take part in future rounds" switch. Off: never invited, and the node declines.
+    participating: bool = True
     #: External nodes only: the latest heartbeat. None if the node has never connected.
     node: Optional[NodePresence] = None
 
@@ -68,5 +70,34 @@ class HospitalMetrics(BaseModel):
     participation: List[Dict[str, Any]]
 
 
+class MyRound(OpenModel):
+    """One round seen from a single hospital's side."""
+
+    round_id: str
+    round_number: int
+    modality: str
+    round_status: str
+    status: str
+    error: Optional[str] = None
+    started_at: str
+    joined_at: Optional[str] = None
+    update_received_at: Optional[str] = None
+    evaluated_at: Optional[str] = None
+    num_samples: Optional[int] = None
+    update_bytes: Optional[int] = None
+    local_model: Optional[Dict[str, Any]] = None
+    global_model_on_local_data: Optional[Dict[str, Any]] = None
+
+
+class MyHospital(BaseModel):
+    hospital: Hospital
+    metrics: HospitalMetrics
+    latest_round: Optional[MyRound] = None
+
+
 class AvailabilityRequest(BaseModel):
     online: bool
+
+
+class ParticipationRequest(BaseModel):
+    participating: bool

@@ -51,6 +51,8 @@ class HeartbeatAccepted(BaseModel):
     hospital_id: str
     received_at: str
     timeout_seconds: int
+    #: The operator's switch; a node that is off declines any round it was invited to.
+    participating: bool = True
 
 
 class Participant(OpenModel):
@@ -107,6 +109,8 @@ class NodeRoundInfo(OpenModel):
 class NodePendingRounds(BaseModel):
     hospital_id: str
     round_ids: List[str]
+    #: False when the operator has switched participation off: the node declines these rounds.
+    participating: bool = True
 
 
 class UpdateAccepted(BaseModel):

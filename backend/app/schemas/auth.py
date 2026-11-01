@@ -20,6 +20,8 @@ class RegisterRequest(BaseModel):
 
 class RoleChangeRequest(BaseModel):
     role: str = Field(min_length=1, max_length=32)
+    #: Required when role is "hospital"; ignored otherwise.
+    hospital_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class User(BaseModel):

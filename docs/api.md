@@ -18,7 +18,7 @@ All requests and responses are JSON unless noted, and are described by Pydantic 
 token, or a demo token from `/api/auth/demo-login`). Hospital-node endpoints need
 `X-Hospital-Token: <token>` for the hospital named in the request.
 
-Roles: **viewer** can read; **coordinator** and **admin** can also change state. Endpoints marked ✎ need
+Roles: **viewer** can read; **hospital** (hospital operator, linked to one hospital) reads like a viewer, sees detailed pages and per-hospital results only for its own hospital, has `/api/my-hospital` and its hospital's participation switch, and cannot start rounds or read the audit log; **coordinator** and **admin** can also change state. Endpoints marked ✎ need
 coordinator or admin.
 
 ## System
@@ -42,16 +42,18 @@ coordinator or admin.
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/api/users` | Every account with its role, and whether the role can be changed here |
-| POST | `/api/users/{id}/role` | `{role}` (`viewer`, `coordinator` or `admin`). 409 for your own account, a built-in demo account or an `ADMIN_EMAILS` administrator. Audited as `USER_ROLE_CHANGED` |
+| POST | `/api/users/{id}/role` | `{role, hospital_id?}`: `viewer`, `hospital`, `coordinator` or `admin`. `hospital_id` is required for `hospital` (422 without it or for an unknown hospital) and cleared for every other role. 409 for your own account, a built-in demo account or an `ADMIN_EMAILS` administrator. Audited as `USER_ROLE_CHANGED` |
 
 ## Hospitals
 
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/api/hospitals` | All hospitals: availability, modalities, record counts, current round, latest update |
-| GET | `/api/hospitals/{id}` | One hospital |
-| GET | `/api/hospitals/{id}/metrics` | Local training and validation metrics per round, and the global model's metrics on this hospital's data |
-| POST ✎ | `/api/hospitals/{id}/availability` | `{online: bool}` - take a node offline or bring it back |
+| GET | `/api/hospitals/{id}` | One hospital. 403 for a hospital operator asking about another hospital |
+| GET | `/api/hospitals/{id}/metrics` | Local training and validation metrics per round, and the global model's metrics on this hospital's data. 403 for a hospital operator asking about another hospital |
+| POST ✎ | `/api/hospitals/{id}/availability` | `{online: bool}` - take a node offline or bring it back (in-process nodes only) |
+| POST | `/api/hospitals/{id}/participation` | `{participating: bool}`: "Take part in future rounds". Allowed for that hospital's operator, a coordinator or an administrator. Off: the hospital is not invited, and its node declines rounds it was already invited to. Audited as `HOSPITAL_PARTICIPATION_CHANGED` |
+| GET | `/api/my-hospital` | Hospital operators only: their hospital (with node status), its metrics, and its latest round seen from its side (own status, update size, local and global F1 on its held-out data) |
 
 ## Federated learning
 

@@ -19,6 +19,7 @@ No record ever leaves the machine: only weights, counts and summary metrics.
 from __future__ import annotations
 
 import socket
+import sys
 import threading
 import time
 from datetime import datetime
@@ -34,6 +35,38 @@ from ml.training.hospital_node import HospitalNode
 from ml.training.http_transport import CoordinatorError, HttpTransport
 
 HEARTBEAT_SECONDS = 10.0
+DECLINE_REASON = "participation is switched off on this hospital's dashboard"
+
+
+def display_name(hospital_id: str) -> str:
+    """'hospital_b' -> 'Hospital B'; any other id is shown as it is."""
+    prefix, _, suffix = hospital_id.partition("_")
+    return f"Hospital {suffix.upper()}" if prefix == "hospital" and suffix else hospital_id
+
+
+def format_bytes(size: int) -> str:
+    """Readable size of an update: kilobytes below 0.1 MB, so small models do not show as 0.0 MB."""
+    return f"{size / 1e6:.1f} MB" if size >= 100_000 else f"{max(1, round(size / 1e3))} KB"
+
+
+def round_label(round_id: str) -> str:
+    """'ehr-r0004' -> 'round 4 (EHR)' (round ids are '<modality>-r<number>')."""
+    modality, _, number = round_id.rpartition("-r")
+    return f"round {int(number)} ({modality.upper()})" if number.isdigit() and modality else round_id
+
+
+def set_console_title(title: str) -> None:
+    """Name the terminal window, so two nodes on one laptop are easy to tell apart."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            ctypes.windll.kernel32.SetConsoleTitleW(title)
+        elif sys.stdout.isatty():
+            sys.stdout.write(f"]0;{title}")
+            sys.stdout.flush()
+    except Exception:  # cosmetic only
+        pass
 PYTORCH_INSTALL = "pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu"
 
 
@@ -118,9 +151,12 @@ class NodeRunner:
         self.node = HospitalNode(hospital_id, self.data_dir, self.transport)
         self.beat: dict = {}
         self._stop = threading.Event()
+        self.name = display_name(hospital_id)
+        self.participating = True
 
     def log(self, message: str) -> None:
-        self._log(f"{datetime.now():%H:%M:%S} [{self.hospital_id}] {message}")
+        """One line per step, always naming the hospital: two nodes may share a laptop."""
+        self._log(f"{datetime.now():%H:%M:%S} {self.name} · {message}")
 
     # ------------------------------------------------------------ start-up
     def preflight(self) -> dict:
@@ -206,35 +242,68 @@ class NodeRunner:
 
     # --------------------------------------------------------------- rounds
     def handle_round(self, round_id: str) -> None:
-        self.log(f"joining {round_id}")
+        label = round_label(round_id)
+        self.log(f"{label} · invited, joining")
         stage = "join"
         try:
             info = self.node.join(round_id)
             stage = "training"
-            self.log(f"training {info['modality'].upper()} locally on this machine's data")
+            self.log(f"{label} · training locally…")
             started = time.perf_counter()
             self.node.train_and_submit(round_id, info)
-            self.log(f"update sent ({time.perf_counter() - started:.1f} s); waiting for the other hospitals")
+            size = format_bytes(self.node.last_update_bytes or 0)
+            self.log(f"{label} · update sent ({size}, trained in {time.perf_counter() - started:.1f} s)")
         except Exception as exc:
             self.transport.report_failure(round_id, self.hospital_id, stage, str(exc))
-            self.log(f"{stage} failed: {exc}")
+            self.log(f"{label} · {stage} failed: {exc}")
             return
         try:
             status = self.transport.wait_for_status(round_id, self.hospital_id, ("EVALUATING", "COMPLETED"))
         except Exception as exc:
-            self.log(f"lost track of {round_id}: {exc}")
+            self.log(f"{label} · lost track of the round: {exc}")
             return
         if status["status"] != "EVALUATING":
-            self.log(f"{round_id} ended as {status['status']}")
+            self.log(f"{label} · round ended as {status['status'].lower()}")
             return
         try:
             self.node.evaluate_and_report(round_id, info)
-            self.log(f"evaluated the new global model on local held-out data; {round_id} done")
+            self.log(f"{label} · evaluated {self._f1_text(info['modality'])} on local held-out data")
         except Exception as exc:
             self.transport.report_failure(round_id, self.hospital_id, "evaluation", str(exc))
-            self.log(f"evaluation failed: {exc}")
+            self.log(f"{label} · evaluation failed: {exc}")
+
+    def _f1_text(self, modality: str) -> str:
+        """F1 of the new global model on this hospital's held-out split (as the dashboard defines F1)."""
+        from ml.evaluation.metrics import metrics_from_evaluation
+
+        if self.node.last_evaluation is None:
+            return "the new global model"
+        metrics = metrics_from_evaluation(self.node.last_evaluation, get_adapter(modality).task)
+        return f"F1 {metrics['f1']:.2f}"
+
+    def decline(self, round_id: str) -> None:
+        """The operator switched participation off: tell the coordinator rather than stay silent."""
+        self.transport.report_failure(round_id, self.hospital_id, "declined", DECLINE_REASON)
+        self.log(f"{round_label(round_id)} · declined ({DECLINE_REASON})")
+
+    def poll_once(self) -> None:
+        pending = self.transport.pending(self.hospital_id)
+        participating = bool(pending.get("participating", True))
+        if participating != self.participating:
+            self.participating = participating
+            self.log(
+                "participation switched on: taking part in rounds again"
+                if participating
+                else f"{DECLINE_REASON}: rounds will be declined"
+            )
+        for round_id in pending["round_ids"]:
+            if self.participating:
+                self.handle_round(round_id)
+            else:
+                self.decline(round_id)
 
     def run(self, only_round: Optional[str] = None) -> None:
+        set_console_title(f"{self.name} · FL hospital node")
         server = self.preflight()
         counts = ", ".join(
             f"{m.upper()} {s['train_samples'] + s['val_samples']}"
@@ -242,8 +311,9 @@ class NodeRunner:
             for m, s in sorted(self.beat["data_summary"].items())
         )
         self.log(f"connected to {self.server} (coordinator {server.get('version')})")
-        self.log(f"machine {self.beat['hostname']}, {self.beat['ml_backend']} on {self.beat['device']}")
-        self.log(f"local records: {counts}. They stay on this machine.")
+        self.log(f"machine {self.beat['hostname']} · {self.beat['ml_backend']} on {self.beat['device'].upper()}")
+        self.log(f"local records: {counts} · they stay on this machine")
+        set_console_title(f"{self.name} · connected to {self.server}")
 
         heartbeat = threading.Thread(target=self._heartbeat_loop, name="heartbeat", daemon=True)
         heartbeat.start()
@@ -255,8 +325,7 @@ class NodeRunner:
             reachable = True
             while True:
                 try:
-                    for round_id in self.transport.pending_rounds(self.hospital_id):
-                        self.handle_round(round_id)
+                    self.poll_once()
                     if not reachable:
                         self.log("coordinator reachable again; waiting for rounds")
                         reachable = True

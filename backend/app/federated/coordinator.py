@@ -247,11 +247,17 @@ class Coordinator:
         if min_participants < 1:
             raise ValidationFailed("min_participants must be at least 1")
 
-        selected = [h for h in candidate_hospitals if h["online"] and modality in (h["modalities"] or [])]
+        selected = [
+            h
+            for h in candidate_hospitals
+            if h["online"] and h.get("participating", True) and modality in (h["modalities"] or [])
+        ]
         if len(selected) < min_participants:
+            opted_out = sum(1 for h in candidate_hospitals if not h.get("participating", True))
             raise ConflictError(
                 f"Only {len(selected)} online hospital(s) can take part in a {modality.upper()} round; "
                 f"{min_participants} are required."
+                + (f" {opted_out} hospital(s) have switched participation off." if opted_out else "")
             )
 
         with self._start_lock:
@@ -916,6 +922,11 @@ class Coordinator:
                 return
             if participant["status"] in P_PENDING:
                 self._set_participant(round_id, hospital_id, status=P_FAILED, error=message)
+                if stage == "declined":
+                    self.audit.record(
+                        "HOSPITAL_DECLINED_ROUND", hospital_id, hospital_id=hospital_id, round_id=round_id,
+                        details={"reason": message},
+                    )
                 self._after_participant_change(round_id)
 
     def fail_round(self, round_id: str, error: str, actor: str = SYSTEM_ACTOR) -> Dict[str, Any]:
