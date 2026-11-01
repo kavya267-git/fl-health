@@ -1,0 +1,42 @@
+## Known issues
+
+Recorded as they were noticed. Nothing listed here was rerun or changed after the fact; each item is left
+for the project owner to decide.
+
+1. **The laptop slept twice during the MIT-BIH runs** (around 17:50 and 18:12 on 1 Nov 2026). Running
+   processes paused and resumed. This affects only wall-clock time, which is not reported from these runs
+   (see *Run time*); rounds are computed identically before and after a pause.
+2. **No +P (precision) for the Kaggle MIT-BIH and simulated runs.** Per-class precision was added to the
+   harness for the patient-wise setting after those runs had started, so their Se / +P tables show a dash
+   for +P. Their recall (= Se) is recorded. These runs did not save confusion matrices either, and +P cannot
+   be reconstructed from what they did save: per-class recall and the held-out class counts give each
+   class's true positives, but not its false positives (four unknowns for the four ECG classes, against two
+   constraints from accuracy and macro-F1). Getting +P for these settings would need a rerun.
+3. **The same setting gives slightly different FedAvg results in two experiments.** Kaggle MIT-BIH
+   baselines (1d) and non-IID alpha = 1.0 (2b) use identical data, partitions and seeds: their local-only
+   and centralised results are identical, but FedAvg gives macro-F1 0.842 ± 0.023 in 1d and
+   0.829 ± 0.036 in 2b. Likewise FedAvg at alpha = 0.1 gives 0.430 ± 0.079 in 2b and 0.452 ± 0.106 as the
+   mu = 0 row of 5b. Cause: `HospitalNode` derives each hospital's shuffling seed from the round id, and the
+   harness puts the experiment's name in the round id, so the same seed trains with a different data order
+   in each experiment. Nothing is wrong in either run; the gap shows how much FedAvg moves with training
+   order alone, beyond the three seeds. Removing the name from the round id would make the two identical.
+4. **On MIT-BIH, the small-noise DP points mainly measure clipping, not noise (interpretation, not tested).**
+   With C = 1.0, every update was clipped (median norm before clipping about 11). At sigma = 0.001-0.03 every
+   seed ends up predicting class V for every beat (V recall 1.000, macro-F1 0.05-0.09), and sigma = 0.1
+   (0.247) scores higher than sigma = 0.001 (0.048). In the simulated setting, where updates are smaller
+   (median norm about 3.5), the same small-noise levels still learn (macro-F1 0.975-0.986) but need 15
+   rounds instead of 5 to reach 0.9. This is consistent with clipping shrinking each MIT-BIH update about
+   11-fold so that the model barely leaves its starting point in 20 rounds. Testing it would need a
+   clip-only run (DP settings currently require noise to enable clipping) or another clip norm, which was
+   fixed at 1.0 by decision. Left for the project owner.
+5. **In the patient-wise setting (1e) the centralised "upper bound" is not an upper bound.** At the final
+   round, centralised scores macro-F1 0.372 ± 0.037 against FedAvg's 0.409 ± 0.007. For seeds 0 and 1 its
+   curve peaks early (0.462 at round 3, 0.483 at round 4) and ends at 0.340 and 0.364; seed 2 has no early
+   peak and ends at 0.413, while FedAvg and local only stay roughly flat at 0.28-0.45 from round 3 onwards;
+   none of the curves is still rising at round 20. The protocol reports the final round and has no validation
+   set for picking a round (choosing one by DS2 score would be tuning on test data), so the early peak is not
+   used. Two consequences for the 1e tables: the "(upper bound)" label does not describe what happened, and
+   "Rounds to 95% of centralised macro-F1" (2.0 ± 1.0) compares against a low reference and should not be read
+   as fast convergence. Likely explanation: pooled training on DS1 overfits to the 22 training patients, and
+   inter-patient generalisation, not the training method, limits all three; untested. Nothing was rerun or
+   relabelled.

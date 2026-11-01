@@ -1,0 +1,108 @@
+{
+  "config": {
+    "description": "Platform DP prototype (client-level: noise sigma x clip_norm on every coordinate of a hospital's update), clip norm 1.0 fixed. The noise grid was fixed before any MIT-BIH run and spans levels where epsilon is far too large to mean anything, to show where utility is lost. Dirichlet alpha = 1.0 split.\n",
+    "dataset": {
+      "modality": "ecg",
+      "source": "mit-bih",
+      "csv": [
+        "data/raw/mitbih/mitbih_train.csv",
+        "data/raw/mitbih/mitbih_test.csv"
+      ],
+      "scale": 1.0,
+      "max_records": 25000,
+      "subsample_seed": 0
+    },
+    "partition": {
+      "scheme": "dirichlet",
+      "alpha": 1.0,
+      "val_fraction": 0.25
+    },
+    "training": {
+      "rounds": 20,
+      "local_epochs": 2,
+      "batch_size": 32,
+      "learning_rate": 0.003,
+      "class_weighting": "none",
+      "proximal_mu": 0.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "noise_multiplier": 0.0,
+      "delta": 1e-05
+    },
+    "methods": [
+      "fedavg"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_f1": 0.8,
+    "variants": [
+      {
+        "label": "sigma=0 (no DP)"
+      },
+      {
+        "label": "sigma=0.001",
+        "dp": {
+          "enabled": true,
+          "clip_norm": 1.0,
+          "noise_multiplier": 0.001
+        }
+      },
+      {
+        "label": "sigma=0.003",
+        "dp": {
+          "enabled": true,
+          "clip_norm": 1.0,
+          "noise_multiplier": 0.003
+        }
+      },
+      {
+        "label": "sigma=0.01",
+        "dp": {
+          "enabled": true,
+          "clip_norm": 1.0,
+          "noise_multiplier": 0.01
+        }
+      },
+      {
+        "label": "sigma=0.03",
+        "dp": {
+          "enabled": true,
+          "clip_norm": 1.0,
+          "noise_multiplier": 0.03
+        }
+      },
+      {
+        "label": "sigma=0.1",
+        "dp": {
+          "enabled": true,
+          "clip_norm": 1.0,
+          "noise_multiplier": 0.1
+        }
+      },
+      {
+        "label": "sigma=1.0",
+        "dp": {
+          "enabled": true,
+          "clip_norm": 1.0,
+          "noise_multiplier": 1.0
+        }
+      }
+    ],
+    "title": "3b. Privacy cost: ECG, MIT-BIH",
+    "name": "mitbih_ecg_privacy",
+    "config_file": "mitbih_ecg_privacy.yaml"
+  },
+  "environment": {
+    "fl_healthcare": "1.1.0",
+    "python": "3.13.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_threads": 5
+  }
+}

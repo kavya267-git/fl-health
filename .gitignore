@@ -45,3 +45,6 @@ experiments/.work/
 
 # Browser-automation artifacts (screenshots, page snapshots)
 .playwright-mcp/
+
+# Per-round experiment logs are large; RESULTS.md and each experiment's summary.csv are committed instead
+experiments/results/*/rounds.csv

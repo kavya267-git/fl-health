@@ -1,0 +1,68 @@
+{
+  "config": {
+    "description": "alpha = 0.1 Dirichlet label split. FedProx adds mu/2 ||w - w_global||^2 to each hospital's local loss; mu = 0 is FedAvg. Aggregation is the same FedAvg weighted average in all three.\n",
+    "dataset": {
+      "modality": "ecg",
+      "source": "simulated",
+      "csv": [],
+      "scale": 1.0,
+      "max_records": null
+    },
+    "partition": {
+      "scheme": "dirichlet",
+      "alpha": 0.1,
+      "val_fraction": 0.25
+    },
+    "training": {
+      "rounds": 30,
+      "local_epochs": 2,
+      "batch_size": 32,
+      "learning_rate": 0.003,
+      "class_weighting": "none",
+      "proximal_mu": 0.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "noise_multiplier": 0.0,
+      "delta": 1e-05
+    },
+    "methods": [
+      "fedavg"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_f1": 0.9,
+    "variants": [
+      {
+        "label": "FedAvg (mu=0)"
+      },
+      {
+        "label": "FedProx mu=0.01",
+        "training": {
+          "proximal_mu": 0.01
+        }
+      },
+      {
+        "label": "FedProx mu=0.1",
+        "training": {
+          "proximal_mu": 0.1
+        }
+      }
+    ],
+    "title": "5. FedProx vs FedAvg under strong label skew: ECG, simulated",
+    "name": "sim_ecg_fedprox",
+    "config_file": "sim_ecg_fedprox.yaml"
+  },
+  "environment": {
+    "fl_healthcare": "1.1.0",
+    "python": "3.13.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_threads": 5
+  }
+}

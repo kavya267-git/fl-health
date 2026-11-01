@@ -1,0 +1,13 @@
+variant,seed,hospital,train,val,train_labels,val_labels
+default,0,hospital_a,240,80,"[135, 105]","[42, 38]"
+default,0,hospital_b,195,65,"[121, 74]","[45, 20]"
+default,0,hospital_c,165,55,"[123, 42]","[36, 19]"
+default,0,hospital_d,150,50,"[80, 70]","[27, 23]"
+default,1,hospital_a,240,80,"[119, 121]","[42, 38]"
+default,1,hospital_b,195,65,"[126, 69]","[44, 21]"
+default,1,hospital_c,165,55,"[112, 53]","[40, 15]"
+default,1,hospital_d,150,50,"[77, 73]","[28, 22]"
+default,2,hospital_a,240,80,"[124, 116]","[41, 39]"
+default,2,hospital_b,195,65,"[128, 67]","[38, 27]"
+default,2,hospital_c,165,55,"[110, 55]","[41, 14]"
+default,2,hospital_d,150,50,"[69, 81]","[28, 22]"

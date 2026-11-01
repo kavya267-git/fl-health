@@ -1,0 +1,77 @@
+{
+  "config": {
+    "description": "Same records, re-split with Dirichlet alpha = inf (even random), 1.0 and 0.1.\n",
+    "dataset": {
+      "modality": "ecg",
+      "source": "mit-bih",
+      "csv": [
+        "data/raw/mitbih/mitbih_train.csv",
+        "data/raw/mitbih/mitbih_test.csv"
+      ],
+      "scale": 1.0,
+      "max_records": 25000,
+      "subsample_seed": 0
+    },
+    "partition": {
+      "scheme": "dirichlet",
+      "alpha": null,
+      "val_fraction": 0.25
+    },
+    "training": {
+      "rounds": 20,
+      "local_epochs": 2,
+      "batch_size": 32,
+      "learning_rate": 0.003,
+      "class_weighting": "none",
+      "proximal_mu": 0.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "noise_multiplier": 0.0,
+      "delta": 1e-05
+    },
+    "methods": [
+      "local",
+      "fedavg",
+      "centralised"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_f1": 0.8,
+    "variants": [
+      {
+        "label": "alpha=inf",
+        "partition": {
+          "alpha": "inf"
+        }
+      },
+      {
+        "label": "alpha=1.0",
+        "partition": {
+          "alpha": 1.0
+        }
+      },
+      {
+        "label": "alpha=0.1",
+        "partition": {
+          "alpha": 0.1
+        }
+      }
+    ],
+    "title": "2b. Non-IID label skew: ECG, MIT-BIH",
+    "name": "mitbih_ecg_noniid",
+    "config_file": "mitbih_ecg_noniid.yaml"
+  },
+  "environment": {
+    "fl_healthcare": "1.1.0",
+    "python": "3.13.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_threads": 5
+  }
+}
