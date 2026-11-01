@@ -1,0 +1,31 @@
+{
+  "files": [
+    "mitbih_train.csv",
+    "mitbih_test.csv"
+  ],
+  "classes": [
+    "N",
+    "S",
+    "V",
+    "F"
+  ],
+  "records_available": 101407,
+  "class_counts_available": [
+    90589,
+    2779,
+    7236,
+    803
+  ],
+  "records_used": 25000,
+  "class_counts_used": [
+    22333,
+    685,
+    1784,
+    198
+  ],
+  "subsample": {
+    "method": "stratified by class, without replacement",
+    "max_records": 25000,
+    "subsample_seed": 0
+  }
+}

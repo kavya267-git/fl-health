@@ -1,0 +1,16 @@
+experiment,modality,source,training_records,hospitals,local_epochs,method,seconds_per_round,rounds_timed,cpu,logical_cpus,torch_threads
+mitdb_patientwise_baselines,ecg,mitdb,50987,4,2,local,36.27253590000328,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+mitdb_patientwise_baselines,ecg,mitdb,50987,4,2,fedavg,36.6281085498631,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+mitdb_patientwise_baselines,ecg,mitdb,50987,4,2,centralised,33.57608769997023,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+mitbih_ecg_baselines,ecg,mit-bih,18750,4,2,local,12.307867600116879,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+mitbih_ecg_baselines,ecg,mit-bih,18750,4,2,fedavg,12.757788349874318,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+mitbih_ecg_baselines,ecg,mit-bih,18750,4,2,centralised,12.507469650008716,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_ecg_baselines,ecg,simulated,1455,4,2,local,1.0713972001103684,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_ecg_baselines,ecg,simulated,1455,4,2,fedavg,1.1225759000517428,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_ecg_baselines,ecg,simulated,1455,4,2,centralised,1.0247298000613227,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_ehr_baselines,ehr,simulated,2490,4,2,local,1.373120449949056,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_ehr_baselines,ehr,simulated,2490,4,2,fedavg,1.5274594000075012,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_ehr_baselines,ehr,simulated,2490,4,2,centralised,1.3135834999848157,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_xray_baselines,xray,simulated,750,4,2,local,23.854252299992368,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_xray_baselines,xray,simulated,750,4,2,fedavg,28.04441254993435,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8
+sim_xray_baselines,xray,simulated,750,4,2,centralised,22.927129150019027,2,11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz,16,8

@@ -1,0 +1,59 @@
+{
+  "config": {
+    "description": "Inter-patient evaluation after de Chazal et al. (2004): the 4 paced records are excluded, DS1's 22 records are dealt to the 4 hospitals as training data and DS2's 22 records as held-out data (5 or 6 whole patients per hospital and side, re-dealt for each seed). No patient appears in two hospitals or on both sides of a split. Beats are segmented at the database's reference R-peak annotations (no detector), as in de Chazal et al., and shaped like the Kaggle export (see the beat check below). All beats are used; no subsampling. 20 rounds were fixed before the first run because one round processes ~100k beats (compute); this matches the Kaggle MIT-BIH experiments, while the simulated experiments use 30. No FedProx or DP in this setting.\n",
+    "dataset": {
+      "modality": "ecg",
+      "source": "mitdb",
+      "csv": [],
+      "scale": 1.0,
+      "max_records": null,
+      "mitdb_dir": "data/raw/mitdb"
+    },
+    "partition": {
+      "scheme": "records",
+      "alpha": null,
+      "val_fraction": 0.25
+    },
+    "training": {
+      "rounds": 20,
+      "local_epochs": 2,
+      "batch_size": 32,
+      "learning_rate": 0.003,
+      "class_weighting": "none",
+      "proximal_mu": 0.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "noise_multiplier": 0.0,
+      "delta": 1e-05
+    },
+    "methods": [
+      "local",
+      "fedavg",
+      "centralised"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_f1": 0.8,
+    "variants": [
+      {
+        "label": "default"
+      }
+    ],
+    "title": "1e. Baselines, patient-wise: ECG, PhysioNet MIT-BIH Arrhythmia Database (DS1 / DS2)",
+    "name": "mitdb_patientwise_baselines",
+    "config_file": "mitdb_patientwise_baselines.yaml"
+  },
+  "environment": {
+    "fl_healthcare": "1.1.0",
+    "python": "3.13.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_threads": 5
+  }
+}

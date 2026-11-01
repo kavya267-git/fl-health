@@ -1,0 +1,94 @@
+{
+  "physionet": {
+    "N": {
+      "count": 90074,
+      "length_median": 111.0,
+      "length_p10": 85.0,
+      "length_p90": 155.0,
+      "share_max_is_1": 1.0,
+      "share_min_is_0": 0.9775961986810845,
+      "share_peak_at_sample_0": 0.4022026333903235
+    },
+    "S": {
+      "count": 2780,
+      "length_median": 110.0,
+      "length_p10": 74.0,
+      "length_p90": 127.0,
+      "share_max_is_1": 1.0,
+      "share_min_is_0": 0.9823741007194244,
+      "share_peak_at_sample_0": 0.42302158273381296
+    },
+    "V": {
+      "count": 7009,
+      "length_median": 97.0,
+      "length_p10": 82.0,
+      "length_p90": 137.0,
+      "share_max_is_1": 1.0,
+      "share_min_is_0": 0.9927236410329576,
+      "share_peak_at_sample_0": 0.34869453559708946
+    },
+    "F": {
+      "count": 803,
+      "length_median": 84.0,
+      "length_p10": 82.0,
+      "length_p90": 91.0,
+      "share_max_is_1": 1.0,
+      "share_min_is_0": 0.937733499377335,
+      "share_peak_at_sample_0": 0.597758405977584
+    }
+  },
+  "kaggle": {
+    "N": {
+      "count": 90589,
+      "length_median": 106.0,
+      "length_p10": 79.0,
+      "length_p90": 149.0,
+      "share_max_is_1": 0.9996357173608275,
+      "share_min_is_0": 0.9699411628343397,
+      "share_peak_at_sample_0": 0.49248805042554833
+    },
+    "S": {
+      "count": 2779,
+      "length_median": 107.0,
+      "length_p10": 58.0,
+      "length_p90": 187.0,
+      "share_max_is_1": 0.9355883411299029,
+      "share_min_is_0": 0.973011874775099,
+      "share_peak_at_sample_0": 0.4649154372076286
+    },
+    "V": {
+      "count": 7236,
+      "length_median": 114.0,
+      "length_p10": 76.0,
+      "length_p90": 172.0,
+      "share_max_is_1": 0.9982034273079049,
+      "share_min_is_0": 0.9929519071310116,
+      "share_peak_at_sample_0": 0.2551133222775014
+    },
+    "F": {
+      "count": 803,
+      "length_median": 78.0,
+      "length_p10": 69.0,
+      "length_p90": 87.0,
+      "share_max_is_1": 1.0,
+      "share_min_is_0": 0.7658779576587795,
+      "share_peak_at_sample_0": 0.6687422166874222
+    }
+  },
+  "ds_counts": {
+    "DS1": {
+      "N": 45841,
+      "S": 943,
+      "V": 3788,
+      "F": 415
+    },
+    "DS2": {
+      "N": 44233,
+      "S": 1837,
+      "V": 3221,
+      "F": 388
+    }
+  },
+  "skipped_q": 15,
+  "skipped_other": 52
+}

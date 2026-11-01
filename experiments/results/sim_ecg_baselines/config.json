@@ -1,0 +1,58 @@
+{
+  "config": {
+    "description": "Each hospital training alone, FedAvg, and a centralised model trained offline on the union of the same training partitions (an upper bound, not part of the platform). The four simulated hospitals keep their own data distributions (\"natural\" partition, as on the platform).\n",
+    "dataset": {
+      "modality": "ecg",
+      "source": "simulated",
+      "csv": [],
+      "scale": 1.0,
+      "max_records": null
+    },
+    "partition": {
+      "scheme": "natural",
+      "alpha": null,
+      "val_fraction": 0.25
+    },
+    "training": {
+      "rounds": 30,
+      "local_epochs": 2,
+      "batch_size": 32,
+      "learning_rate": 0.003,
+      "class_weighting": "none",
+      "proximal_mu": 0.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "noise_multiplier": 0.0,
+      "delta": 1e-05
+    },
+    "methods": [
+      "local",
+      "fedavg",
+      "centralised"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_f1": 0.9,
+    "variants": [
+      {
+        "label": "default"
+      }
+    ],
+    "title": "1a. Baselines: ECG, simulated hospitals",
+    "name": "sim_ecg_baselines",
+    "config_file": "sim_ecg_baselines.yaml"
+  },
+  "environment": {
+    "fl_healthcare": "1.1.0",
+    "python": "3.13.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_threads": 5
+  }
+}
