@@ -27,6 +27,7 @@ from experiments.harness import RESULTS_DIR, load_config, run_experiment, time_m
 RESULTS_MD = ROOT / "experiments" / "RESULTS.md"
 HEADER = ROOT / "experiments" / "results_header.md"
 DISCUSSION = ROOT / "experiments" / "discussion.md"
+KNOWN_ISSUES = ROOT / "experiments" / "known_issues.md"
 ORDER = ROOT / "experiments" / "configs" / "ORDER"
 
 
@@ -49,6 +50,8 @@ def build_results_md() -> None:
             parts.append(section(name))
         else:
             parts.append(f"### {name}\n\nNot run yet.\n")
+    if KNOWN_ISSUES.exists():
+        parts.append(KNOWN_ISSUES.read_text(encoding="utf-8"))
     if DISCUSSION.exists():
         parts.append(DISCUSSION.read_text(encoding="utf-8"))
     RESULTS_MD.write_text("\n".join(parts), encoding="utf-8")

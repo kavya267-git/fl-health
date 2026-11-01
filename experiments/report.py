@@ -11,6 +11,7 @@ import csv
 import json
 import math
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import matplotlib
@@ -206,11 +207,43 @@ def figure_bars(name: str, rows: List[dict], config: dict) -> str:
     return path.relative_to(ROOT / "experiments").as_posix()
 
 
+# ------------------------------------------------------------------ summary
+# "seconds" is left out: runs shared the CPU, so their wall-clock times are not comparable.
+_NOT_METRICS = {"experiment", "variant", "method", "seed", "modality", "source", "round", "seconds"}
+
+
+def write_summary(name: str, rows: List[dict]) -> Path:
+    """Final round of every run, as mean and sample std over seeds: results/<name>/summary.csv.
+
+    The small, committable digest of rounds.csv (which keeps every round of every run).
+    """
+    final = finals(rows)
+    metrics = sorted(
+        {k for rs in final.values() for r in rs for k, v in r.items() if k not in _NOT_METRICS and isinstance(v, float)}
+    )
+    out_rows = []
+    for (variant, method), seeds_rows in final.items():
+        row = {"experiment": name, "variant": variant, "method": method, "seeds": len(seeds_rows),
+               "rounds": int(seeds_rows[0]["round"])}
+        for metric in metrics:
+            mean, std, n = mean_std([r.get(metric) for r in seeds_rows])
+            row[f"{metric}_mean"] = "" if mean is None else mean
+            row[f"{metric}_std"] = "" if std is None else std
+        out_rows.append(row)
+    path = RESULTS_DIR / name / "summary.csv"
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(out_rows[0]))
+        writer.writeheader()
+        writer.writerows(out_rows)
+    return path
+
+
 # ------------------------------------------------------------------ section
 def section(name: str) -> str:
     rows = read_rounds(name)
     if not rows:
         return f"### {name}\n\nNo results yet.\n"
+    write_summary(name, rows)
     config = read_config(name)
     settings = config["config"]
     modality = rows[0]["modality"]
@@ -367,11 +400,11 @@ def section(name: str) -> str:
             lines += rare_class_table(prow, variants, rare="F")
         if any(p.get("ds1_records") for p in prow):
             lines += records_table(prow)
-    if settings["dataset"]["source"] == "mitdb":
-        lines += beat_check_lines()
         if excluded:
             lines += ["Hospitals that sat a run out (too few records to train): "
                       + "; ".join(f"{p['variant']} seed {p['seed']} {p['hospital']} ({p['excluded']})" for p in excluded), ""]
+    if settings["dataset"]["source"] == "mitdb":
+        lines += beat_check_lines()
 
     lines += [f"![Learning curves]({figure_curves(name, rows, config, modality)})", ""]
     if len(variants) > 1:
