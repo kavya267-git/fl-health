@@ -1,0 +1,13 @@
+title: "5. FedProx vs FedAvg under strong label skew: ECG, simulated"
+description: >
+  alpha = 0.1 Dirichlet label split. FedProx adds mu/2 ||w - w_global||^2 to each hospital's local
+  loss; mu = 0 is FedAvg. Aggregation is the same FedAvg weighted average in all three.
+dataset: {modality: ecg, source: simulated}
+partition: {scheme: dirichlet, alpha: 0.1}
+training: {rounds: 30}
+methods: [fedavg]
+target_f1: 0.9
+variants:
+  - {label: "FedAvg (mu=0)"}
+  - {label: "FedProx mu=0.01", training: {proximal_mu: 0.01}}
+  - {label: "FedProx mu=0.1", training: {proximal_mu: 0.1}}

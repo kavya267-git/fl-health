@@ -1,0 +1,28 @@
+title: "3b. Privacy cost: ECG, MIT-BIH"
+description: >
+  Platform DP prototype (client-level: noise sigma x clip_norm on every coordinate of a hospital's
+  update), clip norm 1.0 fixed. The noise grid was fixed before any MIT-BIH run and spans levels where
+  epsilon is far too large to mean anything, to show where utility is lost. Dirichlet alpha = 1.0 split.
+dataset:
+  modality: ecg
+  source: mit-bih
+  # Kaggle "ECG Heartbeat Categorization" export; both files are pooled, class Q dropped, then
+  # re-split per hospital (25% held out), exactly as scripts/prepare_real_data.py does.
+  csv: ["${MITBIH_DIR}/mitbih_train.csv", "${MITBIH_DIR}/mitbih_test.csv"]
+  # One round on all ~101k beats took 68-120 s per method (~31 compute-hours for the four MIT-BIH
+  # experiments). Fixed before any MIT-BIH experiment run: 25,000 beats, stratified by class, drawn
+  # once with subsample_seed 0 and shared by every MIT-BIH experiment and seed.
+  max_records: 25000
+  subsample_seed: 0
+training: {rounds: 20}
+target_f1: 0.8
+partition: {scheme: dirichlet, alpha: 1.0}
+methods: [fedavg]
+variants:
+  - {label: "sigma=0 (no DP)"}
+  - {label: "sigma=0.001", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.001}}
+  - {label: "sigma=0.003", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.003}}
+  - {label: "sigma=0.01", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.01}}
+  - {label: "sigma=0.03", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.03}}
+  - {label: "sigma=0.1", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.1}}
+  - {label: "sigma=1.0", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 1.0}}

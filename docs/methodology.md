@@ -1,0 +1,198 @@
+# Methodology
+
+What each part of the system computes, and what it does not claim.
+
+## Models and tasks
+
+| Modality | Task | Model (PyTorch) | Input |
+| --- | --- | --- | --- |
+| EHR | Adverse in-hospital outcome, binary | TabNet: 3 attention steps, 16-d decision and attention embeddings, sparsemax masks, ghost batch norm, sparsity regulariser | 14 structured features, standardised with fixed clinical reference values |
+| ECG | Beat class N / S / V / F, 4 classes | Three 1-D conv blocks (32, 64, 64) → BiLSTM (64 per direction) → mean pool → linear | 187-sample beat window (125 Hz) |
+| X-ray | Finding present, binary | torchvision EfficientNet-B3 with a 2-way head; optional ImageNet initialisation (`XRAY_PRETRAINED=true`) | Greyscale image replicated to three channels |
+
+EHR features are standardised with fixed reference means and spreads (`ml/ehr/features.py`) instead of
+statistics computed from data, so every hospital preprocesses identically without anyone pooling
+per-feature statistics.
+
+Each task is separate. An F1 score for the ECG model and one for the EHR model measure different things and
+are never placed on the same axis.
+
+## Federated averaging
+
+After local training, the coordinator computes
+
+```
+W_global = Σ_k (n_k / N) · W_k
+```
+
+where `W_k` are hospital k's weights, `n_k` its number of local training samples and `N = Σ n_k` over the
+hospitals whose updates were accepted (`backend/app/federated/fedavg.py`). Floating-point tensors are
+averaged in float64 and cast back; integer buffers (batch-norm step counters) are averaged and rounded.
+Batch-norm running statistics are averaged like any other tensor.
+
+The simulated hospitals are deliberately non-IID: different sizes, class balance, acuity, sensor noise and
+scanner contrast. Plain FedAvg is known to converge more slowly under such heterogeneity; no correction
+(FedProx, SCAFFOLD) is applied.
+
+## Evaluation
+
+The coordinator holds no evaluation data. After aggregation each participating hospital scores the new
+global model on its **local held-out validation split** (25% of its data, fixed when the partition is
+written) and returns a confusion matrix and the summed cross-entropy. The coordinator sums these, which
+gives exactly the metrics a pooled evaluation would give:
+
+- accuracy; loss (mean cross-entropy);
+- precision, recall, F1: for the positive class in binary tasks, macro-averaged in the multi-class ECG task.
+
+Limits: the validation split is also what you would tune against, so there is no untouched test set; the
+splits are per-hospital random splits, not temporal; and metrics on simulated data say nothing about
+clinical performance.
+
+Each round also records, per hospital, the local training loss and the locally trained model's validation
+metrics before averaging, so local and global models can be compared.
+
+## Simulated data
+
+Used only in demo mode and labelled as simulated everywhere.
+
+- **EHR** - vitals and labs drawn around a latent severity; the outcome follows a hand-written logistic
+  model. Hospitals differ in age mix, acuity and measurement noise.
+- **ECG** - beats built from Gaussian bumps for the P, Q, R, S and T waves, with class-specific changes
+  (early beat with abnormal P for S; wide QRS, no P, inverted T for V; a blend for F), plus baseline wander
+  and noise. They are cartoons of rhythms, not recordings.
+- **X-ray** - 64×64 geometric phantoms; a "finding" is one or two soft bright blobs in a lung field. They
+  are not radiographs.
+- **Surveillance** - twelve fictional regions (a Voronoi tessellation), three diseases, 104 weeks of
+  seasonal counts with autocorrelated local variation and over-dispersed noise. A few recent rises are
+  injected so the hotspot layer has something to detect; they represent no real event.
+
+## Hotspot candidates
+
+Baseline method, chosen for transparency: a historical z-score in the style of CDC's EARS C2, adapted to
+weekly data. For each region and week,
+
+```
+z = (count − mean(baseline)) / max(std(baseline), 1.0)
+```
+
+with the baseline being the 8 weeks that end 1 week before the tested week (the gap stops the start of a
+rise from inflating its own baseline).
+
+| Status | Rule |
+| --- | --- |
+| `CANDIDATE_HOTSPOT` ("Potential hotspot") | z ≥ 3 and at least 5 cases |
+| `ELEVATED` | z ≥ 2 |
+| `NORMAL` | otherwise |
+| `INSUFFICIENT_DATA` | the week's count is missing or suppressed, or fewer than 6 usable baseline weeks |
+
+Flagged regions that share a border are grouped so they can be reviewed together. An Isolation Forest
+score (fitted on earlier weeks only) is reported as a second opinion and never changes the status.
+
+What a flag means: the week is statistically unusual for that region. It is a candidate for further
+investigation, **not a confirmed outbreak**. Known weaknesses: a short baseline reacts to the normal seasonal
+upswing (on the simulated data roughly 4% of ordinary region-weeks reach the candidate threshold);
+reporting delays, testing changes and holidays all produce the same signal; and there is no
+multiple-comparison correction across regions. Rates use a population denominator only when one is supplied.
+
+**Small-count suppression.** A hospital reports no count between 1 and 4. If any hospital's cell for a
+region-week is suppressed, the regional total would only be a lower bound, so it is shown as not available
+and the week is treated as missing.
+
+## Forecasting
+
+Candidates (`analytics/forecasting/models.py`):
+
+| Model | Idea |
+| --- | --- |
+| Naive | Next weeks equal the last observed week |
+| Seasonal naive | Next weeks equal the same weeks one year earlier |
+| ARIMA(p,d,0), least squares | Autoregression on the (optionally differenced) series; order chosen on an inner validation block of the training data |
+| Seasonal ARIMA(1,0,0)(0,1,0)[52], least squares | Last year's value plus a decaying share of the current gap from last year |
+| ARIMA(2,1,1), statsmodels | Added automatically if `statsmodels` is installed |
+
+Validation is **rolling-origin**: for each of the last 12 weeks, every candidate is fitted on the weeks
+before it only and forecasts up to the requested horizon. Errors are pooled into MAE and RMSE; the lowest
+RMSE wins and is refitted on the full history to forecast. A prediction for week t never uses week t or any
+later week - there is a test that tampers with later weeks and checks earlier predictions do not move.
+
+Intervals are a normal approximation from each model's forecast standard error (80% and 95%), floored at
+zero. They reflect the model's own error structure, not reporting error or structural change, so treat them
+as optimistic. Series with more than 20% missing or suppressed weeks, or fewer than 30 points, are not
+forecast; short gaps are linearly interpolated and counted.
+
+Everything on the Forecasting page is labelled **Forecast / Prediction**. It is a projection, not confirmed
+future cases.
+
+## Explainability
+
+Global and individual explanations are kept apart.
+
+**EHR, individual (SHAP).** Shapley values by permutation sampling against a background sample
+(`analytics/explainability/shapley.py`): each feature's value is the average change in the predicted
+probability when that feature is switched from background values to the record's value, over random feature
+orderings (each ordering also run in reverse). The values are additive: base value + contributions equals
+the model's output, which is checked in tests against a closed form for linear models. This estimates the
+same quantity as the `shap` package's Kernel and Permutation explainers; set
+`EXPLAINER_BACKEND=shap-library` to use that package's KernelExplainer instead.
+
+**EHR, global.** During evaluation each hospital computes mean |SHAP| per feature on up to 24 held-out
+records and returns only those 14 averages (plus the direction of each feature's effect). The coordinator
+weights them by records explained. No record leaves a hospital.
+
+**ECG.** Occlusion sensitivity: a 12-sample window is replaced by a straight line between its edges and
+the drop in the predicted class's log-odds is recorded for each position.
+
+**X-ray.** Grad-CAM on the last convolutional block when the PyTorch EfficientNet-B3 is active; occlusion
+sensitivity otherwise, labelled as such.
+
+Individual explanations in the UI use a small set of **synthetic reference cases** held by the coordinator,
+generated separately from every hospital partition and never used for training or evaluation. In a
+deployment, explaining a real patient's prediction would happen inside the hospital.
+
+Limits: SHAP explains the model, not the disease; correlated features share credit in ways that can
+mislead; a heat map shows where the model is sensitive, not that it is correct. If no explanation can be
+produced (untrained model, unsupported scope), the API says so with a reason instead of returning values.
+
+## Privacy
+
+**Architecture.** Raw data stays on hospital nodes; the list of what crosses the boundary is in
+[architecture.md](architecture.md). This reduces the need to centralise patient data. It is not a privacy
+guarantee: model updates can leak information about training data (membership inference, gradient
+inversion).
+
+**Differential privacy (prototype).** Chosen per round. At the hospital, before the update leaves:
+
+1. the update Δ = W_local − W_global is scaled so that ‖Δ‖₂ ≤ `clip_norm`;
+2. Gaussian noise N(0, (`noise_multiplier` · `clip_norm`)²) is added to every coordinate.
+
+Accounting (`analytics/privacy/dp.py`), with its assumptions stated in the UI:
+
+- the protected unit is one hospital's whole update in a round, not an individual patient;
+- sensitivity = `clip_norm` (update present vs absent);
+- each round is ρ-zCDP with ρ = 1 / (2 · noise_multiplier²); rounds add; ε = ρ + 2·√(ρ · ln(1/δ)), δ = 10⁻⁵;
+- no subsampling amplification;
+- batch-norm running statistics are sent unclipped and un-noised and fall outside the bound;
+- a round run without DP has no bound, so a cumulative ε only holds if every round used DP.
+
+This is an unaudited prototype. With four hospitals, noise large enough to give a small ε destroys model
+quality, and noise small enough to preserve quality gives an ε in the hundreds or thousands - the UI shows
+whichever it is. It is not patient-level DP (that would need DP-SGD inside local training).
+
+**Not implemented:** secure aggregation (the coordinator sees each hospital's update), encryption of
+updates at rest, protection against a malicious coordinator or malicious hospitals (no robust
+aggregation).
+
+**Validation checks** (Settings page) inspect the running system: no patient-identifier-like columns in
+the central schema; coordinator storage separate from hospital data and free of raw-data file types; every
+accepted update passed structural validation; no stored count between 1 and 4; DP status; transport
+encryption. They are evidence about this deployment, not a proof of privacy or a compliance assessment.
+
+## Audit trail
+
+Every significant event appends an entry containing the previous entry's hash and its own SHA-256 over
+(timestamp, actor, action, hospital, round, model version, status, details, previous hash). Verification
+recomputes the chain and reports the first entry that was altered, removed or reordered.
+
+This makes tampering detectable. It does not make the database immutable: someone who can rewrite every row
+can rebuild a consistent chain. Stronger guarantees would need the latest hash to be anchored somewhere the
+database owner cannot change.

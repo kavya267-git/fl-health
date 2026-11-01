@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+
+/*
+  Design tokens. One family (IBM Plex Sans) for everything; IBM Plex Mono only
+  for values that are literally machine identifiers (hashes, round ids).
+*/
+@theme {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-canvas: #f1f5f4;
+  --color-surface: #ffffff;
+  --color-ink: #13211e;
+  --color-muted: #586964;
+  --color-faint: #8b9995;
+  --color-line: #dbe3e0;
+  --color-line-strong: #c3cfcb;
+
+  --color-brand-950: #082725;
+  --color-brand-900: #0c3b38;
+  --color-brand-800: #0e4a45;
+  --color-brand-700: #0f5d56;
+  --color-brand-600: #127168;
+  --color-brand-200: #a9d8d0;
+  --color-brand-100: #d3ebe7;
+  --color-brand-50: #e9f4f2;
+
+  /* One hue per data modality, used consistently across pages. */
+  --color-ehr: #4353b3;
+  --color-ehr-soft: #e8eaf8;
+  --color-ecg: #b03a60;
+  --color-ecg-soft: #f8e7ed;
+  --color-xray: #2a7b99;
+  --color-xray-soft: #e2f1f6;
+
+  /* Surveillance status scale. */
+  --color-ok: #2a7a57;
+  --color-ok-soft: #e3f3eb;
+  --color-warn: #a4680e;
+  --color-warn-soft: #fbf0d9;
+  --color-alert: #b3261e;
+  --color-alert-soft: #fbe6e4;
+  --color-nodata: #84918d;
+  --color-nodata-soft: #eceff0;
+
+  --color-forecast: #6a4c9c;
+  --color-forecast-soft: #ede7f6;
+
+  --shadow-card: 0 1px 2px rgb(19 33 30 / 0.05), 0 1px 1px rgb(19 33 30 / 0.03);
+  --shadow-raised: 0 10px 30px -12px rgb(12 59 56 / 0.28);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-canvas);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'tnum' 1; /* tabular numerals: numbers line up in tables and KPIs */
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* The round progress pulse on the Federated Learning page (the one animated element). */
+@keyframes lane-flow {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 24px 0;
+  }
+}
+
+.lane-active {
+  background-image: linear-gradient(90deg, var(--color-brand-600) 50%, transparent 50%);
+  background-size: 12px 2px;
+  animation: lane-flow 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lane-active {
+    animation: none;
+  }
+
+  .animate-spin {
+    animation-duration: 3s;
+  }
+}
+
+/* Leaflet: match the app surface and keep popups readable. */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #e9eeec;
+  border-radius: 0.5rem;
+}
+
+.leaflet-interactive:focus {
+  outline: none;
+}

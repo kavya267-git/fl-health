@@ -1,22 +1,26 @@
-# run.py
-import sys
-import os
-import uvicorn
+"""Start the FL-Healthcare API.
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+    python run.py
+
+Reads settings from backend/.env (see backend/.env.example). Equivalent to
+``cd backend && uvicorn app.main:app``.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT))
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))  # Railway injects PORT automatically
-    print("=" * 60)
-    print("FL-HEALTH SERVER")
-    print("Data stays local. Only learning travels.")
-    print("=" * 60)
-    print(f"Running at: http://127.0.0.1:{port}")
-    print(f"Docs:       http://127.0.0.1:{port}/docs")
-    print("=" * 60)
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False,  # Never use reload=True in production
-    )
+    import uvicorn
+    from dotenv import load_dotenv
+
+    # API_HOST / API_PORT may be set in backend/.env; read it before using them.
+    load_dotenv(ROOT / "backend" / ".env")
+    host = os.getenv("API_HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", os.getenv("API_PORT", "8000")))
+    print(f"FL-Healthcare API on http://{host}:{port}  (interactive docs: /docs)")
+    uvicorn.run("app.main:app", host=host, port=port, reload=False, timeout_graceful_shutdown=5)

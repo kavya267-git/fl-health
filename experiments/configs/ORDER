@@ -1,0 +1,16 @@
+# Sections of experiments/RESULTS.md, in this order. Lines starting with ">" are copied as markdown.
+> ## Part A. Real recordings: MIT-BIH heartbeats (headline results)
+> Everything in this part was trained and evaluated on real ECG beats from the MIT-BIH Arrhythmia Database, in two settings. **Patient-wise (1e)**: whole patients assigned to hospitals, held-out patients never seen in training (de Chazal DS1 / DS2); this is the realistic setting. **Kaggle export (1d, 2b, 3b, 5b)**: the export has no patient identifiers, so beats from one patient can sit in several hospitals and on both sides of a hospital's train / held-out split; those scores are optimistic compared with the patient-wise setting.
+mitdb_patientwise_baselines
+mitbih_ecg_baselines
+mitbih_ecg_noniid
+mitbih_ecg_privacy
+mitbih_ecg_fedprox
+> ## Part B. Simulated data: pipeline validation, not evidence
+> These runs check that the experiment pipeline, the methods and the reporting behave as expected on every modality. The simulated hospitals are fictional and the simulators are easy (simulated ECG reaches macro-F1 near 0.99), so a high score here shows that the simulator is easy, not that a method works. Do not cite these numbers as results.
+sim_ecg_baselines
+sim_ehr_baselines
+sim_xray_baselines
+sim_ecg_noniid
+sim_ecg_privacy
+sim_ecg_fedprox

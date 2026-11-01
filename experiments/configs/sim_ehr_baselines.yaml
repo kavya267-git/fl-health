@@ -1,0 +1,12 @@
+title: "1b. Baselines: EHR, simulated hospitals, with and without class-weighted loss"
+description: >
+  EHR is imbalanced (about 18% adverse outcomes). Class-weighted cross-entropy is an experiment
+  variable here, not a change to the platform: "balanced" weights each class by n / (2 n_class),
+  computed by every hospital from its own training labels (the centralised model uses the union).
+dataset: {modality: ehr, source: simulated}
+partition: {scheme: natural}
+training: {rounds: 30}
+target_f1: 0.6
+variants:
+  - {label: "unweighted loss"}
+  - {label: "class-weighted loss", training: {class_weighting: balanced}}
