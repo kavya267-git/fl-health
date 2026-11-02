@@ -66,7 +66,7 @@ from ml.common.types import ArrayDataset, EvalResult, TrainConfig  # noqa: E402
 from ml.common.weights import weights_from_bytes, weights_to_bytes  # noqa: E402
 from ml.ecg.preprocess import ECG_BEAT_LENGTH  # noqa: E402
 from ml.evaluation.metrics import per_class_metrics, pool_evaluations  # noqa: E402
-from ml.registry import get_adapter  # noqa: E402
+from ml.registry import adapter_override, get_adapter  # noqa: E402
 from ml.simulation.hospitals import SIMULATED_HOSPITALS, generate_hospital_data  # noqa: E402
 from ml.training.hospital_node import HospitalNode  # noqa: E402
 
@@ -283,10 +283,11 @@ def build_partition(config: dict, seed: int, run_dir: Path) -> Partition:
 
         if source != "mitdb":
             raise ValueError("The 'records' partition needs dataset.source 'mitdb'")
-        if dataset.get("rr_features"):
-            # Experiment 1f: the RR-interval inputs exist (mitdb.load_rr), the model that reads them does not yet.
-            raise NotImplementedError("dataset.rr_features needs the CNN-BiLSTM+RR model, which is not built yet")
         beats = mitdb.load_all(Path(dataset["mitdb_dir"]), WORK_DIR / "mitdb-beats.npz")
+        if dataset.get("rr_features"):
+            # Experiment 1f: the same beats, each row followed by its pre-RR, post-RR and local average RR.
+            rr = mitdb.load_rr(Path(dataset["mitdb_dir"]), WORK_DIR / "mitdb-rr.npz")
+            beats = {r: (np.concatenate([X, rr[r]], axis=1), y) for r, (X, y) in beats.items()}
         for hospital_id, records in mitdb.assign_records(seed, hospitals).items():
             train = [beats[r] for r in records["ds1"]]
             val = [beats[r] for r in records["ds2"]]
@@ -571,6 +572,19 @@ def run_centralised(config: dict, partition: Partition, seed: int) -> List[dict]
 RUNNERS = {"local": run_local, "fedavg": run_fedavg, "centralised": run_centralised}
 
 
+def run_method(method: str, settings: dict, partition: Partition, seed: int) -> List[dict]:
+    """Run one method, with the model named in ``settings["model"]`` if it is not the platform's default."""
+    architecture = (settings.get("model") or {}).get("architecture")
+    if not architecture:
+        return RUNNERS[method](settings, partition, seed)
+    if architecture != "CNN-BiLSTM+RR" or partition.modality != "ecg":
+        raise ValueError(f"Unknown experiment model '{architecture}' for {partition.modality}")
+    from ml.ecg.cnn_bilstm import CNNBiLSTMRRAdapter
+
+    with adapter_override("ecg", CNNBiLSTMRRAdapter()):
+        return RUNNERS[method](settings, partition, seed)
+
+
 # ===================================================================== driver
 def environment() -> dict:
     import torch
@@ -635,7 +649,7 @@ def run_experiment(config: dict, resume: bool = True, log=print) -> Path:
                 _write_rows(partitions_path, partition_rows)
             for method in pending:
                 started = time.perf_counter()
-                result = RUNNERS[method](settings, partition, seed)
+                result = run_method(method, settings, partition, seed)
                 for row in result:
                     rows.append(
                         {
@@ -691,7 +705,7 @@ def time_methods(config: dict, rounds: int = 3, log=print) -> List[dict]:
     records = sum(s["train"] for s in partition.sizes.values())
     out = []
     for method in settings["methods"]:
-        result = RUNNERS[method](settings, partition, 0)
+        result = run_method(method, settings, partition, 0)
         timed = [row["seconds"] for row in result[1:]]
         out.append(
             {

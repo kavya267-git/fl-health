@@ -186,3 +186,27 @@ def test_numpy_reference_refuses_options_it_does_not_implement():
         reference.train_local(reference.init_weights(0), data, TrainConfig(class_weighting="balanced"))
     with pytest.raises(ValueError, match="class_weighting"):
         TrainConfig(class_weighting="sometimes").validate()
+
+
+def test_rr_model_reads_beats_plus_rr_and_leaves_the_default_model_alone():
+    from ml.ecg.cnn_bilstm import CNNBiLSTMRRAdapter
+    from ml.registry import adapter_override
+
+    default = get_adapter("ecg", "pytorch")
+    rr = CNNBiLSTMRRAdapter()
+    base, extra = default.init_weights(0), rr.init_weights(0)
+    assert set(base) == set(extra)
+    assert extra["head.weight"].shape == (4, 131) and base["head.weight"].shape == (4, 128)
+    # The convolution and LSTM start from the same values: only the classifier differs.
+    assert all(np.array_equal(base[k], extra[k]) for k in base if not k.startswith("head."))
+
+    X, _ = simulate_ecg(64, np.random.default_rng(0))
+    rows = np.concatenate([X, np.ones((len(X), 3), np.float32)], axis=1)
+    probs = rr.predict_proba(extra, rows)
+    assert probs.shape == (64, 4) and np.allclose(probs.sum(axis=1), 1.0, atol=1e-5)
+    with pytest.raises(ValueError):
+        rr.predict_proba(extra, X)  # beats without RR inputs
+
+    with adapter_override("ecg", rr):
+        assert get_adapter("ecg") is rr
+    assert get_adapter("ecg", "pytorch") is default

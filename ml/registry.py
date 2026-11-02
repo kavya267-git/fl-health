@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import importlib.util
 import os
+from contextlib import contextmanager
 from functools import lru_cache
-from typing import Dict
+from typing import Dict, Iterator
 
 from ml.common.adapter import ModelAdapter
 from ml.common.types import MODALITIES
@@ -82,9 +83,29 @@ def _cached_adapter(modality: str, backend: str) -> ModelAdapter:
     return build_reference_adapter(modality)
 
 
+#: Adapters substituted by ``adapter_override`` (experiments only; empty in the platform).
+_OVERRIDES: Dict[str, ModelAdapter] = {}
+
+
+@contextmanager
+def adapter_override(modality: str, adapter: ModelAdapter) -> Iterator[None]:
+    """Inside the block, ``get_adapter(modality)`` returns ``adapter``. Used by the experiment harness."""
+    previous = _OVERRIDES.get(modality)
+    _OVERRIDES[modality] = adapter
+    try:
+        yield
+    finally:
+        if previous is None:
+            _OVERRIDES.pop(modality, None)
+        else:
+            _OVERRIDES[modality] = previous
+
+
 def get_adapter(modality: str, backend: str | None = None) -> ModelAdapter:
     if modality not in MODALITIES:
         raise ValueError(f"Unknown modality '{modality}'. Expected one of {MODALITIES}")
+    if modality in _OVERRIDES:
+        return _OVERRIDES[modality]
     return _cached_adapter(modality, resolve_backend(modality, backend))
 
 

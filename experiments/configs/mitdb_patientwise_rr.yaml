@@ -4,17 +4,25 @@ description: >
   with RR-interval features, and in 1e, where the model sees one beat without its own RR interval, S beats
   were almost never detected. 1e stays as reported; 1f does not replace it. Fixed before any 1f run:
   identical to 1e (the same DS1 / DS2 records dealt to the same hospitals per seed, seeds 0-2, 20 rounds x 2
-  local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP),
-  except that each beat also gets three RR-interval inputs from the reference annotations: pre-RR, post-RR
-  and the local average RR over the 10 surrounding intervals, each divided by the record's own average RR
-  (experiments/mitdb.py, rr_features). The model is the same CNN-BiLSTM with the three RR inputs
-  concatenated to its mean-pooled BiLSTM output before the final linear layer.
+  local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP, the
+  same evaluation, final round reported even if a curve peaks earlier), except that each beat also gets three
+  RR-interval inputs from the reference annotations: pre-RR, post-RR and the local average RR over the 10
+  surrounding intervals, each divided by the record's own average RR (experiments/mitdb.py, rr_features).
+  The model is the same CNN-BiLSTM with the three RR inputs concatenated to its mean-pooled BiLSTM output
+  (after dropout) before the final linear layer, which grows from 128 to 131 inputs (CNN-BiLSTM+RR, used
+  only by the experiment harness). The same training order as 1e (round ids named after 1e) and the same
+  5 PyTorch threads, so each seed is a paired comparison with the same seed of 1e; a check before the run
+  reproduced 1e's seed 0, round 1 FedAvg score exactly. Simplification: dividing by the record's average
+  RR uses beats that come after the current one (and post-RR uses the next beat); a deployed system would
+  use a running average of past beats only.
 dataset:
   modality: ecg
   source: mitdb
   mitdb_dir: data/raw/mitdb
   rr_features: true
-model: {architecture: "CNN-BiLSTM+RR", rr_inputs: [pre_rr, post_rr, local_rr]}
+model: {architecture: "CNN-BiLSTM+RR"}
 partition: {scheme: records}
 training: {rounds: 20}
 target_f1: 0.8
+round_id_name: mitdb_patientwise_baselines
+paired_with: mitdb_patientwise_baselines

@@ -13,12 +13,14 @@ from torch import nn
 
 from ml.common.tasks import ECG_TASK
 from ml.common.torch_adapter import TorchModelAdapter
-from ml.ecg.preprocess import prepare_ecg
+from ml.ecg.preprocess import ECG_BEAT_LENGTH, prepare_ecg
 
 
 class CNNBiLSTM(nn.Module):
-    def __init__(self, num_classes: int, lstm_hidden: int = 64, dropout: float = 0.2):
+    def __init__(self, num_classes: int, lstm_hidden: int = 64, dropout: float = 0.2, rr_inputs: int = 0):
         super().__init__()
+        #: Extra per-beat inputs (e.g. RR intervals) stored after the beat samples and fed to the classifier.
+        self.rr_inputs = rr_inputs
         self.features = nn.Sequential(
             nn.Conv1d(1, 32, kernel_size=7, padding=3),
             nn.BatchNorm1d(32),
@@ -34,13 +36,18 @@ class CNNBiLSTM(nn.Module):
         )
         self.lstm = nn.LSTM(input_size=64, hidden_size=lstm_hidden, batch_first=True, bidirectional=True)
         self.dropout = nn.Dropout(dropout)
-        self.head = nn.Linear(2 * lstm_hidden, num_classes)
+        self.head = nn.Linear(2 * lstm_hidden + rr_inputs, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: [batch, 1, samples]
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: [batch, 1, samples (+ rr_inputs)]
+        extra = None
+        if self.rr_inputs:
+            x, extra = x[:, :, : -self.rr_inputs], x[:, 0, -self.rr_inputs :]
         features = self.features(x)  # [batch, 64, steps]
         sequence, _ = self.lstm(features.transpose(1, 2))  # [batch, steps, 2 * hidden]
-        pooled = sequence.mean(dim=1)
-        return self.head(self.dropout(pooled))
+        pooled = self.dropout(sequence.mean(dim=1))
+        if extra is not None:
+            pooled = torch.cat([pooled, extra], dim=1)
+        return self.head(pooled)
 
 
 class CNNBiLSTMAdapter(TorchModelAdapter):
@@ -60,3 +67,25 @@ class CNNBiLSTMAdapter(TorchModelAdapter):
     def to_input(self, X: np.ndarray) -> torch.Tensor:
         beats = np.ascontiguousarray(prepare_ecg(X))
         return torch.from_numpy(beats).unsqueeze(1)
+
+
+class CNNBiLSTMRRAdapter(CNNBiLSTMAdapter):
+    """CNN-BiLSTM plus three RR-interval inputs per beat (experiment 1f; not used by the platform).
+
+    Each input row is the 187 beat samples followed by pre-RR, post-RR and local average RR, each relative
+    to the record's average RR. The RR values join the mean-pooled BiLSTM output before the final layer.
+    """
+
+    architecture = "CNN-BiLSTM+RR"
+    rr_inputs = 3
+    summary = CNNBiLSTMAdapter.summary + " Three RR-interval inputs join the pooled output before the classifier."
+
+    def build_model(self, for_init: bool = False) -> nn.Module:
+        return CNNBiLSTM(self.task.num_classes, rr_inputs=self.rr_inputs)
+
+    def to_input(self, X: np.ndarray) -> torch.Tensor:
+        X = np.asarray(X, dtype=np.float32)
+        if X.ndim != 2 or X.shape[1] != ECG_BEAT_LENGTH + self.rr_inputs:
+            raise ValueError(f"Input must have shape [n, {ECG_BEAT_LENGTH + self.rr_inputs}], got {X.shape}")
+        rows = np.concatenate([prepare_ecg(X[:, :ECG_BEAT_LENGTH]), X[:, ECG_BEAT_LENGTH:]], axis=1)
+        return torch.from_numpy(np.ascontiguousarray(rows)).unsqueeze(1)
