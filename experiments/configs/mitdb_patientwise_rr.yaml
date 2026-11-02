@@ -1,0 +1,20 @@
+title: "1f. Patient-wise with RR-interval inputs: ECG, PhysioNet MIT-BIH Arrhythmia Database (DS1 / DS2)"
+description: >
+  Added after seeing the 1e results, motivated by the literature: de Chazal et al. (2004) classify beats
+  with RR-interval features, and in 1e, where the model sees one beat without its own RR interval, S beats
+  were almost never detected. 1e stays as reported; 1f does not replace it. Fixed before any 1f run:
+  identical to 1e (the same DS1 / DS2 records dealt to the same hospitals per seed, seeds 0-2, 20 rounds x 2
+  local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP),
+  except that each beat also gets three RR-interval inputs from the reference annotations: pre-RR, post-RR
+  and the local average RR over the 10 surrounding intervals, each divided by the record's own average RR
+  (experiments/mitdb.py, rr_features). The model is the same CNN-BiLSTM with the three RR inputs
+  concatenated to its mean-pooled BiLSTM output before the final linear layer.
+dataset:
+  modality: ecg
+  source: mitdb
+  mitdb_dir: data/raw/mitdb
+  rr_features: true
+model: {architecture: "CNN-BiLSTM+RR", rr_inputs: [pre_rr, post_rr, local_rr]}
+partition: {scheme: records}
+training: {rounds: 20}
+target_f1: 0.8

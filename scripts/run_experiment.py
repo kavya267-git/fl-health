@@ -31,6 +31,18 @@ KNOWN_ISSUES = ROOT / "experiments" / "known_issues.md"
 ORDER = ROOT / "experiments" / "configs" / "ORDER"
 
 
+def not_run_section(name: str) -> str:
+    """Title and description of an experiment whose config is fixed but which has not run."""
+    path = ROOT / "experiments" / "configs" / f"{name}.yaml"
+    if not path.exists():
+        return f"### {name}\n\nNot run yet.\n"
+    config = load_config(path)
+    return (
+        f"### {config.get('title', name)}\n\n{config.get('description', '').strip()}\n\n"
+        f"*Config:* `experiments/configs/{path.name}`, fixed before any run. **Not run yet.**\n"
+    )
+
+
 def build_results_md() -> None:
     from experiments.report import section, timing_section
 
@@ -49,7 +61,7 @@ def build_results_md() -> None:
         elif (RESULTS_DIR / name / "rounds.csv").exists():
             parts.append(section(name))
         else:
-            parts.append(f"### {name}\n\nNot run yet.\n")
+            parts.append(not_run_section(name))
     if KNOWN_ISSUES.exists():
         parts.append(KNOWN_ISSUES.read_text(encoding="utf-8"))
     if DISCUSSION.exists():

@@ -29,6 +29,20 @@ CLASS_LABEL = {
     "xray": {"no_finding": "no finding", "finding": "finding"},
 }
 COLORS = {"local": "#b0751a", "fedavg": "#0f6e64", "centralised": "#5b5f97"}
+#: Per-experiment method labels. A label only; no number changes.
+METHOD_LABEL_OVERRIDES = {"mitdb_patientwise_baselines": {"centralised": "Centralised (pooled data)"}}
+#: A sentence printed under an experiment's main table.
+TABLE_NOTES = {
+    "mitdb_patientwise_baselines": (
+        "*Centralised (pooled data)*: one model trained on all hospitals' training records together. Pooled "
+        "training is usually an upper bound for federated training, but here it ended below FedAvg (known issue 5), "
+        "so it is labelled by what it is."
+    ),
+}
+
+
+def method_label(name: str, method: str) -> str:
+    return METHOD_LABEL_OVERRIDES.get(name, {}).get(method, METHOD_LABEL[method])
 
 
 # ------------------------------------------------------------------ loading
@@ -82,12 +96,18 @@ def mean_std(values: List[Optional[float]]) -> tuple:
     return float(arr.mean()), float(arr.std(ddof=1)) if len(arr) > 1 else 0.0, len(arr)
 
 
+#: Set by ``section`` for an experiment with a single seed: there is no spread to show, so no "± 0".
+_SINGLE_SEED = False
+
+
 def fmt(values: List[Optional[float]], digits: int = 3) -> str:
     mean, std, n = mean_std(values)
     if mean is None:
         return "-"
     if math.isinf(mean):
         return "∞"
+    if _SINGLE_SEED:
+        return f"{mean:.{digits}f}"
     return f"{mean:.{digits}f} ± {std:.{digits}f}"
 
 
@@ -144,7 +164,7 @@ def figure_curves(name: str, rows: List[dict], config: dict, modality: str) -> s
             values = np.array([[row["macro_f1"] for row in c[:length]] for c in curves])
             x = np.arange(1, length + 1)
             mean, std = values.mean(axis=0), values.std(axis=0, ddof=1) if len(values) > 1 else 0
-            ax.plot(x, mean, color=COLORS[method], label=METHOD_LABEL[method])
+            ax.plot(x, mean, color=COLORS[method], label=method_label(name, method))
             ax.fill_between(x, mean - std, mean + std, color=COLORS[method], alpha=0.15, linewidth=0)
         ax.set_title(variant, fontsize=10)
         ax.set_xlabel("Round")
@@ -194,7 +214,7 @@ def figure_bars(name: str, rows: List[dict], config: dict) -> str:
         stats = [mean_std([r["macro_f1"] for r in final.get((v, method), [])]) for v in variants]
         x = np.arange(len(variants)) + (i - (len(methods) - 1) / 2) * width
         ax.bar(x, [s[0] or 0 for s in stats], width, yerr=[s[1] or 0 for s in stats], capsize=3,
-               color=COLORS[method], label=METHOD_LABEL[method])
+               color=COLORS[method], label=method_label(name, method))
     ax.set_xticks(np.arange(len(variants)), variants)
     ax.set_ylabel("Final macro-F1 (held-out, pooled)")
     ax.set_ylim(0, 1)
@@ -240,9 +260,18 @@ def write_summary(name: str, rows: List[dict]) -> Path:
 
 # ------------------------------------------------------------------ section
 def section(name: str) -> str:
+    global _SINGLE_SEED
     rows = read_rounds(name)
     if not rows:
         return f"### {name}\n\nNo results yet.\n"
+    _SINGLE_SEED = len({r["seed"] for r in rows}) == 1
+    try:
+        return _section(name, rows)
+    finally:
+        _SINGLE_SEED = False
+
+
+def _section(name: str, rows: List[dict]) -> str:
     write_summary(name, rows)
     config = read_config(name)
     settings = config["config"]
@@ -262,7 +291,8 @@ def section(name: str) -> str:
         + (f" (alpha = {settings['partition']['alpha']})" if settings["partition"]["scheme"] == "dirichlet" else "")
         + f". {int(training['rounds'])} rounds × {training['local_epochs']} local epochs, batch {training['batch_size']}, "
         f"learning rate {training['learning_rate']}. Seeds: {', '.join(str(int(s)) for s in seeds)}. "
-        "Values are mean ± std over seeds, final round, held-out splits pooled over hospitals.",
+        + ("One seed, so no spread is shown; " if _SINGLE_SEED else "Values are mean ± std over seeds, ")
+        + "final round, held-out splits pooled over hospitals.",
         "",
     ]
     dataset_file = RESULTS_DIR / name / "dataset.json"
@@ -297,17 +327,32 @@ def section(name: str) -> str:
                 if any(r.get("cross_macro_f1") is not None for r in seeds_rows):
                     result_rows.append((variant, f"Local only, all hospitals' {held_out}", "cross_", seeds_rows))
             else:
-                result_rows.append((variant, METHOD_LABEL[method], "", seeds_rows))
+                result_rows.append((variant, method_label(name, method), "", seeds_rows))
     body = [
         [variant, label, str(len(rs))] + [fmt([r.get(prefix + col) for r in rs]) for col, _ in columns]
         for variant, label, prefix, rs in result_rows
     ]
     lines += [table(["Variant", "Method", "Seeds"] + [label for _, label in columns], body), ""]
+    if name in TABLE_NOTES:
+        lines += [TABLE_NOTES[name], ""]
     if any(prefix for _, _, prefix, _ in result_rows):
         lines += [
             f"*Local only, all hospitals' {held_out}*: each hospital's final local model scored on every hospital's "
             "held-out records, pooled over the four models. It answers whether one hospital's model generalises to "
             "the other hospitals' patients. A dash means the metric was not recorded for that run.",
+            "",
+        ]
+
+    labels = CLASS_SHORT[modality]
+    if any(r.get(f"predicted_{labels[0]}") is not None for _, _, _, rs in result_rows for r in rs):
+        body = [
+            [variant, label] + [fmt([r.get(f"{prefix}predicted_{c}") for r in rs]) for c in labels]
+            for variant, label, prefix, rs in result_rows
+        ]
+        lines += [
+            "Predicted-class distribution (share of held-out beats assigned to each class, final round):",
+            "",
+            table(["Variant", "Method"] + [f"Predicted {CLASS_LABEL[modality][c]}" for c in labels], body),
             "",
         ]
 
