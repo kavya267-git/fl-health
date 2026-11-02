@@ -51,3 +51,17 @@ for the project owner to decide.
    95% of centralised macro-F1" (2.0 ± 1.0) compares against a low reference and should not be read as fast
    convergence. Likely explanation: pooled training on DS1 overfits to the 22 training patients, and
    inter-patient generalisation, not the training method, limits all three; untested. Nothing was rerun.
+6. **The laptop slept during 1f.** Windows logged a sleep at 10:53 and a wake at 19:51 on 2 Nov 2026, during
+   round 7 of the seed 1 pooled run, which took 32,354 s against roughly 40-100 s for its other rounds. As in
+   item 1 this affects only wall-clock time, which is not reported from 1f; the rounds are computed
+   identically before and after a pause.
+7. **1f curves: pooled training peaks early again, and FedAvg moves from round to round.** As in 1e (item 5),
+   the pooled model's best macro-F1 comes early (0.498 at round 1, 0.484 and 0.493 at round 3 for seeds 0, 1
+   and 2) and it ends at 0.403, 0.409 and 0.429; the final round is reported, as fixed before the run. The
+   FedAvg curves are not smooth near the end: at round 19 FedAvg scores 0.433, 0.435 and 0.397 against 0.485,
+   0.483 and 0.462 at round 20, and its Se S over rounds 15-20 ranges from 0.10 to 0.21. As a check that
+   round 20 does not decide the paired comparison, the same-seed, same-round 1f and 1e FedAvg values were
+   compared at each of rounds 15-20: 1f is higher in both macro-F1 and Se S at all 18 seed-round pairs (1e's
+   FedAvg Se S never exceeds 0.092 in those rounds). The direction of the paired differences therefore does
+   not depend on the round chosen; their size does. This check uses DS2 scores only to describe the curves,
+   not to choose what is reported.

@@ -169,9 +169,119 @@ Records (patients) per hospital and seed. DS1 records are the hospital's trainin
 
 ### 1f. Patient-wise with RR-interval inputs: ECG, PhysioNet MIT-BIH Arrhythmia Database (DS1 / DS2)
 
-Added after seeing the 1e results, motivated by the literature: de Chazal et al. (2004) classify beats with RR-interval features, and in 1e, where the model sees one beat without its own RR interval, S beats were almost never detected. 1e stays as reported; 1f does not replace it. Fixed before any 1f run: identical to 1e (the same DS1 / DS2 records dealt to the same hospitals per seed, seeds 0-2, 20 rounds x 2 local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP), except that each beat also gets three RR-interval inputs from the reference annotations: pre-RR, post-RR and the local average RR over the 10 surrounding intervals, each divided by the record's own average RR (experiments/mitdb.py, rr_features). The model is the same CNN-BiLSTM with the three RR inputs concatenated to its mean-pooled BiLSTM output before the final linear layer.
+Added after seeing the 1e results, motivated by the literature: de Chazal et al. (2004) classify beats with RR-interval features, and in 1e, where the model sees one beat without its own RR interval, S beats were almost never detected. 1e stays as reported; 1f does not replace it. Fixed before any 1f run: identical to 1e (the same DS1 / DS2 records dealt to the same hospitals per seed, seeds 0-2, 20 rounds x 2 local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP, the same evaluation, final round reported even if a curve peaks earlier), except that each beat also gets three RR-interval inputs from the reference annotations: pre-RR, post-RR and the local average RR over the 10 surrounding intervals, each divided by the record's own average RR (experiments/mitdb.py, rr_features). The model is the same CNN-BiLSTM with the three RR inputs concatenated to its mean-pooled BiLSTM output (after dropout) before the final linear layer, which grows from 128 to 131 inputs (CNN-BiLSTM+RR, used only by the experiment harness). The same training order as 1e (round ids named after 1e) and the same 5 PyTorch threads, so each seed is a paired comparison with the same seed of 1e; a check before the run reproduced 1e's seed 0, round 1 FedAvg score exactly. Simplification: dividing by the record's average RR uses beats that come after the current one (and post-RR uses the next beat); a deployed system would use a running average of past beats only.
 
-*Config:* `experiments/configs/mitdb_patientwise_rr.yaml`, fixed before any run. **Not run yet.**
+*Config:* `experiments/configs/mitdb_patientwise_rr.yaml`. Data: mitdb ECG. Partition: records. 20 rounds × 2 local epochs, batch 32, learning rate 0.003. Seeds: 0, 1, 2. Values are mean ± std over seeds, final round, held-out splits pooled over hospitals.
+
+| Variant | Method | Seeds | Macro-F1 | Accuracy | Recall N | Recall S | Recall V | Recall F |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | Local only, own hospital's share | 3 | 0.374 ± 0.024 | 0.789 ± 0.053 | 0.819 ± 0.058 | 0.126 ± 0.081 | 0.846 ± 0.072 | 0.044 ± 0.074 |
+| default | Local only, all hospitals' DS2 | 3 | 0.364 ± 0.036 | 0.785 ± 0.048 | 0.817 ± 0.053 | 0.114 ± 0.011 | 0.820 ± 0.003 | 0.028 ± 0.022 |
+| default | FedAvg | 3 | 0.477 ± 0.013 | 0.892 ± 0.002 | 0.925 ± 0.004 | 0.190 ± 0.029 | 0.940 ± 0.019 | 0.026 ± 0.017 |
+| default | Centralised (pooled data) | 3 | 0.414 ± 0.013 | 0.850 ± 0.007 | 0.885 ± 0.009 | 0.125 ± 0.028 | 0.883 ± 0.004 | 0.015 ± 0.018 |
+
+*Centralised (pooled data)*: as in 1e, one model trained on all hospitals' training records together, labelled as in 1e so that the paired comparison below lines up.
+
+*Local only, all hospitals' DS2*: each hospital's final local model scored on every hospital's held-out records, pooled over the four models. It answers whether one hospital's model generalises to the other hospitals' patients. A dash means the metric was not recorded for that run.
+
+Predicted-class distribution (share of held-out beats assigned to each class, final round):
+
+| Variant | Method | Predicted N | Predicted S | Predicted V | Predicted F |
+| --- | --- | --- | --- | --- | --- |
+| default | Local only, own hospital's share | 0.766 ± 0.045 | 0.047 ± 0.037 | 0.163 ± 0.021 | 0.024 ± 0.007 |
+| default | Local only, all hospitals' DS2 | 0.763 ± 0.051 | 0.044 ± 0.015 | 0.174 ± 0.036 | 0.018 ± 0.005 |
+| default | FedAvg | 0.860 ± 0.006 | 0.017 ± 0.005 | 0.113 ± 0.007 | 0.009 ± 0.004 |
+| default | Centralised (pooled data) | 0.824 ± 0.010 | 0.015 ± 0.004 | 0.147 ± 0.017 | 0.014 ± 0.013 |
+
+Sensitivity (Se, = recall) and positive predictivity (+P, = precision) for the S and V classes, the measures the inter-patient literature reports:
+
+| Variant | Method | Se S | +P S | Se V | +P V |
+| --- | --- | --- | --- | --- | --- |
+| default | Local only, own hospital's share | 0.126 ± 0.081 | 0.109 ± 0.067 | 0.846 ± 0.072 | 0.341 ± 0.072 |
+| default | Local only, all hospitals' DS2 | 0.114 ± 0.011 | 0.108 ± 0.057 | 0.820 ± 0.003 | 0.315 ± 0.070 |
+| default | FedAvg | 0.190 ± 0.029 | 0.413 ± 0.073 | 0.940 ± 0.019 | 0.540 ± 0.038 |
+| default | Centralised (pooled data) | 0.125 ± 0.028 | 0.313 ± 0.037 | 0.883 ± 0.004 | 0.393 ± 0.048 |
+
+Paired comparison with 1e: the same seed, the same records at each hospital and the same training order, so each row is this experiment minus 1e for one seed (positive = higher here), then the mean and std of those differences:
+
+| Method | Seed | Δ Macro-F1 | Δ Se S | Δ +P S | Δ Se V | Δ +P V |
+| --- | --- | --- | --- | --- | --- | --- |
+| Local only, own hospital's share | seed 0 | +0.027 | -0.015 | +0.006 | +0.037 | +0.064 |
+| Local only, own hospital's share | seed 1 | -0.037 | -0.024 | +0.006 | +0.025 | -0.145 |
+| Local only, own hospital's share | seed 2 | +0.019 | -0.009 | +0.116 | +0.050 | -0.016 |
+| Local only, own hospital's share | mean ± std | **+0.003 ± 0.035** | **-0.016 ± 0.008** | **+0.043 ± 0.064** | **+0.037 ± 0.012** | **-0.032 ± 0.105** |
+| Local only, all hospitals' DS2 | seed 0 | +0.035 | +0.025 | +0.083 | +0.001 | +0.053 |
+| Local only, all hospitals' DS2 | seed 1 | -0.016 | +0.012 | +0.014 | +0.039 | -0.054 |
+| Local only, all hospitals' DS2 | seed 2 | -0.006 | -0.007 | +0.042 | +0.055 | -0.073 |
+| Local only, all hospitals' DS2 | mean ± std | **+0.004 ± 0.027** | **+0.010 ± 0.016** | **+0.046 ± 0.035** | **+0.032 ± 0.028** | **-0.025 ± 0.068** |
+| FedAvg | seed 0 | +0.079 | +0.188 | +0.387 | +0.029 | +0.017 |
+| FedAvg | seed 1 | +0.066 | +0.152 | +0.253 | +0.010 | +0.090 |
+| FedAvg | seed 2 | +0.058 | +0.102 | +0.328 | +0.007 | +0.050 |
+| FedAvg | mean ± std | **+0.068 ± 0.010** | **+0.147 ± 0.043** | **+0.323 ± 0.067** | **+0.015 ± 0.012** | **+0.052 ± 0.036** |
+| Centralised (pooled data) | seed 0 | +0.064 | +0.095 | +0.133 | -0.025 | +0.089 |
+| Centralised (pooled data) | seed 1 | +0.045 | +0.040 | +0.225 | -0.008 | +0.038 |
+| Centralised (pooled data) | seed 2 | +0.016 | +0.046 | +0.185 | +0.062 | -0.031 |
+| Centralised (pooled data) | mean ± std | **+0.042 ± 0.024** | **+0.060 ± 0.030** | **+0.181 ± 0.046** | **+0.010 ± 0.046** | **+0.032 ± 0.060** |
+
+Communication (FedAvg):
+
+| Variant | Upload per hospital per round (MB) | Download per hospital per round (MB) | Total upload, all hospitals and rounds (MB) | Rounds to macro-F1 ≥ 0.8 | Rounds to 95% of centralised macro-F1 |
+| --- | --- | --- | --- | --- | --- |
+| default | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | 4.7 ± 2.1 |
+
+Download counts the round's base model and the aggregated model each hospital fetches to evaluate.
+
+Partition, seed 0 (training records per class at each hospital):
+
+| Variant | Hospital | Train | Held-out | train N | train S | train V | train F |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| all variants | hospital_a | 14034 | 13614 | 13224 | 19 | 782 | 9 |
+| all variants | hospital_b | 13463 | 12583 | 11811 | 744 | 900 | 8 |
+| all variants | hospital_c | 12245 | 11812 | 10571 | 102 | 1188 | 384 |
+| all variants | hospital_d | 11245 | 11670 | 10235 | 78 | 918 | 14 |
+
+Class F beats per hospital, training / held-out, for each seed (the rarest class; its recall rests on these few beats):
+
+| Variant | Hospital | seed 0 | seed 1 | seed 2 |
+| --- | --- | --- | --- | --- |
+| default | hospital_a | 9 / 11 | 373 / 0 | 20 / 3 |
+| default | hospital_b | 8 / 2 | 24 / 376 | 377 / 10 |
+| default | hospital_c | 384 / 364 | 15 / 12 | 4 / 2 |
+| default | hospital_d | 14 / 11 | 3 / 0 | 14 / 373 |
+
+Records (patients) per hospital and seed. DS1 records are the hospital's training data, DS2 records its held-out data; no record appears twice:
+
+| Seed | Hospital | DS1 records (training) | DS2 records (held-out) |
+| --- | --- | --- | --- |
+| 0 | hospital_a | 106, 108, 109, 114, 122, 215 | 111, 210, 214, 228, 232, 234 |
+| 0 | hospital_b | 124, 201, 203, 207, 209, 220 | 100, 117, 121, 200, 212, 231 |
+| 0 | hospital_c | 115, 116, 118, 205, 208 | 113, 202, 213, 219, 222 |
+| 0 | hospital_d | 101, 112, 119, 223, 230 | 103, 105, 123, 221, 233 |
+| 1 | hospital_a | 106, 112, 115, 116, 119, 208 | 100, 117, 212, 221, 231, 234 |
+| 1 | hospital_b | 108, 114, 124, 201, 205, 220 | 111, 121, 200, 202, 213, 233 |
+| 1 | hospital_c | 118, 122, 215, 223, 230 | 105, 123, 210, 214, 219 |
+| 1 | hospital_d | 101, 109, 203, 207, 209 | 103, 113, 222, 228, 232 |
+| 2 | hospital_a | 101, 118, 119, 124, 203, 223 | 105, 113, 200, 214, 222, 228 |
+| 2 | hospital_b | 106, 114, 116, 207, 208, 220 | 111, 117, 121, 210, 221, 231 |
+| 2 | hospital_c | 108, 109, 115, 209, 230 | 100, 103, 123, 202, 219 |
+| 2 | hospital_d | 112, 122, 201, 205, 215 | 212, 213, 232, 233, 234 |
+
+**Beat check** (`python -m experiments.check_mitdb_beats`, run before any training). Beats are segmented at the reference R-peak annotations, with no detector, as in de Chazal et al. (2004). Each beat runs from its R-peak for 1.2 × the median RR interval of its 10 s window, MLII lead at 125 Hz, zero-padded to 187 samples. Normalisation is per beat (min-max to [0, 1]): the Kaggle export's own data shows this (maximum exactly 1 and minimum exactly 0 in nearly every beat), although Kachuee et al. (2018) describe normalising per 10 s window. Beats extracted: DS1 N 45,841, S 943, V 3,788, F 415; DS2 N 44,233, S 1,837, V 3,221, F 388; 15 class-Q beats dropped, 52 beats skipped at record edges or in windows with a single beat.
+
+| Class | Source | Beats | Length in samples, median (p10-p90) | Share max = 1 | Share min = 0 | Share peaking at sample 0 |
+| --- | --- | --- | --- | --- | --- | --- |
+| N | PhysioNet extraction | 90,074 | 111 (85-155) | 1.000 | 0.978 | 0.402 |
+| N | Kaggle export | 90,589 | 106 (79-149) | 1.000 | 0.970 | 0.492 |
+| S | PhysioNet extraction | 2,780 | 110 (74-127) | 1.000 | 0.982 | 0.423 |
+| S | Kaggle export | 2,779 | 107 (58-187) | 0.936 | 0.973 | 0.465 |
+| V | PhysioNet extraction | 7,009 | 97 (82-137) | 1.000 | 0.993 | 0.349 |
+| V | Kaggle export | 7,236 | 114 (76-172) | 0.998 | 0.993 | 0.255 |
+| F | PhysioNet extraction | 803 | 84 (82-91) | 1.000 | 0.938 | 0.598 |
+| F | Kaggle export | 803 | 78 (69-87) | 1.000 | 0.766 | 0.669 |
+
+![PhysioNet beats next to Kaggle beats](results/mitdb_beat_check/beats.png)
+
+![Learning curves](results/mitdb_patientwise_rr/curves.png)
 
 ### 1d. Baselines: ECG, MIT-BIH (real recordings)
 
@@ -831,6 +941,20 @@ for the project owner to decide.
    95% of centralised macro-F1" (2.0 ± 1.0) compares against a low reference and should not be read as fast
    convergence. Likely explanation: pooled training on DS1 overfits to the 22 training patients, and
    inter-patient generalisation, not the training method, limits all three; untested. Nothing was rerun.
+6. **The laptop slept during 1f.** Windows logged a sleep at 10:53 and a wake at 19:51 on 2 Nov 2026, during
+   round 7 of the seed 1 pooled run, which took 32,354 s against roughly 40-100 s for its other rounds. As in
+   item 1 this affects only wall-clock time, which is not reported from 1f; the rounds are computed
+   identically before and after a pause.
+7. **1f curves: pooled training peaks early again, and FedAvg moves from round to round.** As in 1e (item 5),
+   the pooled model's best macro-F1 comes early (0.498 at round 1, 0.484 and 0.493 at round 3 for seeds 0, 1
+   and 2) and it ends at 0.403, 0.409 and 0.429; the final round is reported, as fixed before the run. The
+   FedAvg curves are not smooth near the end: at round 19 FedAvg scores 0.433, 0.435 and 0.397 against 0.485,
+   0.483 and 0.462 at round 20, and its Se S over rounds 15-20 ranges from 0.10 to 0.21. As a check that
+   round 20 does not decide the paired comparison, the same-seed, same-round 1f and 1e FedAvg values were
+   compared at each of rounds 15-20: 1f is higher in both macro-F1 and Se S at all 18 seed-round pairs (1e's
+   FedAvg Se S never exceeds 0.092 in those rounds). The direction of the paired differences therefore does
+   not depend on the round chosen; their size does. This check uses DS2 scores only to describe the curves,
+   not to choose what is reported.
 
 ## Discussion
 
@@ -870,7 +994,33 @@ sensitivity is higher than theirs but with much lower +P; its S sensitivity is f
 not like for like: their classifier uses RR-interval features, while this model sees one beat at a time,
 whose length is set by the median RR interval of its 10 s window, not by its own RR interval. *Interpretation:*
 an S beat differs from a normal beat mainly by arriving early, so a model that cannot see the beat's own RR
-interval has little to go on. Adding RR-interval inputs is the obvious next step and was not tried.
+interval has little to go on. 1f, added after these results, tests this.
+
+### RR-interval inputs (1f)
+
+1f gives each beat three RR-interval inputs and changes nothing else; 1e stays as reported. Each 1f seed uses
+the same records, hospitals and training order as the same 1e seed, so the paired table gives 1f minus 1e
+seed by seed.
+
+Under FedAvg, S sensitivity rises in every seed: Δ Se S +0.188, +0.152 and +0.102 (mean +0.147 ± 0.043),
+from 0.043 ± 0.018 in 1e to 0.190 ± 0.029. +P S rises more (Δ +0.323 ± 0.067, to 0.413 ± 0.073), so most
+beats the model now calls S are S beats. Macro-F1 rises by +0.068 ± 0.010 in the paired comparison (0.409 ±
+0.007 to 0.477 ± 0.013), while V changes little (Δ Se V +0.015 ± 0.012, Δ +P V +0.052 ± 0.036) and F stays
+near zero. *Interpretation:* most of the macro-F1 gain is the S class, not better N or V.
+
+Pooled training gains too (Δ Se S +0.060 ± 0.030, positive in every seed; Δ macro-F1 +0.042 ± 0.024), but
+again ends below FedAvg (0.414 ± 0.013) after an early peak (known issue 7). Local models gain nothing:
+Δ macro-F1 +0.003 ± 0.035 and Δ Se S -0.016 ± 0.008 on their own hospital's patients, negative in every
+seed. *Interpretation:* the RR inputs only help a model that has seen enough S beats to learn what an early
+beat means; a single hospital may hold very few (19 S training beats at hospital_a in seed 0).
+
+The RR inputs help S detection but do not fix it. Se S 0.190 ± 0.029 is still far below the 75.9% de Chazal
+et al. report for SVEB on the same split. FedAvg labels 0.017 ± 0.005 of held-out beats as S, while S beats
+are about 3.7% of DS2 (1,837 of 49,679 in the beat check), so the model still under-calls S. 1f supports
+"RR-interval inputs improve S detection under FedAvg", not "the S limitation is solved". Two caveats: the RR
+inputs are divided by the record's average RR, which uses later beats (a deployed system would use a
+running average of past beats only), and the FedAvg curves move by several hundredths from round to round,
+so the size of the paired differences depends on the final round; their direction does not (known issue 7).
 
 ### Class F is high-variance
 
@@ -911,13 +1061,15 @@ also far below the non-private model, and neither epsilon is a meaningful privac
 setting, sigma ≤ 0.03 still learns (0.975-0.986) but sigma = 0.1 drops to 0.678 ± 0.107 and sigma ≥ 0.5 to
 0.17-0.21 (epsilon 16.9-112.6).
 
-For the larger noise levels the noise alone is enough, and the reason is arithmetic, not a bug. The update has about 90,000 values (0.37 MB at 4 bytes each), so the
-noise added to one hospital's update has a norm of about sigma × C × 300, against a clipped signal of at
-most C. Averaging four hospitals divides the noise standard deviation by at most 2 (equal weights). At
-sigma = 1 the noise is about 150 times the signal. Client-level DP becomes workable when the noise is
-averaged over thousands of clients per round, as in cross-device federated learning; with four hospitals it
-cannot give a useful epsilon at a usable accuracy. Clip norm and sigma were fixed in advance and not tuned
-from these results.
+For the larger noise levels the noise alone is enough, and the reason is arithmetic, not a bug. The update has
+d ≈ 90,000 values (0.37 MB at 4 bytes each), so the noise added to one hospital's update has a norm of about
+sigma × C × 300, against a clipped signal of at most C. Averaging four hospitals divides the noise standard
+deviation by at most 2 (equal weights). At sigma = 1 the noise is about 150 times the signal. Both the noise
+and the clipped signal scale with C, so the noise-to-signal ratio is about sigma × √d whatever C is: a clip
+norm near the typical update norm (about 11) would remove the clipping confound in the small-sigma rows but
+would not change this conclusion. Client-level DP becomes workable when the noise is averaged over thousands
+of clients per round, as in cross-device federated learning; with four hospitals it cannot give a useful
+epsilon at a usable accuracy. Clip norm and sigma were fixed in advance and not tuned from these results.
 
 Future work: record-level DP (DP-SGD, for example with Opacus) inside each hospital, which protects individual
 patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and, for client-level DP on this model, a clip
