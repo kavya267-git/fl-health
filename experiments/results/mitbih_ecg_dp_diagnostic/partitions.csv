@@ -1,0 +1,13 @@
+variant,seed,hospital,train,val,train_labels,val_labels
+"(a) clip only, BN statistics sent",0,hospital_a,601,200,"[27, 304, 253, 17]","[13, 102, 79, 6]"
+"(a) clip only, BN statistics sent",0,hospital_b,4669,1556,"[4528, 34, 21, 86]","[1517, 15, 3, 21]"
+"(a) clip only, BN statistics sent",0,hospital_c,728,243,"[388, 37, 302, 1]","[132, 10, 100, 1]"
+"(a) clip only, BN statistics sent",0,hospital_d,12752,4251,"[11785, 141, 778, 48]","[3943, 42, 248, 18]"
+"(b) clip only, BN statistics held",0,hospital_a,601,200,"[27, 304, 253, 17]","[13, 102, 79, 6]"
+"(b) clip only, BN statistics held",0,hospital_b,4669,1556,"[4528, 34, 21, 86]","[1517, 15, 3, 21]"
+"(b) clip only, BN statistics held",0,hospital_c,728,243,"[388, 37, 302, 1]","[132, 10, 100, 1]"
+"(b) clip only, BN statistics held",0,hospital_d,12752,4251,"[11785, 141, 778, 48]","[3943, 42, 248, 18]"
+"(c) no clipping, no noise",0,hospital_a,601,200,"[27, 304, 253, 17]","[13, 102, 79, 6]"
+"(c) no clipping, no noise",0,hospital_b,4669,1556,"[4528, 34, 21, 86]","[1517, 15, 3, 21]"
+"(c) no clipping, no noise",0,hospital_c,728,243,"[388, 37, 302, 1]","[132, 10, 100, 1]"
+"(c) no clipping, no noise",0,hospital_d,12752,4251,"[11785, 141, 778, 48]","[3943, 42, 248, 18]"

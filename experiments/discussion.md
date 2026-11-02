@@ -18,10 +18,10 @@ centralised (0.982 ± 0.021) and has not converged.
 
 When whole patients are kept apart (DS1 for training, DS2 for testing), every method scores far lower than on
 the Kaggle export: FedAvg macro-F1 0.409 ± 0.007, local only 0.371 ± 0.026 on its own hospital's DS2 patients
-and 0.359 ± 0.009 on all hospitals' DS2 patients, centralised 0.372 ± 0.037. FedAvg is the best of the three
-and has the smallest spread, but no method comes close to the 0.8 target. Centralised ends below FedAvg; for
-two of the three seeds its curve peaks early and falls, which is why known issue 5 says it is not an upper bound in this setting. None of
-the curves is still rising at round 20.
+and 0.359 ± 0.009 on all hospitals' DS2 patients, centralised (pooled data) 0.372 ± 0.037. FedAvg is the best of
+the three and has the smallest spread, but no method comes close to the 0.8 target. Centralised ends below
+FedAvg; for two of the three seeds its curve peaks early and falls, which is why 1e labels it "pooled data"
+rather than "upper bound" (known issue 5). None of the curves is still rising at round 20.
 
 The gap between the two settings is the main real-data finding. The Kaggle numbers (FedAvg 0.842 ± 0.023,
 centralised 0.881 ± 0.021 in 1d) come from a split where beats of the same patient can sit on both sides, so
@@ -70,12 +70,14 @@ that only one small hospital holds.
 Client-level DP as implemented here (each hospital clips its update to C = 1.0 and adds Gaussian noise of
 standard deviation sigma × C to every coordinate) destroys the MIT-BIH model at every noise level tried: from
 0.839 ± 0.016 without DP to 0.048-0.247 with DP. The small-sigma points are confounded by clipping (known
-issue 4); sigma = 0.1 (0.247 ± 0.011, epsilon 1214.6) and sigma = 1.0 (0.175 ± 0.104, epsilon 31.46) are
+issue 4): a one-seed diagnostic after 3b shows that clipping at C = 1.0 with no noise at all already collapses
+the model (final macro-F1 0.127 with batch-norm statistics sent, 0.032 with them held, against 0.815 without
+clipping), so batch-norm handling is not the cause. Sigma = 0.1 (0.247 ± 0.011, epsilon 1214.6) and sigma = 1.0 (0.175 ± 0.104, epsilon 31.46) are
 also far below the non-private model, and neither epsilon is a meaningful privacy guarantee. In the simulated
 setting, sigma ≤ 0.03 still learns (0.975-0.986) but sigma = 0.1 drops to 0.678 ± 0.107 and sigma ≥ 0.5 to
 0.17-0.21 (epsilon 16.9-112.6).
 
-The reason is arithmetic, not a bug. The update has about 90,000 values (0.37 MB at 4 bytes each), so the
+For the larger noise levels the noise alone is enough, and the reason is arithmetic, not a bug. The update has about 90,000 values (0.37 MB at 4 bytes each), so the
 noise added to one hospital's update has a norm of about sigma × C × 300, against a clipped signal of at
 most C. Averaging four hospitals divides the noise standard deviation by at most 2 (equal weights). At
 sigma = 1 the noise is about 150 times the signal. Client-level DP becomes workable when the noise is
@@ -84,8 +86,8 @@ cannot give a useful epsilon at a usable accuracy. Clip norm and sigma were fixe
 from these results.
 
 Future work: record-level DP (DP-SGD, for example with Opacus) inside each hospital, which protects individual
-patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and an
-experiment that separates clipping from noise (known issue 4).
+patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and, for client-level DP on this model, a clip
+norm near the typical update norm (about 11 here), which was fixed at 1.0 for these runs (known issue 4).
 
 ### Communication
 
