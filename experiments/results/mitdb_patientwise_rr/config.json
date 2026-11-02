@@ -1,0 +1,66 @@
+{
+  "config": {
+    "description": "Added after seeing the 1e results, motivated by the literature: de Chazal et al. (2004) classify beats with RR-interval features, and in 1e, where the model sees one beat without its own RR interval, S beats were almost never detected. 1e stays as reported; 1f does not replace it. Fixed before any 1f run: identical to 1e (the same DS1 / DS2 records dealt to the same hospitals per seed, seeds 0-2, 20 rounds x 2 local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP, the same evaluation, final round reported even if a curve peaks earlier), except that each beat also gets three RR-interval inputs from the reference annotations: pre-RR, post-RR and the local average RR over the 10 surrounding intervals, each divided by the record's own average RR (experiments/mitdb.py, rr_features). The model is the same CNN-BiLSTM with the three RR inputs concatenated to its mean-pooled BiLSTM output (after dropout) before the final linear layer, which grows from 128 to 131 inputs (CNN-BiLSTM+RR, used only by the experiment harness). The same training order as 1e (round ids named after 1e) and the same 5 PyTorch threads, so each seed is a paired comparison with the same seed of 1e; a check before the run reproduced 1e's seed 0, round 1 FedAvg score exactly. Simplification: dividing by the record's average RR uses beats that come after the current one (and post-RR uses the next beat); a deployed system would use a running average of past beats only.\n",
+    "dataset": {
+      "modality": "ecg",
+      "source": "mitdb",
+      "csv": [],
+      "scale": 1.0,
+      "max_records": null,
+      "mitdb_dir": "data/raw/mitdb",
+      "rr_features": true
+    },
+    "partition": {
+      "scheme": "records",
+      "alpha": null,
+      "val_fraction": 0.25
+    },
+    "training": {
+      "rounds": 20,
+      "local_epochs": 2,
+      "batch_size": 32,
+      "learning_rate": 0.003,
+      "class_weighting": "none",
+      "proximal_mu": 0.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "noise_multiplier": 0.0,
+      "delta": 1e-05
+    },
+    "methods": [
+      "local",
+      "fedavg",
+      "centralised"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_f1": 0.8,
+    "variants": [
+      {
+        "label": "default"
+      }
+    ],
+    "round_id_name": "mitdb_patientwise_baselines",
+    "diagnostic_clip": null,
+    "title": "1f. Patient-wise with RR-interval inputs: ECG, PhysioNet MIT-BIH Arrhythmia Database (DS1 / DS2)",
+    "model": {
+      "architecture": "CNN-BiLSTM+RR"
+    },
+    "paired_with": "mitdb_patientwise_baselines",
+    "name": "mitdb_patientwise_rr",
+    "config_file": "mitdb_patientwise_rr.yaml"
+  },
+  "environment": {
+    "fl_healthcare": "1.1.0",
+    "python": "3.13.2",
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu_threads": 5
+  }
+}

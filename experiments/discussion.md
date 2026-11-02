@@ -36,7 +36,33 @@ sensitivity is higher than theirs but with much lower +P; its S sensitivity is f
 not like for like: their classifier uses RR-interval features, while this model sees one beat at a time,
 whose length is set by the median RR interval of its 10 s window, not by its own RR interval. *Interpretation:*
 an S beat differs from a normal beat mainly by arriving early, so a model that cannot see the beat's own RR
-interval has little to go on. Adding RR-interval inputs is the obvious next step and was not tried.
+interval has little to go on. 1f, added after these results, tests this.
+
+### RR-interval inputs (1f)
+
+1f gives each beat three RR-interval inputs and changes nothing else; 1e stays as reported. Each 1f seed uses
+the same records, hospitals and training order as the same 1e seed, so the paired table gives 1f minus 1e
+seed by seed.
+
+Under FedAvg, S sensitivity rises in every seed: Δ Se S +0.188, +0.152 and +0.102 (mean +0.147 ± 0.043),
+from 0.043 ± 0.018 in 1e to 0.190 ± 0.029. +P S rises more (Δ +0.323 ± 0.067, to 0.413 ± 0.073), so most
+beats the model now calls S are S beats. Macro-F1 rises by +0.068 ± 0.010 in the paired comparison (0.409 ±
+0.007 to 0.477 ± 0.013), while V changes little (Δ Se V +0.015 ± 0.012, Δ +P V +0.052 ± 0.036) and F stays
+near zero. *Interpretation:* most of the macro-F1 gain is the S class, not better N or V.
+
+Pooled training gains too (Δ Se S +0.060 ± 0.030, positive in every seed; Δ macro-F1 +0.042 ± 0.024), but
+again ends below FedAvg (0.414 ± 0.013) after an early peak (known issue 7). Local models gain nothing:
+Δ macro-F1 +0.003 ± 0.035 and Δ Se S -0.016 ± 0.008 on their own hospital's patients, negative in every
+seed. *Interpretation:* the RR inputs only help a model that has seen enough S beats to learn what an early
+beat means; a single hospital may hold very few (19 S training beats at hospital_a in seed 0).
+
+The RR inputs help S detection but do not fix it. Se S 0.190 ± 0.029 is still far below the 75.9% de Chazal
+et al. report for SVEB on the same split. FedAvg labels 0.017 ± 0.005 of held-out beats as S, while S beats
+are about 3.7% of DS2 (1,837 of 49,679 in the beat check), so the model still under-calls S. 1f supports
+"RR-interval inputs improve S detection under FedAvg", not "the S limitation is solved". Two caveats: the RR
+inputs are divided by the record's average RR, which uses later beats (a deployed system would use a
+running average of past beats only), and the FedAvg curves move by several hundredths from round to round,
+so the size of the paired differences depends on the final round; their direction does not (known issue 7).
 
 ### Class F is high-variance
 
@@ -77,13 +103,15 @@ also far below the non-private model, and neither epsilon is a meaningful privac
 setting, sigma ≤ 0.03 still learns (0.975-0.986) but sigma = 0.1 drops to 0.678 ± 0.107 and sigma ≥ 0.5 to
 0.17-0.21 (epsilon 16.9-112.6).
 
-For the larger noise levels the noise alone is enough, and the reason is arithmetic, not a bug. The update has about 90,000 values (0.37 MB at 4 bytes each), so the
-noise added to one hospital's update has a norm of about sigma × C × 300, against a clipped signal of at
-most C. Averaging four hospitals divides the noise standard deviation by at most 2 (equal weights). At
-sigma = 1 the noise is about 150 times the signal. Client-level DP becomes workable when the noise is
-averaged over thousands of clients per round, as in cross-device federated learning; with four hospitals it
-cannot give a useful epsilon at a usable accuracy. Clip norm and sigma were fixed in advance and not tuned
-from these results.
+For the larger noise levels the noise alone is enough, and the reason is arithmetic, not a bug. The update has
+d ≈ 90,000 values (0.37 MB at 4 bytes each), so the noise added to one hospital's update has a norm of about
+sigma × C × 300, against a clipped signal of at most C. Averaging four hospitals divides the noise standard
+deviation by at most 2 (equal weights). At sigma = 1 the noise is about 150 times the signal. Both the noise
+and the clipped signal scale with C, so the noise-to-signal ratio is about sigma × √d whatever C is: a clip
+norm near the typical update norm (about 11) would remove the clipping confound in the small-sigma rows but
+would not change this conclusion. Client-level DP becomes workable when the noise is averaged over thousands
+of clients per round, as in cross-device federated learning; with four hospitals it cannot give a useful
+epsilon at a usable accuracy. Clip norm and sigma were fixed in advance and not tuned from these results.
 
 Future work: record-level DP (DP-SGD, for example with Opacus) inside each hospital, which protects individual
 patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and, for client-level DP on this model, a clip
