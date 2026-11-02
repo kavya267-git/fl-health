@@ -13,8 +13,9 @@ coordinator's `federated_average`, and epsilon is the platform's `account_rounds
 replaced, by an in-memory one that also counts bytes. See `experiments/harness.py`.
 
 **Comparison points that are not part of the platform.** *Local only*: each hospital trains alone.
-*Centralised*: one model trained offline on the union of the same training partitions. It is an upper bound
-for comparison: pooling the data is exactly what federated learning avoids.
+*Centralised*: one model trained offline on the union of the same training partitions. It is usually an upper bound
+for comparison: pooling the data is exactly what federated learning avoids. In 1e it was not (known
+issue 5), so 1e labels it *Centralised (pooled data)*.
 
 **Equal training effort (epoch budget rule).** With R rounds and E local epochs, every method passes over
 the training data it holds R × E times, as R blocks of E epochs, with the same batch size and learning rate:

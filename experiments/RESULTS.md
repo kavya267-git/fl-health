@@ -13,8 +13,9 @@ coordinator's `federated_average`, and epsilon is the platform's `account_rounds
 replaced, by an in-memory one that also counts bytes. See `experiments/harness.py`.
 
 **Comparison points that are not part of the platform.** *Local only*: each hospital trains alone.
-*Centralised*: one model trained offline on the union of the same training partitions. It is an upper bound
-for comparison: pooling the data is exactly what federated learning avoids.
+*Centralised*: one model trained offline on the union of the same training partitions. It is usually an upper bound
+for comparison: pooling the data is exactly what federated learning avoids. In 1e it was not (known
+issue 5), so 1e labels it *Centralised (pooled data)*.
 
 **Equal training effort (epoch budget rule).** With R rounds and E local epochs, every method passes over
 the training data it holds R × E times, as R blocks of E epochs, with the same batch size and learning rate:
@@ -91,7 +92,9 @@ Inter-patient evaluation after de Chazal et al. (2004): the 4 paced records are 
 | default | Local only, own hospital's share | 3 | 0.371 ± 0.026 | 0.782 ± 0.037 | 0.814 ± 0.038 | 0.142 ± 0.083 | 0.808 ± 0.077 | 0.030 ± 0.043 |
 | default | Local only, all hospitals' DS2 | 3 | 0.359 ± 0.009 | 0.774 ± 0.031 | 0.807 ± 0.035 | 0.104 ± 0.011 | 0.788 ± 0.025 | 0.032 ± 0.034 |
 | default | FedAvg | 3 | 0.409 ± 0.007 | 0.871 ± 0.014 | 0.910 ± 0.016 | 0.043 ± 0.018 | 0.925 ± 0.015 | 0.009 ± 0.012 |
-| default | Centralised (upper bound) | 3 | 0.372 ± 0.037 | 0.814 ± 0.043 | 0.848 ± 0.050 | 0.065 ± 0.026 | 0.873 ± 0.042 | 0.003 ± 0.003 |
+| default | Centralised (pooled data) | 3 | 0.372 ± 0.037 | 0.814 ± 0.043 | 0.848 ± 0.050 | 0.065 ± 0.026 | 0.873 ± 0.042 | 0.003 ± 0.003 |
+
+*Centralised (pooled data)*: one model trained on all hospitals' training records together. Pooled training is usually an upper bound for federated training, but here it ended below FedAvg (known issue 5), so it is labelled by what it is.
 
 *Local only, all hospitals' DS2*: each hospital's final local model scored on every hospital's held-out records, pooled over the four models. It answers whether one hospital's model generalises to the other hospitals' patients. A dash means the metric was not recorded for that run.
 
@@ -102,7 +105,7 @@ Sensitivity (Se, = recall) and positive predictivity (+P, = precision) for the S
 | default | Local only, own hospital's share | 0.142 ± 0.083 | 0.066 ± 0.005 | 0.808 ± 0.077 | 0.373 ± 0.095 |
 | default | Local only, all hospitals' DS2 | 0.104 ± 0.011 | 0.062 ± 0.027 | 0.788 ± 0.025 | 0.339 ± 0.024 |
 | default | FedAvg | 0.043 ± 0.018 | 0.091 ± 0.025 | 0.925 ± 0.015 | 0.487 ± 0.019 |
-| default | Centralised (upper bound) | 0.065 ± 0.026 | 0.132 ± 0.050 | 0.873 ± 0.042 | 0.361 ± 0.108 |
+| default | Centralised (pooled data) | 0.065 ± 0.026 | 0.132 ± 0.050 | 0.873 ± 0.042 | 0.361 ± 0.108 |
 
 Communication (FedAvg):
 
@@ -163,6 +166,12 @@ Records (patients) per hospital and seed. DS1 records are the hospital's trainin
 ![PhysioNet beats next to Kaggle beats](results/mitdb_beat_check/beats.png)
 
 ![Learning curves](results/mitdb_patientwise_baselines/curves.png)
+
+### 1f. Patient-wise with RR-interval inputs: ECG, PhysioNet MIT-BIH Arrhythmia Database (DS1 / DS2)
+
+Added after seeing the 1e results, motivated by the literature: de Chazal et al. (2004) classify beats with RR-interval features, and in 1e, where the model sees one beat without its own RR interval, S beats were almost never detected. 1e stays as reported; 1f does not replace it. Fixed before any 1f run: identical to 1e (the same DS1 / DS2 records dealt to the same hospitals per seed, seeds 0-2, 20 rounds x 2 local epochs, batch 32, learning rate 0.003, local only, FedAvg and pooled training, no FedProx or DP), except that each beat also gets three RR-interval inputs from the reference annotations: pre-RR, post-RR and the local average RR over the 10 surrounding intervals, each divided by the record's own average RR (experiments/mitdb.py, rr_features). The model is the same CNN-BiLSTM with the three RR inputs concatenated to its mean-pooled BiLSTM output before the final linear layer.
+
+*Config:* `experiments/configs/mitdb_patientwise_rr.yaml`, fixed before any run. **Not run yet.**
 
 ### 1d. Baselines: ECG, MIT-BIH (real recordings)
 
@@ -350,6 +359,68 @@ Class F beats per hospital, training / held-out, for each seed (the rarest class
 ![Learning curves](results/mitbih_ecg_privacy/curves.png)
 
 ![Final macro-F1](results/mitbih_ecg_privacy/final_f1.png)
+
+### Diagnostic for known issue 4: clipping and batch-norm statistics, ECG, MIT-BIH (one seed)
+
+A diagnostic, not a result: one seed (0), FedAvg only, added after the privacy runs (3b) to test one hypothesis about known issue 4. With DP on, the platform clips the trainable weights of each update (about 11-fold on this data) but sends batch-norm running statistics unclipped, so the averaged model may pair barely-moved weights with fully-moved statistics. Three variants at clip norm 1.0 and no noise, otherwise identical to 3b (Kaggle subsample, Dirichlet alpha = 1.0, 20 rounds, same partition and the same training order as 3b's seed 0, via round_id_name): (a) clip only, BN statistics sent as the platform's DP sends them; (b) clip only, each hospital sends the global model's BN statistics back unchanged; (c) no clipping, no noise, a reference that should reproduce 3b's sigma = 0, seed 0 run. Clipping without noise exists only in the experiment harness; the platform still requires noise to enable DP.
+
+*Config:* `experiments/configs/mitbih_ecg_dp_diagnostic.yaml`. Data: mit-bih ECG, stratified subsample of 25000 records. Partition: dirichlet (alpha = 1.0). 20 rounds × 2 local epochs, batch 32, learning rate 0.003. Seeds: 0. One seed, so no spread is shown; final round, held-out splits pooled over hospitals.
+
+Records available in mitbih_train.csv + mitbih_test.csv (class Q dropped): 101,407 (N 90,589, S 2,779, V 7,236, F 803). Used: 25,000 (N 22,333, S 685, V 1,784, F 198), a stratified by class, without replacement subsample drawn once with seed 0 and shared by every MIT-BIH experiment and seed.
+
+| Variant | Method | Seeds | Macro-F1 | Accuracy | Recall N | Recall S | Recall V | Recall F |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| (a) clip only, BN statistics sent | FedAvg | 1 | 0.127 | 0.261 | 0.214 | 0.000 | 1.000 | 0.000 |
+| (b) clip only, BN statistics held | FedAvg | 1 | 0.032 | 0.069 | 0.000 | 0.000 | 1.000 | 0.000 |
+| (c) no clipping, no noise | FedAvg | 1 | 0.815 | 0.975 | 0.994 | 0.509 | 0.944 | 0.587 |
+
+Predicted-class distribution (share of held-out beats assigned to each class, final round):
+
+| Variant | Method | Predicted N | Predicted S | Predicted V | Predicted F |
+| --- | --- | --- | --- | --- | --- |
+| (a) clip only, BN statistics sent | FedAvg | 0.199 | 0.000 | 0.801 | 0.000 |
+| (b) clip only, BN statistics held | FedAvg | 0.000 | 0.000 | 1.000 | 0.000 |
+| (c) no clipping, no noise | FedAvg | 0.909 | 0.016 | 0.070 | 0.005 |
+
+Sensitivity (Se, = recall) and positive predictivity (+P, = precision) for the S and V classes, the measures the inter-patient literature reports:
+
+| Variant | Method | Se S | +P S | Se V | +P V |
+| --- | --- | --- | --- | --- | --- |
+| (a) clip only, BN statistics sent | FedAvg | 0.000 | 0.000 | 1.000 | 0.086 |
+| (b) clip only, BN statistics held | FedAvg | 0.000 | 0.000 | 1.000 | 0.069 |
+| (c) no clipping, no noise | FedAvg | 0.509 | 0.835 | 0.944 | 0.931 |
+
+Communication (FedAvg):
+
+| Variant | Upload per hospital per round (MB) | Download per hospital per round (MB) | Total upload, all hospitals and rounds (MB) | Rounds to macro-F1 ≥ 0.8 | Rounds to 95% of centralised macro-F1 |
+| --- | --- | --- | --- | --- | --- |
+| (a) clip only, BN statistics sent | 0.37 | 0.74 | 29.7 | not reached (0/1) | - |
+| (b) clip only, BN statistics held | 0.37 | 0.74 | 29.7 | not reached (0/1) | - |
+| (c) no clipping, no noise | 0.37 | 0.74 | 29.7 | 15.0 | - |
+
+Download counts the round's base model and the aggregated model each hospital fetches to evaluate.
+
+Partition, seed 0 (training records per class at each hospital):
+
+| Variant | Hospital | Train | Held-out | train N | train S | train V | train F |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| all variants | hospital_a | 601 | 200 | 27 | 304 | 253 | 17 |
+| all variants | hospital_b | 4669 | 1556 | 4528 | 34 | 21 | 86 |
+| all variants | hospital_c | 728 | 243 | 388 | 37 | 302 | 1 |
+| all variants | hospital_d | 12752 | 4251 | 11785 | 141 | 778 | 48 |
+
+Class F beats per hospital, training / held-out, for each seed (the rarest class; its recall rests on these few beats):
+
+| Variant | Hospital | seed 0 |
+| --- | --- | --- |
+| all variants | hospital_a | 17 / 6 |
+| all variants | hospital_b | 86 / 21 |
+| all variants | hospital_c | 1 / 1 |
+| all variants | hospital_d | 48 / 18 |
+
+![Learning curves](results/mitbih_ecg_dp_diagnostic/curves.png)
+
+![Final macro-F1](results/mitbih_ecg_dp_diagnostic/final_f1.png)
 
 ### 5b. FedProx vs FedAvg under strong label skew: ECG, MIT-BIH
 
@@ -729,26 +800,37 @@ for the project owner to decide.
    harness puts the experiment's name in the round id, so the same seed trains with a different data order
    in each experiment. Nothing is wrong in either run; the gap shows how much FedAvg moves with training
    order alone, beyond the three seeds. Removing the name from the round id would make the two identical.
-4. **On MIT-BIH, the small-noise DP points mainly measure clipping, not noise (interpretation, not tested).**
-   With C = 1.0, every update was clipped (median norm before clipping about 11). At sigma = 0.001-0.03 every
-   seed ends up predicting class V for every beat (V recall 1.000, macro-F1 0.05-0.09), and sigma = 0.1
-   (0.247) scores higher than sigma = 0.001 (0.048). In the simulated setting, where updates are smaller
-   (median norm about 3.5), the same small-noise levels still learn (macro-F1 0.975-0.986) but need 15
-   rounds instead of 5 to reach 0.9. This is consistent with clipping shrinking each MIT-BIH update about
-   11-fold so that the model barely leaves its starting point in 20 rounds. Testing it would need a
-   clip-only run (DP settings currently require noise to enable clipping) or another clip norm, which was
-   fixed at 1.0 by decision. Left for the project owner.
+4. **On MIT-BIH, the small-noise DP points measure clipping, not noise.** With C = 1.0, every update was
+   clipped (median norm before clipping about 11). At sigma = 0.001-0.03 every seed ends up predicting class V
+   for every beat (V recall 1.000, macro-F1 0.05-0.09), and sigma = 0.1 (0.247) scores higher than sigma =
+   0.001 (0.048). In the simulated setting, where updates are smaller (median norm about 3.5), the same
+   small-noise levels still learn (macro-F1 0.975-0.986) but need 15 rounds instead of 5 to reach 0.9. A
+   one-seed diagnostic (*Diagnostic for known issue 4*, after 3b) then tested whether the cause is that
+   batch-norm running statistics are sent unclipped while the weights are clipped. It does not support that:
+   with clipping at C = 1.0 and no noise, the model collapses whether the BN statistics are sent (a: final
+   macro-F1 0.127, 80% of beats predicted V) or held at the global values (b: 0.032, every beat predicted V),
+   while the same run without clipping learns (c: 0.815). Over the 20 rounds, both clip-only runs spend most
+   rounds at macro-F1 0.236, which is the score of predicting N for every beat, never exceed 0.32 and then
+   drop to predicting mostly or only V; (c) rises steadily. So clipping at C = 1.0 by itself reproduces the
+   collapse, and the small-sigma DP rows are confounded by the clip norm, not by BN handling. One seed only;
+   no DP row was rerun or changed. The reference (c) did not reproduce 3b's sigma = 0, seed 0 run exactly
+   (0.815 against 0.832, with curves that differ from round 1) although the partition and training order were
+   the same; the likely cause is that 3b ran with 5 PyTorch threads and the diagnostic with 8, which changes
+   floating-point rounding (untested). All three diagnostic variants used 8 threads, so they are comparable
+   with each other. A clip norm near the typical update norm would be the next thing to test; C = 1.0 was
+   fixed by decision, so that is left for the project owner. Separately, BN statistics fall outside the
+   privacy bound (stated in the accounting assumptions).
 5. **In the patient-wise setting (1e) the centralised "upper bound" is not an upper bound.** At the final
    round, centralised scores macro-F1 0.372 ± 0.037 against FedAvg's 0.409 ± 0.007. For seeds 0 and 1 its
    curve peaks early (0.462 at round 3, 0.483 at round 4) and ends at 0.340 and 0.364; seed 2 has no early
    peak and ends at 0.413, while FedAvg and local only stay roughly flat at 0.28-0.45 from round 3 onwards;
    none of the curves is still rising at round 20. The protocol reports the final round and has no validation
    set for picking a round (choosing one by DS2 score would be tuning on test data), so the early peak is not
-   used. Two consequences for the 1e tables: the "(upper bound)" label does not describe what happened, and
-   "Rounds to 95% of centralised macro-F1" (2.0 ± 1.0) compares against a low reference and should not be read
-   as fast convergence. Likely explanation: pooled training on DS1 overfits to the 22 training patients, and
-   inter-patient generalisation, not the training method, limits all three; untested. Nothing was rerun or
-   relabelled.
+   used. Two consequences for the 1e tables: the "(upper bound)" label did not describe what happened, so 1e
+   now labels the method "Centralised (pooled data)" (a label change only; no number changed), and "Rounds to
+   95% of centralised macro-F1" (2.0 ± 1.0) compares against a low reference and should not be read as fast
+   convergence. Likely explanation: pooled training on DS1 overfits to the 22 training patients, and
+   inter-patient generalisation, not the training method, limits all three; untested. Nothing was rerun.
 
 ## Discussion
 
@@ -770,10 +852,10 @@ centralised (0.982 ± 0.021) and has not converged.
 
 When whole patients are kept apart (DS1 for training, DS2 for testing), every method scores far lower than on
 the Kaggle export: FedAvg macro-F1 0.409 ± 0.007, local only 0.371 ± 0.026 on its own hospital's DS2 patients
-and 0.359 ± 0.009 on all hospitals' DS2 patients, centralised 0.372 ± 0.037. FedAvg is the best of the three
-and has the smallest spread, but no method comes close to the 0.8 target. Centralised ends below FedAvg; for
-two of the three seeds its curve peaks early and falls, which is why known issue 5 says it is not an upper bound in this setting. None of
-the curves is still rising at round 20.
+and 0.359 ± 0.009 on all hospitals' DS2 patients, centralised (pooled data) 0.372 ± 0.037. FedAvg is the best of
+the three and has the smallest spread, but no method comes close to the 0.8 target. Centralised ends below
+FedAvg; for two of the three seeds its curve peaks early and falls, which is why 1e labels it "pooled data"
+rather than "upper bound" (known issue 5). None of the curves is still rising at round 20.
 
 The gap between the two settings is the main real-data finding. The Kaggle numbers (FedAvg 0.842 ± 0.023,
 centralised 0.881 ± 0.021 in 1d) come from a split where beats of the same patient can sit on both sides, so
@@ -822,12 +904,14 @@ that only one small hospital holds.
 Client-level DP as implemented here (each hospital clips its update to C = 1.0 and adds Gaussian noise of
 standard deviation sigma × C to every coordinate) destroys the MIT-BIH model at every noise level tried: from
 0.839 ± 0.016 without DP to 0.048-0.247 with DP. The small-sigma points are confounded by clipping (known
-issue 4); sigma = 0.1 (0.247 ± 0.011, epsilon 1214.6) and sigma = 1.0 (0.175 ± 0.104, epsilon 31.46) are
+issue 4): a one-seed diagnostic after 3b shows that clipping at C = 1.0 with no noise at all already collapses
+the model (final macro-F1 0.127 with batch-norm statistics sent, 0.032 with them held, against 0.815 without
+clipping), so batch-norm handling is not the cause. Sigma = 0.1 (0.247 ± 0.011, epsilon 1214.6) and sigma = 1.0 (0.175 ± 0.104, epsilon 31.46) are
 also far below the non-private model, and neither epsilon is a meaningful privacy guarantee. In the simulated
 setting, sigma ≤ 0.03 still learns (0.975-0.986) but sigma = 0.1 drops to 0.678 ± 0.107 and sigma ≥ 0.5 to
 0.17-0.21 (epsilon 16.9-112.6).
 
-The reason is arithmetic, not a bug. The update has about 90,000 values (0.37 MB at 4 bytes each), so the
+For the larger noise levels the noise alone is enough, and the reason is arithmetic, not a bug. The update has about 90,000 values (0.37 MB at 4 bytes each), so the
 noise added to one hospital's update has a norm of about sigma × C × 300, against a clipped signal of at
 most C. Averaging four hospitals divides the noise standard deviation by at most 2 (equal weights). At
 sigma = 1 the noise is about 150 times the signal. Client-level DP becomes workable when the noise is
@@ -836,8 +920,8 @@ cannot give a useful epsilon at a usable accuracy. Clip norm and sigma were fixe
 from these results.
 
 Future work: record-level DP (DP-SGD, for example with Opacus) inside each hospital, which protects individual
-patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and an
-experiment that separates clipping from noise (known issue 4).
+patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and, for client-level DP on this model, a clip
+norm near the typical update norm (about 11 here), which was fixed at 1.0 for these runs (known issue 4).
 
 ### Communication
 
