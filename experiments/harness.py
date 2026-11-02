@@ -56,7 +56,7 @@ if os.getenv("FL_EXPERIMENT_THREADS"):
 
     torch.set_num_threads(int(os.environ["FL_EXPERIMENT_THREADS"]))
 
-from analytics.privacy.dp import DPConfig, account_rounds  # noqa: E402
+from analytics.privacy.dp import DPConfig, account_rounds, is_statistic, update_norm  # noqa: E402
 from app.federated.fedavg import ClientUpdate, federated_average  # noqa: E402
 from app.federated.validation import UpdateRejected, validate_update  # noqa: E402
 from ml import __version__  # noqa: E402
@@ -96,6 +96,11 @@ DEFAULTS = {
     "seeds": [0, 1, 2],
     "target_f1": None,
     "variants": [{"label": "default"}],
+    # Diagnostics only (experiment harness, never the platform):
+    # name used in FedAvg round ids, which seed each hospital's data order; None = the experiment's name.
+    "round_id_name": None,
+    # {"clip_norm": C, "bn_statistics": "local" | "global"}: clip each update to C with no noise.
+    "diagnostic_clip": None,
 }
 
 
@@ -278,6 +283,9 @@ def build_partition(config: dict, seed: int, run_dir: Path) -> Partition:
 
         if source != "mitdb":
             raise ValueError("The 'records' partition needs dataset.source 'mitdb'")
+        if dataset.get("rr_features"):
+            # Experiment 1f: the RR-interval inputs exist (mitdb.load_rr), the model that reads them does not yet.
+            raise NotImplementedError("dataset.rr_features needs the CNN-BiLSTM+RR model, which is not built yet")
         beats = mitdb.load_all(Path(dataset["mitdb_dir"]), WORK_DIR / "mitdb-beats.npz")
         for hospital_id, records in mitdb.assign_records(seed, hospitals).items():
             train = [beats[r] for r in records["ds1"]]
@@ -328,9 +336,12 @@ def metric_row(confusion: np.ndarray, modality: str, loss_sum: float, n: int) ->
         "loss": loss_sum / max(n, 1),
         "n_eval": int(n),
     }
-    for short, metrics in zip(CLASS_SHORT[modality], per_class):
+    predicted = np.asarray(confusion).sum(axis=0) / max(np.sum(confusion), 1)  # rows true, columns predicted
+    for short, metrics, share in zip(CLASS_SHORT[modality], per_class, predicted):
         row[f"recall_{short}"] = metrics["recall"]  # sensitivity, Se
         row[f"precision_{short}"] = metrics["precision"]  # positive predictivity, +P
+        row[f"predicted_{short}"] = float(share)  # share of held-out beats predicted as this class
+    row["confusion"] = json.dumps(np.asarray(confusion).astype(int).tolist())
     if adapter.task.task_type == "binary":
         row["f1_pos"] = per_class[1]["f1"]
         row["precision_pos"] = per_class[1]["precision"]
@@ -382,6 +393,30 @@ class InMemoryTransport:
 
 
 # ==================================================================== methods
+def diagnostic_clip(global_weights: dict, local_weights: dict, clip_norm: float, bn_statistics: str) -> tuple:
+    """Clip one update to ``clip_norm`` without noise. A diagnostic for the harness only.
+
+    Same scaling as ``analytics.privacy.dp.privatize_update`` with the noise left out (the platform refuses
+    DP without noise). ``bn_statistics`` says what the hospital sends for batch-norm running statistics:
+    "local" its own, as the platform's DP does; "global" the round's global values, unchanged.
+    """
+    if bn_statistics not in ("local", "global"):
+        raise ValueError("diagnostic_clip.bn_statistics must be 'local' or 'global'")
+    norm = update_norm(global_weights, local_weights)
+    scale = min(1.0, clip_norm / norm) if norm > 0 else 1.0
+    out = {}
+    for key, local in local_weights.items():
+        local = np.asarray(local)
+        if is_statistic(key):
+            out[key] = (np.asarray(global_weights[key]) if bn_statistics == "global" else local).copy()
+        elif np.issubdtype(local.dtype, np.floating):
+            base = np.asarray(global_weights[key], dtype=np.float64)
+            out[key] = (base + (local.astype(np.float64) - base) * scale).astype(local.dtype)
+        else:
+            out[key] = local.copy()
+    return out, scale < 1.0
+
+
 def _train_config(training: dict, seed: int) -> TrainConfig:
     return TrainConfig(
         local_epochs=int(training["local_epochs"]),
@@ -406,7 +441,7 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
     rows = []
     for round_number in range(1, int(training["rounds"]) + 1):
         started = time.perf_counter()
-        round_id = f"{config['name']}-seed{seed}-r{round_number:03d}"
+        round_id = f"{config.get('round_id_name') or config['name']}-seed{seed}-r{round_number:03d}"
         transport.base = weights_to_bytes(weights)
         transport.updates, transport.evaluations, transport.failures = {}, {}, {}
         transport.downloaded.clear()
@@ -428,6 +463,16 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
         }
         for node in nodes.values():
             node.train_and_submit(round_id, transport.round_info)
+        clip = config.get("diagnostic_clip")
+        if clip:
+            # Applied as each update arrives, before validation: nothing touches it in between, so this is
+            # the same as clipping at the hospital.
+            for update in transport.updates.values():
+                clipped, was_clipped = diagnostic_clip(
+                    weights, weights_from_bytes(update["payload"]), float(clip["clip_norm"]), clip["bn_statistics"]
+                )
+                update["payload"] = weights_to_bytes(clipped)
+                update["dp_report"] = {**update["dp_report"], "clipped": was_clipped}
 
         accepted, rejected = [], {}
         for hospital_id, update in transport.updates.items():

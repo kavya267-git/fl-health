@@ -21,6 +21,14 @@ its own; matching the data the platform already reads takes precedence.
 
 Annotation symbols are mapped to the AAMI classes N, S, V, F; class Q
 (paced, fusion of paced, unclassifiable) is dropped, as for the Kaggle export.
+
+For experiment 1f, ``record_beats_with_rr`` also gives each beat three
+RR-interval inputs of the kind de Chazal et al. used, from the reference
+annotations: pre-RR, post-RR and the local average RR over the 10 RR intervals
+around the beat, each divided by the record's own average RR. Every annotated
+beat (class Q included) counts as a beat for the intervals. The first beat of a
+record has no pre-RR and takes its post-RR; the last beat takes its pre-RR as
+post-RR. The beats themselves are exactly those of ``record_beats``.
 """
 
 from __future__ import annotations
@@ -49,8 +57,34 @@ AAMI = {
 }
 
 
+RR_FEATURES = ("pre_rr", "post_rr", "local_rr")
+
+
+def rr_features(samples: np.ndarray) -> np.ndarray:
+    """[n, 3] pre-RR, post-RR and local average RR (10 intervals around the beat), over the record's mean RR."""
+    t = np.asarray(samples, dtype=np.float64)
+    rr = np.diff(t)
+    n = len(t)
+    if n < 2:
+        return np.ones((n, 3), dtype=np.float32)
+    pre = np.concatenate([[rr[0]], rr])
+    post = np.concatenate([rr, [rr[-1]]])
+    # Beat i lies between intervals i-1 and i; the 10 intervals i-5 .. i+4 span beats i-5 .. i+5.
+    cumulative = np.concatenate([[0.0], np.cumsum(rr)])
+    lo = np.clip(np.arange(n) - 5, 0, len(rr))
+    hi = np.clip(np.arange(n) + 5, 0, len(rr))
+    local = (cumulative[hi] - cumulative[lo]) / np.maximum(hi - lo, 1)
+    return (np.stack([pre, post, local], axis=1) / rr.mean()).astype(np.float32)
+
+
 def record_beats(directory: Path, record: int) -> Tuple[np.ndarray, np.ndarray, dict]:
     """Beats of one record as ([n, 187] float32 in [0, 1], [n] labels), plus extraction statistics."""
+    X, y, stats, _ = record_beats_with_rr(directory, record)
+    return X, y, stats
+
+
+def record_beats_with_rr(directory: Path, record: int) -> Tuple[np.ndarray, np.ndarray, dict, np.ndarray]:
+    """``record_beats`` plus each kept beat's RR-interval inputs ([n, 3] float32, see ``rr_features``)."""
     import wfdb
     from scipy.signal import resample_poly
 
@@ -63,22 +97,27 @@ def record_beats(directory: Path, record: int) -> Tuple[np.ndarray, np.ndarray, 
 
     divisor = gcd(TARGET_HZ, fs)
     x = resample_poly(signal, TARGET_HZ // divisor, fs // divisor)
-    beats = [(int(round(s * TARGET_HZ / fs)), sym) for s, sym in zip(annotation.sample, annotation.symbol) if sym in AAMI]
+    is_beat = [sym in AAMI for sym in annotation.symbol]
+    rr_all = rr_features(np.asarray(annotation.sample)[is_beat])
+    beats = [
+        (int(round(s * TARGET_HZ / fs)), sym, index)
+        for index, (s, sym) in enumerate((s, sym) for s, sym, b in zip(annotation.sample, annotation.symbol, is_beat) if b)
+    ]
 
     window = WINDOW_SECONDS * TARGET_HZ
-    X, y, lengths = [], [], []
+    X, y, lengths, rr_kept = [], [], [], []
     skipped = {"Q": 0, "edge": 0}
     for start in range(0, len(x), window):
         segment = x[start : start + window]
         if len(segment) < window // 2:
             break
-        in_window = [(r, sym) for r, sym in beats if start <= r < start + window]
-        peaks = np.array([r for r, _ in in_window])
+        in_window = [(r, sym, i) for r, sym, i in beats if start <= r < start + window]
+        peaks = np.array([r for r, _, _ in in_window])
         if len(peaks) < 2:
             skipped["edge"] += len(in_window)
             continue
         length = min(ECG_BEAT_LENGTH, int(round(1.2 * float(np.median(np.diff(peaks))))))
-        for r, sym in in_window:
+        for r, sym, index in in_window:
             label = AAMI[sym]
             if label == "Q":
                 skipped["Q"] += 1
@@ -96,9 +135,23 @@ def record_beats(directory: Path, record: int) -> Tuple[np.ndarray, np.ndarray, 
             X.append(beat)
             y.append(CLASS_INDEX[label])
             lengths.append(length)
+            rr_kept.append(rr_all[index])
     stats = {"record": record, "beats": len(y), "skipped_q": skipped["Q"], "skipped_edge": skipped["edge"],
              "median_length": float(np.median(lengths)) if lengths else 0.0}
-    return np.asarray(X, dtype=np.float32), np.asarray(y, dtype=np.int64), stats
+    rr = np.asarray(rr_kept, dtype=np.float32).reshape(-1, len(RR_FEATURES))
+    return np.asarray(X, dtype=np.float32), np.asarray(y, dtype=np.int64), stats, rr
+
+
+def load_rr(directory: Path, cache: Path) -> Dict[int, np.ndarray]:
+    """RR-interval inputs of every DS1 and DS2 record, aligned with ``load_all``'s beats, cached as one .npz."""
+    cache = Path(cache)
+    if cache.exists():
+        with np.load(cache) as archive:
+            return {int(k[3:]): archive[k] for k in archive.files}
+    out = {record: record_beats_with_rr(directory, record)[3] for record in DS1 + DS2}
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, **{f"rr_{record}": rr for record, rr in out.items()})
+    return out
 
 
 def load_all(directory: Path, cache: Path) -> Dict[int, Tuple[np.ndarray, np.ndarray]]:

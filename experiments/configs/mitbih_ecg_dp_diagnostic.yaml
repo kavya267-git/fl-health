@@ -1,0 +1,27 @@
+title: "Diagnostic for known issue 4: clipping and batch-norm statistics, ECG, MIT-BIH (one seed)"
+description: >
+  A diagnostic, not a result: one seed (0), FedAvg only, added after the privacy runs (3b) to test one
+  hypothesis about known issue 4. With DP on, the platform clips the trainable weights of each update
+  (about 11-fold on this data) but sends batch-norm running statistics unclipped, so the averaged model may
+  pair barely-moved weights with fully-moved statistics. Three variants at clip norm 1.0 and no noise,
+  otherwise identical to 3b (Kaggle subsample, Dirichlet alpha = 1.0, 20 rounds, same partition and the same
+  training order as 3b's seed 0, via round_id_name): (a) clip only, BN statistics sent as the platform's DP
+  sends them; (b) clip only, each hospital sends the global model's BN statistics back unchanged;
+  (c) no clipping, no noise, a reference that should reproduce 3b's sigma = 0, seed 0 run. Clipping without
+  noise exists only in the experiment harness; the platform still requires noise to enable DP.
+dataset:
+  modality: ecg
+  source: mit-bih
+  csv: ["${MITBIH_DIR}/mitbih_train.csv", "${MITBIH_DIR}/mitbih_test.csv"]
+  max_records: 25000
+  subsample_seed: 0
+training: {rounds: 20}
+target_f1: 0.8
+partition: {scheme: dirichlet, alpha: 1.0}
+methods: [fedavg]
+seeds: [0]
+round_id_name: mitbih_ecg_privacy
+variants:
+  - {label: "(a) clip only, BN statistics sent", diagnostic_clip: {clip_norm: 1.0, bn_statistics: local}}
+  - {label: "(b) clip only, BN statistics held", diagnostic_clip: {clip_norm: 1.0, bn_statistics: global}}
+  - {label: "(c) no clipping, no noise"}
