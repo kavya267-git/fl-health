@@ -30,7 +30,10 @@ CLASS_LABEL = {
 }
 COLORS = {"local": "#b0751a", "fedavg": "#0f6e64", "centralised": "#5b5f97"}
 #: Per-experiment method labels. A label only; no number changes.
-METHOD_LABEL_OVERRIDES = {"mitdb_patientwise_baselines": {"centralised": "Centralised (pooled data)"}}
+METHOD_LABEL_OVERRIDES = {
+    "mitdb_patientwise_baselines": {"centralised": "Centralised (pooled data)"},
+    "mitdb_patientwise_rr": {"centralised": "Centralised (pooled data)"},  # same setting as 1e, compared with it
+}
 #: A sentence printed under an experiment's main table.
 TABLE_NOTES = {
     "mitdb_patientwise_baselines": (
@@ -38,7 +41,13 @@ TABLE_NOTES = {
         "training is usually an upper bound for federated training, but here it ended below FedAvg (known issue 5), "
         "so it is labelled by what it is."
     ),
+    "mitdb_patientwise_rr": (
+        "*Centralised (pooled data)*: as in 1e, one model trained on all hospitals' training records together, "
+        "labelled as in 1e so that the paired comparison below lines up."
+    ),
 }
+PAIRED_METRICS = [("macro_f1", "Macro-F1"), ("recall_S", "Se S"), ("precision_S", "+P S"),
+                  ("recall_V", "Se V"), ("precision_V", "+P V")]
 
 
 def method_label(name: str, method: str) -> str:
@@ -370,6 +379,9 @@ def _section(name: str, rows: List[dict]) -> str:
             "",
         ]
 
+    if settings.get("paired_with"):
+        lines += paired_lines(name, final, settings["paired_with"], variants, held_out)
+
     if any(m == "fedavg" for (_, m) in final):
         if any(r.get("epsilon") is not None and not math.isinf(r["epsilon"]) for rs in final.values() for r in rs):
             body = []
@@ -456,6 +468,50 @@ def _section(name: str, rows: List[dict]) -> str:
         lines += [f"![Final macro-F1]({figure_bars(name, rows, config)})", ""]
     # No wall-clock times here: runs shared the CPU with other experiments. See the timing table instead.
     return "\n".join(lines)
+
+
+def paired_lines(name: str, final: Dict[tuple, List[dict]], other: str, variants: List[str], held_out: str) -> List[str]:
+    """Per-seed differences (this experiment minus ``other``) for runs with the same seed, records and training order."""
+    other_rows = read_rounds(other)
+    if not other_rows:
+        return []
+    other_final = finals(other_rows)
+    title = read_config(other)["config"].get("title", other).split(".")[0]
+    body = []
+    for variant in variants:
+        for method, prefix, label in (("local", "", "Local only, own hospital's share"),
+                                      ("local", "cross_", f"Local only, all hospitals' {held_out}"),
+                                      ("fedavg", "", method_label(name, "fedavg")),
+                                      ("centralised", "", method_label(name, "centralised"))):
+            mine = {r["seed"]: r for r in final.get((variant, method), [])}
+            theirs = {r["seed"]: r for r in other_final.get((variant, method), [])}
+            seeds = sorted(set(mine) & set(theirs))
+            if not seeds:
+                continue
+            diffs = {key: [] for key, _ in PAIRED_METRICS}
+            for seed in seeds:
+                cells = []
+                for key, _ in PAIRED_METRICS:
+                    a, b = mine[seed].get(prefix + key), theirs[seed].get(prefix + key)
+                    d = None if a is None or b is None else a - b
+                    diffs[key].append(d)
+                    cells.append("-" if d is None else f"{d:+.3f}")
+                body.append([label, f"seed {int(seed)}"] + cells)
+            summary = []
+            for key, _ in PAIRED_METRICS:
+                mean, std, n = mean_std(diffs[key])
+                summary.append("-" if mean is None else f"**{mean:+.3f} ± {std:.3f}**")
+            body.append([label, "mean ± std"] + summary)
+    if not body:
+        return []
+    return [
+        f"Paired comparison with {title}: the same seed, the same records at each hospital and the same training "
+        f"order, so each row is this experiment minus {title} for one seed (positive = higher here), then the mean "
+        "and std of those differences:",
+        "",
+        table(["Method", "Seed"] + [f"Δ {label}" for _, label in PAIRED_METRICS], body),
+        "",
+    ]
 
 
 def rare_class_table(prow: List[dict], variants: List[str], rare: str) -> List[str]:
