@@ -23,13 +23,13 @@ export function ShapBarChart({ rows, signed, valueLabel }) {
           tickLine={false}
           axisLine={{ stroke: GRID_STROKE }}
           tickFormatter={(value) => (signed ? `${value > 0 ? '+' : ''}${(value * 100).toFixed(0)}` : (value * 100).toFixed(1))}
-          label={{ value: valueLabel, position: 'insideBottom', offset: -12, fill: '#586964', fontSize: 12 }}
+          label={{ value: valueLabel, position: 'insideBottom', offset: -12, fill: '#4e5b75', fontSize: 12 }}
         />
         <YAxis
           type="category"
           dataKey="name"
           width={260}
-          tick={{ ...AXIS_TICK, fill: '#13211e' }}
+          tick={{ ...AXIS_TICK, fill: '#111a2e' }}
           tickLine={false}
           axisLine={false}
           interval={0}
@@ -42,7 +42,7 @@ export function ShapBarChart({ rows, signed, valueLabel }) {
             signed ? 'Contribution' : 'Mean |SHAP|',
           ]}
         />
-        {signed ? <ReferenceLine x={0} stroke="#586964" /> : null}
+        {signed ? <ReferenceLine x={0} stroke="#4e5b75" /> : null}
         <Bar dataKey="value" isAnimationActive={false} barSize={16} radius={2}>
           {rows.map((row) => (
             <Cell key={row.name} fill={row.color} />

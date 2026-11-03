@@ -1,4 +1,16 @@
-import { Activity, Building2, Hospital, Layers, LayoutDashboard, Lightbulb, Map as MapIcon, ScrollText, Settings, TrendingUp } from 'lucide-react'
+import {
+  Activity,
+  Building2,
+  CircleHelp,
+  Hospital,
+  Layers,
+  LayoutDashboard,
+  Lightbulb,
+  Map as MapIcon,
+  ScrollText,
+  Settings,
+  TrendingUp,
+} from 'lucide-react'
 import { canSeeAudit, isHospitalOperator } from '../../utils/constants'
 
 export const NAV_ITEMS = [
@@ -10,6 +22,7 @@ export const NAV_ITEMS = [
   { to: '/forecasting', label: 'Forecasting', icon: TrendingUp },
   { to: '/explainability', label: 'Explainability', icon: Lightbulb },
   { to: '/audit', label: 'Audit Logs', icon: ScrollText },
+  { to: '/how-it-works', label: 'How it works', icon: CircleHelp },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
