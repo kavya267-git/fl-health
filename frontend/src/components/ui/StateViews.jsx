@@ -1,4 +1,5 @@
 import { CircleAlert, Inbox, LoaderCircle, Lock, ServerOff } from 'lucide-react'
+import { WORLD_IMAGE } from '../../assets/illustrations'
 import { API_BASE_URL } from '../../services/api'
 import { Button } from './Button'
 
@@ -11,10 +12,19 @@ export function LoadingState({ label = 'Loading' }) {
   )
 }
 
-export function EmptyState({ title, description, action, icon: Icon = Inbox }) {
+/**
+ * `illustration` swaps the icon for the small world-map illustration, for the "nothing here yet" states of the
+ * federation as a whole (no rounds, no hospitals, no surveillance data). The image is decorative: the title says
+ * what is missing.
+ */
+export function EmptyState({ title, description, action, icon: Icon = Inbox, illustration = false }) {
   return (
     <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-      <Icon className="h-7 w-7 text-faint" aria-hidden="true" />
+      {illustration ? (
+        <img src={WORLD_IMAGE.src} alt={WORLD_IMAGE.alt} className="mb-2 w-full max-w-[280px]" width="592" height="380" />
+      ) : (
+        <Icon className="h-7 w-7 text-faint" aria-hidden="true" />
+      )}
       <p className="text-sm font-semibold text-ink">{title}</p>
       {description ? <p className="max-w-md text-sm leading-relaxed text-muted">{description}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}

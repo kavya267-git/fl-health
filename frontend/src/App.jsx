@@ -9,6 +9,7 @@ import Explainability from './pages/Explainability'
 import FederatedLearning from './pages/FederatedLearning'
 import Forecasting from './pages/Forecasting'
 import HospitalDetail from './pages/HospitalDetail'
+import HowItWorks from './pages/HowItWorks'
 import Hospitals from './pages/Hospitals'
 import Login from './pages/Login'
 import ModelDetail from './pages/ModelDetail'
@@ -75,6 +76,7 @@ export function AppRoutes() {
         <Route path="forecasting" element={<Forecasting />} />
         <Route path="explainability" element={<Explainability />} />
         <Route path="audit" element={<AuditLogs />} />
+        <Route path="how-it-works" element={<HowItWorks />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

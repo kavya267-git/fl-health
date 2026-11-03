@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from app.routers.deps import coordinator_user, get_ctx
+from app.routers.deps import audit_reader, get_ctx
 from app.schemas.audit import AuditPage, AuditVerification
 from app.services.audit_service import ACTIONS
 from app.services.context import AppContext
@@ -25,7 +25,7 @@ def list_audit(
     date_to: Optional[str] = Query(default=None, description="ISO date or timestamp"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    user: Dict[str, Any] = Depends(coordinator_user),
+    user: Dict[str, Any] = Depends(audit_reader),
     ctx: AppContext = Depends(get_ctx),
 ):
     page = ctx.audit.list_entries(search, action, status, hospital_id, round_id, date_from, date_to, limit, offset)
@@ -33,7 +33,7 @@ def list_audit(
 
 
 @router.get("/verify", response_model=AuditVerification)
-def verify_audit(user: Dict[str, Any] = Depends(coordinator_user), ctx: AppContext = Depends(get_ctx)):
+def verify_audit(user: Dict[str, Any] = Depends(audit_reader), ctx: AppContext = Depends(get_ctx)):
     """Recompute the hash chain and report whether any entry was altered, removed or reordered."""
     result = ctx.audit.verify_chain()
     return {

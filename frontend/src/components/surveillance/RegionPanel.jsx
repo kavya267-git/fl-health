@@ -16,7 +16,7 @@ function RecentWeeks({ labels, counts }) {
       >
         {counts.map((count, index) =>
           count === null ? (
-            <rect key={labels[index]} x={index * width + 0.6} y={33} width={width - 1.2} height={1} fill="#c3cfcb" />
+            <rect key={labels[index]} x={index * width + 0.6} y={33} width={width - 1.2} height={1} fill="#bccae0" />
           ) : (
             <rect
               key={labels[index]}
@@ -24,7 +24,7 @@ function RecentWeeks({ labels, counts }) {
               y={34 - (count / max) * 32}
               width={width - 1.2}
               height={(count / max) * 32}
-              fill={index === counts.length - 1 ? '#0f5d56' : '#a9d8d0'}
+              fill={index === counts.length - 1 ? '#24489a' : '#b6cdf2'}
             />
           ),
         )}

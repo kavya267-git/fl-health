@@ -186,7 +186,7 @@ function XrayIndividual({ explanation }) {
         <div>
           <HeatmapCanvas imageBase64={explanation.image_png_base64} heatmap={explanation.heatmap} showOverlay={overlay} />
           <label className="mt-2 flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" className="h-4 w-4 accent-[#0f5d56]" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} />
+            <input type="checkbox" className="h-4 w-4 accent-[#24489a]" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} />
             Show heat map
           </label>
         </div>

@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from fastapi import Depends, Request
 
-from app.services.auth_service import require_role
+from app.services.auth_service import AUDIT_READER_ROLES, require_role
 from app.services.context import AppContext
 from app.utils.errors import AuthenticationFailed, PermissionDenied
 
@@ -30,6 +30,12 @@ def current_user(token: str = Depends(bearer_token), ctx: AppContext = Depends(g
 def coordinator_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
     """Admins and FL coordinators may change state (start rounds, aggregate, ...)."""
     require_role(user, ("admin", "coordinator"))
+    return user
+
+
+def audit_reader(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    """Who may read the audit log."""
+    require_role(user, AUDIT_READER_ROLES)
     return user
 
 

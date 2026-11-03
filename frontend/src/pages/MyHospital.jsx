@@ -66,7 +66,11 @@ function Step({ label, detail, state }) {
 
 function RoundFromHere({ round }) {
   if (!round) {
-    return <EmptyState title="No round yet" description="When a coordinator starts a round that invites this hospital, it appears here live." />
+    return <EmptyState
+        title="No round yet"
+        description="When a coordinator starts a round that invites this hospital, it appears here live."
+        illustration
+      />
   }
   const { reached, failedAt } = progressOf(round)
   const over = ROUND_OVER.includes(round.round_status)
