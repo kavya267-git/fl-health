@@ -1,6 +1,6 @@
 """Analytics endpoints: overview, hotspots, forecast, explainability, privacy."""
 
-from backend_test_helpers import wait_for_round
+from backend_test_helpers import login, wait_for_round
 
 
 def test_overview_before_any_round(client, viewer):
@@ -12,6 +12,17 @@ def test_overview_before_any_round(client, viewer):
     assert overview["data_status"]["simulated"] is True
     assert overview["surveillance"]["available"] is True
     assert "not a confirmed outbreak" in overview["surveillance"]["disclaimer"]
+
+
+def test_overview_includes_audit_activity_only_for_roles_that_may_read_the_audit_log(client, viewer, coordinator, admin):
+    operator = login(client, "hospital_a@fl-healthcare.demo")
+    for headers in (viewer, operator):
+        assert client.get("/api/audit", headers=headers).status_code == 403
+        assert client.get("/api/analytics/overview", headers=headers).json()["recent_activity"] is None
+    for headers in (coordinator, admin):
+        assert client.get("/api/audit", headers=headers).status_code == 200
+        activity = client.get("/api/analytics/overview", headers=headers).json()["recent_activity"]
+        assert isinstance(activity, list) and activity  # signing in is itself audited
 
 
 def test_options_and_hotspots(client, viewer):
