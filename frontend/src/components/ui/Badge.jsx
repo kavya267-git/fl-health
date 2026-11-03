@@ -5,7 +5,7 @@ const TONES = {
   neutral: 'bg-canvas text-muted border-line',
   brand: 'bg-brand-50 text-brand-700 border-brand-100',
   ok: 'bg-ok-soft text-ok border-ok/20',
-  warn: 'bg-warn-soft text-warn border-warn/25',
+  warn: 'bg-warn-soft text-warn-ink border-warn/25',
   alert: 'bg-alert-soft text-alert border-alert/20',
   nodata: 'bg-nodata-soft text-muted border-line',
   forecast: 'bg-forecast-soft text-forecast border-forecast/20',
@@ -72,7 +72,7 @@ export function ModalityTag({ modality, className = '' }) {
 export function SimulatedTag({ label = 'SIMULATED / DEMONSTRATION DATA', compact = false }) {
   return (
     <span
-      className="inline-flex items-center rounded border border-warn/30 bg-warn-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warn"
+      className="inline-flex items-center rounded border border-warn/30 bg-warn-soft px-2 py-0.5 text-[11px] font-semibold tracking-wide text-warn-ink"
       title="These values come from simulated data and are for demonstration only."
     >
       {compact ? 'SIMULATED' : label}

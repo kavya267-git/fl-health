@@ -6,7 +6,7 @@ import { buildScale } from '../components/surveillance/scale'
 import { HotspotStatusBadge, SimulatedTag } from '../components/ui/Badge'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { Field, Note, PageHeader, Select, Td, Th } from '../components/ui/Misc'
-import { AsyncView } from '../components/ui/StateViews'
+import { AsyncView, EmptyState } from '../components/ui/StateViews'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/endpoints'
 import { HOTSPOT_ORDER } from '../utils/constants'
@@ -119,13 +119,15 @@ function SurveillanceResult({ data, selectedId, onSelect }) {
 }
 
 export default function Surveillance() {
-  const options = useApi(() => api.analyticsOptions(), [])
+  const options = useApi(() => api.analyticsOptions(), [], {
+    isEmpty: (data) => !data.diseases?.length || !data.periods?.length,
+  })
   const [disease, setDisease] = useState(null)
   const [period, setPeriod] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
 
   const activeDisease = disease ?? options.data?.diseases[0]?.id
-  const activePeriod = period ?? options.data?.latest_period.week_start
+  const activePeriod = period ?? options.data?.latest_period?.week_start
   const result = useApi(() => api.hotspots(activeDisease, activePeriod), [activeDisease, activePeriod], {
     enabled: options.status === 'success',
   })
@@ -136,7 +138,17 @@ export default function Surveillance() {
         title="Disease Surveillance"
         description="Weekly case counts per region, built from totals the hospitals report. No patient-level locations are used. Regions whose count is unusually high for them are marked for a closer look."
       />
-      <AsyncView state={options} what="surveillance data">
+      <AsyncView
+        state={options}
+        what="surveillance data"
+        empty={
+          <EmptyState
+            title="No surveillance data yet"
+            description="Weekly counts appear here once hospitals report their aggregated totals."
+            illustration
+          />
+        }
+      >
         {(data) => (
           <>
             <Card className="mb-6">

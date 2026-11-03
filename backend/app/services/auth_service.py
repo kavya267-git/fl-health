@@ -52,6 +52,8 @@ from app.utils.time import utc_now_iso
 ROLES = ("admin", "coordinator", "viewer", "hospital")
 #: Roles that act for one hospital; such a user must have users.hospital_id set.
 HOSPITAL_ROLES = ("hospital",)
+#: Roles that may read the audit log (the /api/audit endpoints and the dashboard's recent activity).
+AUDIT_READER_ROLES = ("admin", "coordinator")
 #: Role of every newly created account. Never anything else.
 DEFAULT_ROLE = "viewer"
 MIN_PASSWORD_LENGTH = 8

@@ -100,7 +100,7 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
                 <label key={hospital.id} className={`flex items-center gap-2.5 text-sm ${available ? 'text-ink' : 'text-faint'}`}>
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-[#0f5d56]"
+                    className="h-4 w-4 accent-[#24489a]"
                     disabled={!available}
                     checked={available && selected.includes(hospital.id)}
                     onChange={() => toggle(hospital.id)}
@@ -187,7 +187,7 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
           <label className="flex items-start gap-2.5 text-sm text-ink">
             <input
               type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-[#0f5d56]"
+              className="mt-0.5 h-4 w-4 accent-[#24489a]"
               checked={dpEnabled}
               onChange={(e) => setDpEnabled(e.target.checked)}
             />

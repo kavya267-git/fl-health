@@ -5,7 +5,7 @@ import { Badge, ModalityTag, SimulatedTag } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Note, PageHeader } from '../components/ui/Misc'
-import { AsyncView } from '../components/ui/StateViews'
+import { AsyncView, EmptyState } from '../components/ui/StateViews'
 import { useAuth } from '../context/AuthContext'
 import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
@@ -203,7 +203,17 @@ export default function Hospitals() {
           {actionError}
         </Note>
       ) : null}
-      <AsyncView state={state} what="hospitals">
+      <AsyncView
+        state={state}
+        what="hospitals"
+        empty={
+          <EmptyState
+            title="No hospitals connected"
+            description="A hospital appears here once its node registers with the coordinator."
+            illustration
+          />
+        }
+      >
         {(hospitals) => (
           <div className="grid gap-5 md:grid-cols-2">
             {hospitals.map((hospital) => (
