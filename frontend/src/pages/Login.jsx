@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleCheck } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { NETWORK_IMAGE } from '../assets/illustrations'
@@ -19,6 +19,27 @@ function Message({ tone, children }) {
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone === 'ok' ? 'text-ok' : 'text-alert'}`} aria-hidden="true" />
       <span>{children}</span>
     </div>
+  )
+}
+
+function DemoAccountList({ accounts, onUse }) {
+  return (
+    <ul className="mt-3 divide-y divide-line">
+      {accounts.map((account) => (
+        <li key={account.email} className="flex items-center justify-between gap-3 py-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm text-ink">{account.email}</p>
+            <p className="text-xs text-muted">
+              {ROLE_LABELS[account.role] || account.role}
+              {account.hospital_id ? ` · ${account.hospital_id}` : ''}
+            </p>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => onUse(account.email)}>
+            Use
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -109,6 +130,9 @@ export default function Login() {
     }
   }
 
+  const demoAccounts = config?.demo_accounts || []
+  const operatorAccounts = demoAccounts.filter((account) => account.role === 'hospital')
+  const roleAccounts = demoAccounts.filter((account) => account.role !== 'hospital')
   const incomplete = !email || (mode !== 'reset' && !password) || (mode === 'signup' && !confirm)
   const linkClass = 'font-medium text-brand-700 hover:underline'
 
@@ -116,7 +140,7 @@ export default function Login() {
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       {/* What the platform is, for someone seeing it for the first time. */}
       {/* Stays one screen tall while the form column scrolls, so the privacy note is always in view. */}
-      <section className="sticky top-0 hidden h-screen flex-col overflow-hidden bg-gradient-to-b from-canvas to-[#f3f8fe] lg:flex">
+      <section className="sticky top-0 hidden h-screen flex-col overflow-hidden bg-canvas lg:flex">
         <div className="px-12 pt-10">
           <Logo />
           <div className="mt-10 max-w-lg">
@@ -129,9 +153,9 @@ export default function Login() {
             </p>
           </div>
         </div>
-        <img src={NETWORK_IMAGE.src} alt={NETWORK_IMAGE.alt} className="-mb-12 min-h-0 w-full flex-1 object-contain px-6 pt-4" />
-        {/* Light gradient overlay where the note overlaps the bottom of the illustration. */}
-        <div className="relative bg-gradient-to-t from-[#f3f8fe] from-60% to-[#f3f8fe]/0 px-12 pb-10 pt-14">
+        {/* Directly under the paragraph; its edges fade into the page background (#eef3fb). */}
+        <img src={NETWORK_IMAGE.src} alt={NETWORK_IMAGE.alt} className="fade-edges mt-6 min-h-0 w-full shrink object-contain px-6" />
+        <div className="mt-auto px-12 pb-10 pt-6">
           <p className="max-w-lg text-xs leading-relaxed text-muted">
             Federated learning reduces the need to centralise raw patient data. It does not, on its own, guarantee privacy. This is a
             research prototype and not a medical device.
@@ -146,7 +170,7 @@ export default function Login() {
             <img
               src={NETWORK_IMAGE.src}
               alt={NETWORK_IMAGE.alt}
-              className="mt-5 h-36 w-full rounded-lg border border-line bg-[#f3f8fe] object-cover object-center"
+              className="fade-edges mt-5 h-36 w-full object-cover object-center"
             />
             <p className="mt-3 text-xs leading-relaxed text-muted">
               Patient records stay at each hospital; only model updates are shared. A research prototype, not a medical device.
@@ -278,26 +302,22 @@ export default function Login() {
                 <div className="mt-8 rounded-md border border-line bg-surface p-4">
                   <p className="text-sm font-semibold text-ink">Demo accounts</p>
                   <p className="mt-1 text-xs leading-relaxed text-muted">
-                    Built-in accounts: one per role, and one operator per hospital (sign in as your hospital&rsquo;s operator
-                    on that hospital&rsquo;s laptop). All use the password set by <code className="font-mono">DEMO_PASSWORD</code> on the
-                    server (default <code className="font-mono">demo-password</code>).
+                    All use the password set by <code className="font-mono">DEMO_PASSWORD</code> on the server (default{' '}
+                    <code className="font-mono">demo-password</code>).
                   </p>
-                  <ul className="mt-3 divide-y divide-line">
-                    {config.demo_accounts.map((account) => (
-                      <li key={account.email} className="flex items-center justify-between gap-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-ink">{account.email}</p>
-                          <p className="text-xs text-muted">
-                            {ROLE_LABELS[account.role] || account.role}
-                            {account.hospital_id ? ` · ${account.hospital_id}` : ''}
-                          </p>
-                        </div>
-                        <Button size="sm" variant="ghost" onClick={() => setEmail(account.email)}>
-                          Use
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
+                  <DemoAccountList accounts={roleAccounts} onUse={setEmail} />
+                  {operatorAccounts.length ? (
+                    <details className="group mt-2 border-t border-line pt-2">
+                      <summary className="flex cursor-pointer list-none items-center justify-between py-1.5 text-sm font-medium text-brand-700">
+                        Hospital operator accounts ({operatorAccounts.length})
+                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+                      </summary>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">
+                        One per hospital. Sign in as your hospital&rsquo;s operator on that hospital&rsquo;s laptop.
+                      </p>
+                      <DemoAccountList accounts={operatorAccounts} onUse={setEmail} />
+                    </details>
+                  ) : null}
                 </div>
               ) : null}
             </>

@@ -307,7 +307,7 @@ function Users() {
                                     disabled={saving !== null}
                                     onChange={(next) => next && save(user, 'hospital', next)}
                                   />
-                                  {current.pending ? <p className="text-xs text-warn">Choose the hospital to save this role.</p> : null}
+                                  {current.pending ? <p className="text-xs text-warn-ink">Choose the hospital to save this role.</p> : null}
                                 </>
                               ) : null}
                             </div>

@@ -43,6 +43,8 @@
   --color-ok-soft: #e3f3eb;
   --color-warn: #a4680e;
   --color-warn-soft: #fbf0d9;
+  /* Darker amber for text only (5.4:1 on warn-soft, AA); the status colour itself is unchanged. */
+  --color-warn-ink: #8a560b;
   --color-alert: #b3261e;
   --color-alert-soft: #fbe6e4;
   --color-nodata: #84918d;
@@ -119,4 +121,11 @@
 
 .leaflet-interactive:focus {
   outline: none;
+}
+
+/* Illustrations that should melt into the page: transparent at every edge, solid in the middle. */
+.fade-edges {
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent),
+    linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+  mask-composite: intersect;
 }

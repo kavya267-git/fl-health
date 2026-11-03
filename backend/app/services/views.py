@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from app.federated import coordinator as rounds
+from app.services.auth_service import AUDIT_READER_ROLES
 from app.services.context import AppContext
 from app.services.model_registry import STATUS_INITIAL
 from app.utils.errors import ServiceError
@@ -165,8 +166,13 @@ def _model_card(ctx: AppContext, modality: str) -> Dict[str, Any]:
     }
 
 
-def overview(ctx: AppContext, actor: str) -> Dict[str, Any]:
-    """Everything the main dashboard shows, in one response."""
+def overview(ctx: AppContext, user: Dict[str, Any]) -> Dict[str, Any]:
+    """Everything the main dashboard shows, in one response.
+
+    ``recent_activity`` comes from the audit log, so it is filled only for roles that may read the audit log
+    and is None for everyone else (the dashboard then hides the card).
+    """
+    actor = user["email"]
     hospitals = ctx.hospitals.list()
     models = [_model_card(ctx, modality) for modality in MODALITIES]
     counts = ctx.db.fetch_one(
@@ -260,7 +266,9 @@ def overview(ctx: AppContext, actor: str) -> Dict[str, Any]:
         ],
         "surveillance": surveillance,
         "forecast": forecast,
-        "recent_activity": [
+        "recent_activity": None
+        if user.get("role") not in AUDIT_READER_ROLES
+        else [
             {
                 "id": e["id"],
                 "timestamp": e["timestamp"],

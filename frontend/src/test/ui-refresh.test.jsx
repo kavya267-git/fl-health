@@ -2,6 +2,7 @@
  * The illustrations (sign-in, How it works, empty states) and the sidebar entry for How it works.
  */
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { NETWORK_IMAGE, WORLD_IMAGE } from '../assets/illustrations'
@@ -68,6 +69,23 @@ describe('illustrations', () => {
   })
 })
 
+describe('demo accounts on the sign-in page', () => {
+  it('lists the main roles and folds the hospital operators into a collapsible group', async () => {
+    const roles = ['admin', 'coordinator', 'viewer'].map((role) => ({ email: `${role}@fl-healthcare.demo`, role }))
+    const operators = ['a', 'b', 'c', 'd'].map((h) => ({ email: `hospital_${h}@fl-healthcare.demo`, role: 'hospital', hospital_id: `hospital_${h}` }))
+    api.systemConfig.mockResolvedValue({ ...systemConfig, demo_accounts: [...roles, ...operators] })
+    open('/login')
+    await screen.findByText('Demo accounts')
+
+    for (const account of roles) expect(screen.getByText(account.email)).toBeVisible()
+    const group = screen.getByText('Hospital operator accounts (4)').closest('details')
+    expect(group).not.toHaveAttribute('open')
+    for (const account of operators) expect(within(group).getByText(account.email)).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Hospital operator accounts (4)'))
+    expect(group).toHaveAttribute('open')
+  })
+})
+
 describe('How it works', () => {
   it('is in the sidebar for every role', () => {
     for (const role of ROLE_ORDER) {
@@ -112,5 +130,21 @@ describe('empty states with the illustration', () => {
     open('/surveillance')
     expect(await screen.findByText('No surveillance data yet')).toBeInTheDocument()
     expect(api.hotspots).not.toHaveBeenCalled()
+  })
+})
+
+describe('recent audit activity on the dashboard', () => {
+  it('is hidden when the server leaves the audit items out (roles that may not read the audit log)', async () => {
+    signedInAs(viewerUser)
+    api.overview.mockResolvedValue({ ...emptyOverview, recent_activity: null })
+    open('/')
+    expect(await screen.findByText('No rounds have been run')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Recent audit activity' })).toBeNull()
+  })
+
+  it('is shown when the server includes them', async () => {
+    signedInAs(adminUser)
+    open('/')
+    expect(await screen.findByRole('heading', { name: 'Recent audit activity' })).toBeInTheDocument()
   })
 })

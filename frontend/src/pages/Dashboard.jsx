@@ -362,7 +362,8 @@ export default function Dashboard() {
                 <RoundSummary active={data.active_rounds} recent={data.recent_rounds} />
                 <ModelStatus models={data.models} />
                 <HospitalParticipation hospitals={data.hospitals} />
-                <RecentActivity entries={data.recent_activity} />
+                {/* The server sends audit items only to roles that may read the audit log. */}
+                {Array.isArray(data.recent_activity) ? <RecentActivity entries={data.recent_activity} /> : null}
                 <SurveillanceSummary surveillance={data.surveillance} />
                 <ForecastSummary forecast={data.forecast} />
               </div>

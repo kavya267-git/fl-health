@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 @router.get("/overview", response_model=OverviewResponse)
 def get_overview(user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
     """Dashboard summary: KPIs, model status, rounds, surveillance and forecast highlights."""
-    return overview(ctx, user["email"])
+    return overview(ctx, user)
 
 
 @router.get("/options", response_model=AnalyticsOptions)

@@ -91,7 +91,8 @@ class OverviewResponse(OpenModel):
     hospitals: List[Dict[str, Any]]
     surveillance: Dict[str, Any]
     forecast: Dict[str, Any]
-    recent_activity: List[Dict[str, Any]]
+    #: None when the user may not read the audit log.
+    recent_activity: Optional[List[Dict[str, Any]]] = None
     data_status: DataStatus
 
 
