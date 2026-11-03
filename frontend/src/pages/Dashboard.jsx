@@ -87,7 +87,7 @@ function RoundSummary({ active, recent }) {
         <EmptyState
           title="No rounds have been run"
           description="Start a round on the Federated Learning page to train the first global model."
-          icon={Activity}
+          illustration
         />
       ) : (
         <ul className="divide-y divide-line">

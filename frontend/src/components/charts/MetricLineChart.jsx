@@ -19,7 +19,7 @@ export function MetricLineChart({ data, xKey, xLabel, series, percent = false, h
           tick={AXIS_TICK}
           tickLine={false}
           axisLine={{ stroke: GRID_STROKE }}
-          label={xLabel ? { value: xLabel, position: 'insideBottom', offset: -10, fill: '#586964', fontSize: 12 } : undefined}
+          label={xLabel ? { value: xLabel, position: 'insideBottom', offset: -10, fill: '#4e5b75', fontSize: 12 } : undefined}
         />
         <YAxis
           tick={AXIS_TICK}

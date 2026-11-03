@@ -26,7 +26,7 @@ export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSel
       return {
         fillColor: scale.color(feature.properties[valueKey]),
         fillOpacity: showTiles ? 0.72 : 1,
-        color: selected ? '#13211e' : flagged ? HOTSPOT_STATUS[status].color : '#ffffff',
+        color: selected ? '#111a2e' : flagged ? HOTSPOT_STATUS[status].color : '#ffffff',
         weight: selected ? 3.5 : status === 'CANDIDATE_HOTSPOT' ? 3 : status === 'ELEVATED' ? 2.5 : 1,
         dashArray: status === 'ELEVATED' && !selected ? '6 4' : undefined,
       }

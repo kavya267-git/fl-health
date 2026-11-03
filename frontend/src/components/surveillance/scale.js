@@ -1,5 +1,5 @@
-/** Colour scale for the choropleth: light to dark teal over the observed range. */
-export const INTENSITY_COLORS = ['#e4f1ee', '#bfe0d9', '#8fc7bc', '#55a597', '#1f7f73', '#0c5049']
+/** Colour scale for the choropleth: light to dark blue over the observed range. */
+export const INTENSITY_COLORS = ['#e6eefa', '#c3d6f3', '#93b4e6', '#5d8ad3', '#2f5fb3', '#173a7e']
 export const NO_VALUE_COLOR = '#e3e6e5'
 
 export function buildScale(values) {

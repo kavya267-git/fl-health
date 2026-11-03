@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
+import { NETWORK_IMAGE } from '../assets/illustrations'
 import { Logo } from '../components/layout/Logo'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Misc'
@@ -114,32 +115,42 @@ export default function Login() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       {/* What the platform is, for someone seeing it for the first time. */}
-      <section className="hidden flex-col justify-between bg-brand-900 px-12 py-10 lg:flex">
-        <Logo light />
-        <div className="max-w-lg">
-          <h1 className="text-[2.1rem] font-semibold leading-[1.15] tracking-tight text-white">
-            Hospitals train shared models together. Patient records stay where they are.
-          </h1>
-          <p className="mt-5 text-base leading-relaxed text-brand-100">
-            Each hospital trains on its own EHR, ECG and chest X-ray data. Only model updates travel to the coordinator, which averages them
-            into a shared model and sends it back.
-          </p>
-          <ul className="mt-8 space-y-3 text-sm leading-relaxed text-brand-100">
-            <li>Separate federated pipelines for EHR, ECG and X-ray models.</li>
-            <li>Regional surveillance and forecasts built from aggregated counts.</li>
-            <li>Explanations, privacy checks and an audit trail for every round.</li>
-          </ul>
+      {/* Stays one screen tall while the form column scrolls, so the privacy note is always in view. */}
+      <section className="sticky top-0 hidden h-screen flex-col overflow-hidden bg-gradient-to-b from-canvas to-[#f3f8fe] lg:flex">
+        <div className="px-12 pt-10">
+          <Logo />
+          <div className="mt-10 max-w-lg">
+            <h1 className="text-[2.1rem] font-semibold leading-[1.15] tracking-tight text-brand-950">
+              Hospitals train shared models together. Patient records stay where they are.
+            </h1>
+            <p className="mt-5 text-base leading-relaxed text-muted">
+              Each hospital trains on its own EHR, ECG and chest X-ray data. Only model updates travel to the coordinator, which averages
+              them into a shared model and sends it back.
+            </p>
+          </div>
         </div>
-        <p className="max-w-lg text-xs leading-relaxed text-brand-200">
-          Federated learning reduces the need to centralise raw patient data. It does not, on its own, guarantee privacy. This is a research
-          prototype and not a medical device.
-        </p>
+        <img src={NETWORK_IMAGE.src} alt={NETWORK_IMAGE.alt} className="-mb-12 min-h-0 w-full flex-1 object-contain px-6 pt-4" />
+        {/* Light gradient overlay where the note overlaps the bottom of the illustration. */}
+        <div className="relative bg-gradient-to-t from-[#f3f8fe] from-60% to-[#f3f8fe]/0 px-12 pb-10 pt-14">
+          <p className="max-w-lg text-xs leading-relaxed text-muted">
+            Federated learning reduces the need to centralise raw patient data. It does not, on its own, guarantee privacy. This is a
+            research prototype and not a medical device.
+          </p>
+        </div>
       </section>
 
       <section className="flex items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
+          <div className="mb-6 lg:hidden">
             <Logo />
+            <img
+              src={NETWORK_IMAGE.src}
+              alt={NETWORK_IMAGE.alt}
+              className="mt-5 h-36 w-full rounded-lg border border-line bg-[#f3f8fe] object-cover object-center"
+            />
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              Patient records stay at each hospital; only model updates are shared. A research prototype, not a medical device.
+            </p>
           </div>
 
           {status === 'loading' ? (

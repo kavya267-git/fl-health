@@ -8,22 +8,27 @@
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-canvas: #f1f5f4;
+  /*
+    Neutrals and brand sampled from the illustrations in src/assets (light blue canvas, indigo-blue brand).
+    Contrast (WCAG AA needs 4.5:1 for text): ink 15.6, muted 6.1, faint 4.5 and brand-700 7.6 on canvas;
+    white on brand-600 6.6. The status colours below are unchanged.
+  */
+  --color-canvas: #eef3fb;
   --color-surface: #ffffff;
-  --color-ink: #13211e;
-  --color-muted: #586964;
-  --color-faint: #8b9995;
-  --color-line: #dbe3e0;
-  --color-line-strong: #c3cfcb;
+  --color-ink: #111a2e;
+  --color-muted: #4e5b75;
+  --color-faint: #636f88;
+  --color-line: #d6dfee;
+  --color-line-strong: #bccae0;
 
-  --color-brand-950: #082725;
-  --color-brand-900: #0c3b38;
-  --color-brand-800: #0e4a45;
-  --color-brand-700: #0f5d56;
-  --color-brand-600: #127168;
-  --color-brand-200: #a9d8d0;
-  --color-brand-100: #d3ebe7;
-  --color-brand-50: #e9f4f2;
+  --color-brand-950: #0b1d45;
+  --color-brand-900: #11285e;
+  --color-brand-800: #1b3878;
+  --color-brand-700: #24489a;
+  --color-brand-600: #2d59b5;
+  --color-brand-200: #b6cdf2;
+  --color-brand-100: #d9e5f9;
+  --color-brand-50: #ecf2fc;
 
   /* One hue per data modality, used consistently across pages. */
   --color-ehr: #4353b3;
@@ -46,8 +51,8 @@
   --color-forecast: #6a4c9c;
   --color-forecast-soft: #ede7f6;
 
-  --shadow-card: 0 1px 2px rgb(19 33 30 / 0.05), 0 1px 1px rgb(19 33 30 / 0.03);
-  --shadow-raised: 0 10px 30px -12px rgb(12 59 56 / 0.28);
+  --shadow-card: 0 1px 2px rgb(17 26 46 / 0.05), 0 1px 1px rgb(17 26 46 / 0.03);
+  --shadow-raised: 0 10px 30px -12px rgb(17 40 94 / 0.24);
 }
 
 @layer base {
@@ -108,7 +113,7 @@
 /* Leaflet: match the app surface and keep popups readable. */
 .leaflet-container {
   font-family: var(--font-sans);
-  background: #e9eeec;
+  background: #e6edf8;
   border-radius: 0.5rem;
 }
 
