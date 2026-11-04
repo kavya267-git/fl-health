@@ -4,8 +4,13 @@
 shapely>=2.0
 geopandas>=0.14
 
-# Adds a full ARIMA(p,d,q) candidate to the forecast comparison.
+# Adds a full ARIMA(p,d,q) candidate to the forecast comparison (and the backtest in
+# experiments/forecasting.py).
 statsmodels>=0.14
+
+# Adds Prophet to the forecast comparison and the backtest. The first forecast of a
+# region and disease then takes several seconds; results are cached until the data changes.
+prophet>=1.1.5
 
 # Lets EXPLAINER_BACKEND=shap-library use the shap package's KernelExplainer
 # instead of the built-in Shapley estimator.
