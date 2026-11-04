@@ -50,6 +50,8 @@ function SurveillanceResult({ data, selectedId, onSelect }) {
               selectedId={selectedId}
               onSelect={onSelect}
               showTiles={!data.data_status.geometry_simulated}
+              // Real boundaries with simulated counts could be mistaken for real cases, so the map says so.
+              watermark={data.data_status.geometry_simulated ? null : data.data_status.watermark}
             />
             <MapLegend
               scale={scale}
@@ -61,7 +63,14 @@ function SurveillanceResult({ data, selectedId, onSelect }) {
               <p className="text-xs text-muted">
                 The regions are fictional and drawn without a base map. They do not correspond to any real place.
               </p>
-            ) : null}
+            ) : (
+              <>
+                {data.data_status.geometry_notes ? <p className="text-xs text-muted">{data.data_status.geometry_notes}</p> : null}
+                {data.data_status.geometry_attribution ? (
+                  <p className="text-xs text-muted">{data.data_status.geometry_attribution}</p>
+                ) : null}
+              </>
+            )}
           </CardBody>
         </Card>
 

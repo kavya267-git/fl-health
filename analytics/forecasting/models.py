@@ -4,8 +4,9 @@ Start simple and validated: two naive baselines and an autoregressive model.
 Every model implements ``fit(y)`` and ``forecast(h)`` returning a point
 forecast and a standard error per step, so they can be compared like for like.
 
-An optional ``statsmodels`` ARIMA adapter is provided for installations that
-have the package; it is not required.
+Optional adapters for ``statsmodels`` (full ARIMA) and ``prophet`` are used
+when those packages are installed (backend/requirements-optional.txt); neither
+is required.
 """
 
 from __future__ import annotations
@@ -14,6 +15,9 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
 import numpy as np
+
+#: Standard-normal quantile for a two-sided 80% interval.
+Z_80 = 1.2816
 
 
 class Forecaster(ABC):
@@ -30,6 +34,11 @@ class Forecaster(ABC):
     def clone(self) -> "Forecaster":
         """An unfitted copy with the same configuration."""
         return type(self)()
+
+    def interval80(self, horizon: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """``(mean, lower, upper)`` of the 80% interval; by default mean +/- 1.28 standard errors."""
+        mean, std = self.forecast(horizon)
+        return mean, mean - Z_80 * std, mean + Z_80 * std
 
 
 class NaiveLastValue(Forecaster):
@@ -242,14 +251,76 @@ class StatsmodelsARIMA(Forecaster):
         return np.asarray(prediction.predicted_mean), np.asarray(prediction.se_mean)
 
 
-def candidate_models(n_train: int, season: int = 52, include_statsmodels: Optional[bool] = None) -> List[Forecaster]:
-    """Models that have enough training data to be fitted."""
+class ProphetForecaster(Forecaster):
+    """Optional: Prophet (piecewise-linear trend plus yearly seasonality), if it is installed.
+
+    Weeks are given dates 7 days apart from ``start`` (an ISO date of the first week); only their spacing and
+    position in the year matter. Its 80% interval is Prophet's own (``interval_width`` 0.8).
+    """
+
+    def __init__(self, start: str = "2024-01-01", yearly_seasonality: bool = True, uncertainty_samples: int = 300):
+        self.start = start
+        self.yearly_seasonality = yearly_seasonality
+        self.uncertainty_samples = uncertainty_samples
+        self.name = "Prophet"
+        self.min_points = 20
+
+    def clone(self) -> "ProphetForecaster":
+        return ProphetForecaster(self.start, self.yearly_seasonality, self.uncertainty_samples)
+
+    def fit(self, y: np.ndarray) -> "ProphetForecaster":
+        import logging
+
+        import pandas as pd
+        from prophet import Prophet  # optional dependency
+
+        for name in ("cmdstanpy", "prophet"):
+            logging.getLogger(name).setLevel(logging.ERROR)
+        y = np.asarray(y, dtype=np.float64)
+        frame = pd.DataFrame({"ds": pd.date_range(self.start, periods=len(y), freq="7D"), "y": y})
+        self._model = Prophet(
+            yearly_seasonality=self.yearly_seasonality,
+            weekly_seasonality=False,
+            daily_seasonality=False,
+            interval_width=0.8,
+            uncertainty_samples=self.uncertainty_samples,
+        ).fit(frame)
+        self._n = len(y)
+        return self
+
+    def _predict(self, horizon: int):
+        import pandas as pd
+
+        future = pd.DataFrame({"ds": pd.date_range(self.start, periods=self._n + horizon, freq="7D")[self._n :]})
+        return self._model.predict(future)
+
+    def interval80(self, horizon: int):
+        table = self._predict(horizon)
+        return table["yhat"].to_numpy(), table["yhat_lower"].to_numpy(), table["yhat_upper"].to_numpy()
+
+    def forecast(self, horizon: int):
+        mean, lower, upper = self.interval80(horizon)
+        return mean, (upper - lower) / (2 * Z_80)
+
+
+def candidate_models(
+    n_train: int,
+    season: int = 52,
+    include_statsmodels: Optional[bool] = None,
+    include_prophet: Optional[bool] = None,
+    start: Optional[str] = None,
+) -> List[Forecaster]:
+    """Models that have enough training data to be fitted (optional ones only when installed)."""
+    import importlib.util
+
     candidates: List[Forecaster] = [NaiveLastValue(), AutoRegressive()]
     candidates.extend([SeasonalNaive(season), SeasonalAutoRegressive(season)])
     if include_statsmodels is None:
-        import importlib.util
-
         include_statsmodels = importlib.util.find_spec("statsmodels") is not None
     if include_statsmodels:
         candidates.append(StatsmodelsARIMA())
+    if include_prophet is None:
+        include_prophet = importlib.util.find_spec("prophet") is not None
+    if include_prophet:
+        candidates.append(ProphetForecaster(start) if start else ProphetForecaster())
     return [model for model in candidates if n_train >= model.min_points]

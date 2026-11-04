@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from app.federated import coordinator as rounds
-from app.services.auth_service import AUDIT_READER_ROLES
 from app.services.context import AppContext
 from app.services.model_registry import STATUS_INITIAL
+from app.services.permissions import AUDIT_READER_ROLES, HOSPITAL_ROLES
 from app.utils.errors import ServiceError
 from ml.common.types import MODALITIES
 from ml.registry import get_adapter
@@ -38,7 +38,7 @@ def sanitize_data_summary(summary: Optional[dict]) -> Dict[str, dict]:
 def round_detail(ctx: AppContext, round_id: str, viewer: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     row = ctx.coordinator.get_round(round_id)
     participants = ctx.coordinator.participants(round_id)
-    own = viewer.get("hospital_id") if viewer and viewer.get("role") == "hospital" else None
+    own = viewer.get("hospital_id") if viewer and viewer.get("role") in HOSPITAL_ROLES else None
     for participant in participants:
         participant.pop("evaluation", None)  # raw confusion matrices are available via /metrics
         if own and participant["hospital_id"] != own:

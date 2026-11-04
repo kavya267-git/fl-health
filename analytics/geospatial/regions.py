@@ -150,7 +150,14 @@ def load_regions(
     return {
         "type": "FeatureCollection",
         "features": features,
-        "metadata": {"simulated_geometry": False, "description": f"Boundaries loaded from {path.name}."},
+        "metadata": {
+            "simulated_geometry": False,
+            "description": f"Boundaries loaded from {path.name}.",
+            # Credit line carried by the file (e.g. the licence and source of public boundaries), shown on the map.
+            "attribution": collection.get("attribution"),
+            # Caveats about the boundaries themselves (e.g. a district the source does not show separately).
+            "notes": collection.get("notes"),
+        },
     }
 
 

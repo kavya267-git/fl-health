@@ -37,6 +37,12 @@ import requests
 
 from app.database import Database, DatabaseError
 from app.services.audit_service import AuditService
+from app.services.permissions import (  # noqa: E402 - re-exported for existing imports
+    HOSPITAL_ROLES,
+    JURISDICTION_ROLES,
+    ROLE_LABELS,
+    ROLES,
+)
 from app.utils.errors import (
     AuthenticationFailed,
     ConflictError,
@@ -49,11 +55,6 @@ from app.utils.hashing import constant_time_equal
 from app.utils.passwords import DUMMY_HASH, hash_password, verify_password
 from app.utils.time import utc_now_iso
 
-ROLES = ("admin", "coordinator", "viewer", "hospital")
-#: Roles that act for one hospital; such a user must have users.hospital_id set.
-HOSPITAL_ROLES = ("hospital",)
-#: Roles that may read the audit log (the /api/audit endpoints and the dashboard's recent activity).
-AUDIT_READER_ROLES = ("admin", "coordinator")
 #: Role of every newly created account. Never anything else.
 DEFAULT_ROLE = "viewer"
 MIN_PASSWORD_LENGTH = 8
@@ -81,6 +82,32 @@ DEMO_ACCOUNTS = [
         "hospital_id": f"hospital_{letter}",
     }
     for letter in "abcd"
+] + [
+    # Two health officers with different jurisdictions (simulated region ids R01-R12), a researcher and a
+    # hospital manager. With REGIONS_GEOJSON_PATH set the region ids differ, so assign real jurisdictions
+    # to real accounts under Settings instead.
+    {
+        "id": "demo-officer-north",
+        "email": "officer_north@fl-healthcare.demo",
+        "display_name": "Health officer, regions R01-R06",
+        "role": "health_officer",
+        "jurisdiction": ["R01", "R02", "R03", "R04", "R05", "R06"],
+    },
+    {
+        "id": "demo-officer-south",
+        "email": "officer_south@fl-healthcare.demo",
+        "display_name": "Health officer, regions R07-R12",
+        "role": "health_officer",
+        "jurisdiction": ["R07", "R08", "R09", "R10", "R11", "R12"],
+    },
+    {"id": "demo-researcher", "email": "researcher@fl-healthcare.demo", "display_name": "Demo Researcher", "role": "researcher"},
+    {
+        "id": "demo-manager-a",
+        "email": "manager_a@fl-healthcare.demo",
+        "display_name": "Hospital A manager",
+        "role": "hospital_manager",
+        "hospital_id": "hospital_a",
+    },
 ]
 _BUILT_IN_BY_EMAIL = {account["email"]: account for account in DEMO_ACCOUNTS}
 _BUILT_IN_IDS = {account["id"] for account in DEMO_ACCOUNTS}
@@ -180,8 +207,15 @@ class AuthService:
     # ---------------------------------------------------------------- seed
     def seed_demo_users(self) -> None:
         for account in DEMO_ACCOUNTS:
+            row = {"hospital_id": None, "jurisdiction": None, **account}
             if self.db.fetch_one("SELECT id FROM users WHERE id = :id", {"id": account["id"]}) is None:
-                self.db.insert("users", {"hospital_id": None, **account, "created_at": utc_now_iso()})
+                self.db.insert("users", {**row, "created_at": utc_now_iso()})
+            else:  # built-in accounts keep their definition (their role cannot be changed)
+                self.db.update(
+                    "users",
+                    {"role": row["role"], "hospital_id": row["hospital_id"], "jurisdiction": row["jurisdiction"]},
+                    {"id": account["id"]},
+                )
 
     def demo_accounts(self) -> List[Dict[str, Optional[str]]]:
         return [
@@ -190,6 +224,7 @@ class AuthService:
                 "role": a["role"],
                 "display_name": a["display_name"],
                 "hospital_id": a.get("hospital_id"),
+                "jurisdiction": a.get("jurisdiction"),
             }
             for a in DEMO_ACCOUNTS
         ]
@@ -301,6 +336,7 @@ class AuthService:
             "display_name": user["display_name"],
             "role": user["role"],
             "hospital_id": user["hospital_id"],
+            "jurisdiction": user.get("jurisdiction") or None,
             "provider": self.provider.name,
         }
 
@@ -329,6 +365,7 @@ class AuthService:
                     "display_name": row["display_name"],
                     "role": row["role"],
                     "hospital_id": row["hospital_id"],
+                    "jurisdiction": row.get("jurisdiction") or None,
                     "created_at": row["created_at"],
                     "last_login_at": row["last_login_at"],
                     "built_in": row["id"] in _BUILT_IN_IDS,
@@ -339,22 +376,38 @@ class AuthService:
         return users
 
     def set_role(
-        self, actor: Dict[str, Any], user_id: str, role: str, hospital_id: Optional[str] = None
+        self,
+        actor: Dict[str, Any],
+        user_id: str,
+        role: str,
+        hospital_id: Optional[str] = None,
+        jurisdiction: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Change another user's role. Only administrators reach this (checked by the router too).
 
-        A hospital operator must be linked to one hospital; every other role is linked to none.
+        Hospital operators and managers are linked to one hospital; health officers to a jurisdiction (one or
+        more region ids); every other role to neither.
         """
         require_role(actor, ("admin",))
         if role not in ROLES:
             raise ValidationFailed(f"Role must be one of: {', '.join(ROLES)}.")
         if role in HOSPITAL_ROLES:
             if not hospital_id:
-                raise ValidationFailed("Choose the hospital this operator works for.")
+                raise ValidationFailed(f"Choose the hospital this {ROLE_LABELS[role].lower()} works for.")
             if self.db.fetch_one("SELECT id FROM hospitals WHERE id = :id", {"id": hospital_id}) is None:
                 raise ValidationFailed(f"There is no hospital '{hospital_id}'.")
         else:
             hospital_id = None
+        if role in JURISDICTION_ROLES:
+            jurisdiction = sorted(set(jurisdiction or []))
+            if not jurisdiction:
+                raise ValidationFailed("Choose at least one region for this health officer's jurisdiction.")
+            known = {r["region_id"] for r in self.db.fetch_all("SELECT region_id FROM regions")}
+            unknown = [r for r in jurisdiction if r not in known]
+            if unknown:
+                raise ValidationFailed(f"Unknown region id(s): {', '.join(unknown)}.")
+        else:
+            jurisdiction = None
         target = self.db.fetch_one("SELECT * FROM users WHERE id = :id", {"id": user_id})
         if target is None:
             raise NotFoundError("No such user.")
@@ -363,11 +416,16 @@ class AuthService:
         reason = self._role_lock_reason(target)
         if reason:
             raise ConflictError(reason)
-        if target["role"] != role or target["hospital_id"] != hospital_id:
-            self.db.update("users", {"role": role, "hospital_id": hospital_id}, {"id": user_id})
+        previous_jurisdiction = target.get("jurisdiction") or None
+        if target["role"] != role or target["hospital_id"] != hospital_id or previous_jurisdiction != jurisdiction:
+            self.db.update(
+                "users", {"role": role, "hospital_id": hospital_id, "jurisdiction": jurisdiction}, {"id": user_id}
+            )
             details = {"user": target["email"], "from": target["role"], "to": role}
             if role in HOSPITAL_ROLES or target["hospital_id"]:
                 details.update(hospital_from=target["hospital_id"], hospital_to=hospital_id)
+            if role in JURISDICTION_ROLES or previous_jurisdiction:
+                details.update(jurisdiction_from=previous_jurisdiction, jurisdiction_to=jurisdiction)
             self.audit.record("USER_ROLE_CHANGED", actor["email"], details=details)
         return next(user for user in self.list_users() if user["id"] == user_id)
 

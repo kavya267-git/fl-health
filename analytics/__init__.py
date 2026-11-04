@@ -1,4 +1,4 @@
-"""FL-Healthcare analytics package.
+"""PrivaFuse analytics package.
 
 Geospatial surveillance, hotspot-candidate detection, forecasting,
 explainability and the privacy layer. Everything here works on aggregated

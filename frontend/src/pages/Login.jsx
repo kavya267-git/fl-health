@@ -196,7 +196,7 @@ export default function Login() {
                 {mode === 'signin'
                   ? isDemo
                     ? 'Use your account, or one of the demo accounts below.'
-                    : 'Use your FL-Healthcare account.'
+                    : 'Use your PrivaFuse account.'
                   : mode === 'signup'
                     ? 'New accounts have read-only access. An administrator can give you more.'
                     : 'Enter your email and we will send you a link to choose a new password.'}

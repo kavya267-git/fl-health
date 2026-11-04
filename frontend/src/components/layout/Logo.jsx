@@ -22,7 +22,7 @@ export function Logo({ light = false }) {
     <div className="flex items-center gap-2.5">
       <LogoMark />
       <div className="leading-tight">
-        <p className={`text-[15px] font-semibold ${light ? 'text-white' : 'text-ink'}`}>FL-Healthcare</p>
+        <p className={`text-[15px] font-semibold ${light ? 'text-white' : 'text-ink'}`}>PrivaFuse</p>
         <p className={`text-[11px] ${light ? 'text-brand-200' : 'text-muted'}`}>Collaborative healthcare intelligence</p>
       </div>
     </div>

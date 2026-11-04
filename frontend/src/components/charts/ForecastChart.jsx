@@ -9,7 +9,7 @@ const FORECAST = '#6a4c9c'
  *
  * - solid blue: observed counts (gaps where a week was suppressed or missing)
  * - dashed grey: the selected model's one-week-ahead prediction for each held-out week
- * - violet: the forecast, with 80% and 95% uncertainty bands
+ * - violet: the forecast, with 80% and 95% likely ranges (based on past errors; often too narrow)
  */
 export function ForecastChart({ history, forecast, visibleWeeks = 52 }) {
   const recent = history.slice(-visibleWeeks)
@@ -45,7 +45,7 @@ export function ForecastChart({ history, forecast, visibleWeeks = 52 }) {
         <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 13 }} />
         <Area
           dataKey="band95"
-          name="95% interval"
+          name="95% likely range"
           stroke="none"
           fill={FORECAST}
           fillOpacity={0.14}
@@ -54,7 +54,7 @@ export function ForecastChart({ history, forecast, visibleWeeks = 52 }) {
         />
         <Area
           dataKey="band80"
-          name="80% interval"
+          name="80% likely range"
           stroke="none"
           fill={FORECAST}
           fillOpacity={0.24}

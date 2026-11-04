@@ -7,6 +7,7 @@ import { AsyncView, UnavailableState } from '../components/ui/StateViews'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/endpoints'
 import { DASH, formatDate, formatNumber } from '../utils/format'
+import { LIKELY_RANGE_NOTE } from '../utils/constants'
 
 const HORIZONS = [4, 8, 12]
 
@@ -68,7 +69,9 @@ function ForecastResult({ data }) {
             <p className="text-sm leading-relaxed text-muted">
               MAE and RMSE are in cases per week, measured on weeks the model did not see. {metrics.split}
             </p>
-            <p className="text-sm leading-relaxed text-muted">Uncertainty interval: {data.uncertainty_interval.method}</p>
+            <p className="text-sm leading-relaxed text-muted">
+              {LIKELY_RANGE_NOTE}: {data.uncertainty_interval.method}
+            </p>
             {data.imputed_points > 0 ? (
               <Note tone="warn">
                 {data.imputed_points} week{data.imputed_points === 1 ? ' was' : 's were'} missing or suppressed and filled by straight-line
@@ -112,7 +115,7 @@ function ForecastResult({ data }) {
       </div>
 
       <Card>
-        <CardHeader title="Forecast values" />
+        <CardHeader title="Forecast values" description={`${LIKELY_RANGE_NOTE}.`} />
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -120,8 +123,8 @@ function ForecastResult({ data }) {
                 <Th>Week</Th>
                 <Th>Starting</Th>
                 <Th align="right">Predicted cases</Th>
-                <Th align="right">80% interval</Th>
-                <Th align="right">95% interval</Th>
+                <Th align="right">80% likely range</Th>
+                <Th align="right">95% likely range</Th>
               </tr>
             </thead>
             <tbody>
