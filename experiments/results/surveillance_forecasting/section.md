@@ -4,6 +4,8 @@ Fixed before any run. Data: the SIMULATED weekly hospital reports the demo uses 
 
 *Config:* `experiments/configs/surveillance_forecasting.yaml`. Data: 26 SIMULATED series (10 excluded by the missing-weeks rule: acute_gastroenteritis:R02, acute_gastroenteritis:R03, acute_gastroenteritis:R07, acute_gastroenteritis:R08, acute_gastroenteritis:R09, acute_gastroenteritis:R10, acute_gastroenteritis:R12, dengue:R02, dengue:R08, influenza_like_illness:R02), weeks 2024-11-04 to 2026-10-26. Origins: weeks 61-103. One run (LSTM seed 0, 4 PyTorch threads).
 
+**These results apply to the 26 series with enough reported weeks, not to all 36.** The 10 excluded series were mostly suppressed small counts: 20%-91% of their weeks 1-64 have no regional total because a hospital's count was below the suppression threshold, and their median weekly count is 22.5, against 0%-14% missing and a median of 56.5 for the series that were forecast. How the models would do on those sparse series was not measured.
+
 Test window (targets in weeks 85-104), horizons 1-4 pooled, 2008 forecasts per model:
 
 | Model | MAE | RMSE | 80% interval coverage | MAE ratio vs seasonal naive |

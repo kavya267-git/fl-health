@@ -7,7 +7,7 @@ import { AsyncView, EmptyState, UnavailableState } from '../components/ui/StateV
 import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
 import { api } from '../services/endpoints'
-import { AUDIT_ACTION_LABELS, METRIC_LABELS, MODALITIES, availabilityLabel } from '../utils/constants'
+import { AUDIT_ACTION_LABELS, LIKELY_RANGE_NOTE, METRIC_LABELS, MODALITIES, availabilityLabel } from '../utils/constants'
 import { DASH, formatMetric, formatNumber, formatTime, timeAgo } from '../utils/format'
 
 const linkClass = 'text-sm font-medium text-brand-700 hover:underline'
@@ -243,19 +243,19 @@ function ForecastSummary({ forecast }) {
                 <p className="text-xs text-muted">Predicted next week</p>
                 <p className="mt-1 text-xl font-semibold text-forecast">{formatNumber(forecast.next_week.predicted)}</p>
                 <p className="text-xs text-muted">
-                  95% interval {formatNumber(forecast.next_week.lower_95)}&ndash;{formatNumber(forecast.next_week.upper_95)}
+                  95% likely range {formatNumber(forecast.next_week.lower_95)}&ndash;{formatNumber(forecast.next_week.upper_95)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted">Predicted in {forecast.horizon} weeks</p>
                 <p className="mt-1 text-xl font-semibold text-forecast">{formatNumber(forecast.final_week.predicted)}</p>
                 <p className="text-xs text-muted">
-                  95% interval {formatNumber(forecast.final_week.lower_95)}&ndash;{formatNumber(forecast.final_week.upper_95)}
+                  95% likely range {formatNumber(forecast.final_week.lower_95)}&ndash;{formatNumber(forecast.final_week.upper_95)}
                 </p>
               </div>
             </div>
             <p className="mt-4 text-xs leading-relaxed text-muted">
-              {forecast.model_name}. Hold-out error: MAE {formatNumber(forecast.evaluation_metrics.mae, 1)}, RMSE{' '}
+              {LIKELY_RANGE_NOTE}. {forecast.model_name}. Hold-out error: MAE {formatNumber(forecast.evaluation_metrics.mae, 1)}, RMSE{' '}
               {formatNumber(forecast.evaluation_metrics.rmse, 1)} cases per week. Forecast / prediction, not confirmed future cases.
             </p>
           </>

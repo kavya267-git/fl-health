@@ -129,7 +129,8 @@ Kaggle subsample, about the same as local-only and centralised training of the s
 
 ### Surveillance forecasting (Part C)
 
-On the simulated test window (weeks 85-104, 2,008 forecasts per model), the ensemble of ARIMA(2,1,1), Prophet
+On the simulated test window (weeks 85-104, 2,008 forecasts per model), which covers the 26 series with
+enough reported weeks (the 10 excluded series were mostly suppressed small counts), the ensemble of ARIMA(2,1,1), Prophet
 and the global LSTM has the lowest pooled MAE (14.52) and RMSE (24.85) in the table, and the lowest MAE at each
 horizon from 1 to 4 weeks. Its MAE ratio against seasonal naive is 0.792, against 0.837 for the best single
 model (the LSTM) and 0.895 for ARIMA(2,1,1). This is one simulated dataset and one run, and the differences
