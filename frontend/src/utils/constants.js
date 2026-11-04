@@ -116,3 +116,9 @@ export const homePathFor = (user) => (isHospitalOperator(user) ? '/my-hospital' 
 export const canSeeAudit = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
 
 export const canManageRounds = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
+
+/**
+ * How forecast intervals are named on screen. They come from the model's past errors and, in the backtest,
+ * covered fewer weeks than their nominal level (RESULTS.md Part C), so the label says so.
+ */
+export const LIKELY_RANGE_NOTE = 'Likely range (based on past errors; often too narrow)'

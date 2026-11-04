@@ -312,6 +312,31 @@ def summarise(table: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def scope_note(cfg: dict, info: dict) -> str:
+    """Which series the results apply to, described from the (deterministic) simulated data."""
+    series, _ = build_series(cfg["data"])
+    fit_last = cfg["windows"]["fit"][1]
+    excluded = set(info["excluded_series"])
+
+    def describe(group):
+        missing = [float(np.isnan(s["values"][:fit_last]).mean()) for s in group]
+        medians = [float(np.nanmedian(s["values"][:fit_last])) for s in group]
+        return min(missing), max(missing), float(np.median(medians))
+
+    kept = [s for s in series if s["series_id"] not in excluded]
+    dropped = [s for s in series if s["series_id"] in excluded]
+    k_lo, k_hi, k_med = describe(kept)
+    d_lo, d_hi, d_med = describe(dropped)
+    return (
+        f"**These results apply to the {len(kept)} series with enough reported weeks, not to all "
+        f"{len(series)}.** The {len(dropped)} excluded series were mostly suppressed small counts: "
+        f"{d_lo:.0%}-{d_hi:.0%} of their weeks 1-{fit_last} have no regional total because a hospital's count "
+        f"was below the suppression threshold, and their median weekly count is {d_med:.1f}, against "
+        f"{k_lo:.0%}-{k_hi:.0%} missing and a median of {k_med:.1f} for the series that were forecast. How the "
+        f"models would do on those sparse series was not measured."
+    )
+
+
 def write_section(out: Path) -> None:
     info = json.loads((out / "config.json").read_text(encoding="utf-8"))
     cfg = info["config"]
@@ -324,6 +349,8 @@ def write_section(out: Path) -> None:
         f"{info['weeks'][0]} to {info['weeks'][1]}. Origins: weeks {info['origins'][0]}-{info['origins'][1]}. "
         f"One run (LSTM seed {cfg['lstm']['seed']}, {info['torch_threads']} PyTorch threads)."
     )
+    lines.append("")
+    lines.append(scope_note(cfg, info))
     lines.append("")
     every = summary[summary["horizon"] == "all"]
     lines.append(

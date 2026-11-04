@@ -10,7 +10,7 @@ import { navItemsFor } from '../components/layout/navigation'
 import { EmptyState } from '../components/ui/StateViews'
 import { api } from '../services/endpoints'
 import { ROLE_ORDER } from '../utils/constants'
-import { adminUser, emptyOverview, systemConfig, viewerUser } from './fixtures'
+import { adminUser, emptyOverview, systemConfig, trainedOverview, viewerUser } from './fixtures'
 
 vi.mock('../services/endpoints', () => ({
   api: {
@@ -146,5 +146,29 @@ describe('recent audit activity on the dashboard', () => {
     signedInAs(adminUser)
     open('/')
     expect(await screen.findByRole('heading', { name: 'Recent audit activity' })).toBeInTheDocument()
+  })
+})
+
+describe('forecast ranges on the dashboard', () => {
+  it('calls the interval a likely range and says it is often too narrow', async () => {
+    signedInAs(viewerUser)
+    api.overview.mockResolvedValue({
+      ...trainedOverview,
+      forecast: {
+        available: true,
+        disease: { id: 'dengue', label: 'Dengue' },
+        region_name: 'North Valley',
+        horizon: 4,
+        last_observed: 40,
+        next_week: { predicted: 42, lower_95: 30, upper_95: 55 },
+        final_week: { predicted: 45, lower_95: 25, upper_95: 66 },
+        model_name: 'Prophet',
+        evaluation_metrics: { mae: 5.1, rmse: 7.2 },
+      },
+    })
+    open('/')
+    expect(await screen.findByText(/Likely range \(based on past errors; often too narrow\)/)).toBeInTheDocument()
+    expect(screen.getAllByText(/95% likely range/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/95% interval/)).toBeNull()
   })
 })
