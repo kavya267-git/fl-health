@@ -61,6 +61,8 @@ function SurveillanceResult({ data, selectedId, onSelect }) {
               <p className="text-xs text-muted">
                 The regions are fictional and drawn without a base map. They do not correspond to any real place.
               </p>
+            ) : data.data_status.geometry_attribution ? (
+              <p className="text-xs text-muted">{data.data_status.geometry_attribution}</p>
             ) : null}
           </CardBody>
         </Card>
