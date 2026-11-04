@@ -35,6 +35,9 @@ REQUESTS = {
     "rounds_manage": ("post", "/api/federated/rounds/no-such-round/cancel", None),
     "models_read": ("get", "/api/models", None),
     "audit_read": ("get", "/api/audit", None),
+    "situation_report": ("get", "/api/officer/forecast-status", None),
+    "alerts_read": ("get", "/api/alerts", None),
+    "alerts_manage": ("post", "/api/alerts/999999/acknowledge", None),
     "users_manage": ("get", "/api/users", None),
 }
 

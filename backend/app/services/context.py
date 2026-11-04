@@ -11,8 +11,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from app.analytics.alert_service import AlertService
+from app.analytics.ensemble_service import EnsembleService
 from app.analytics.explainability_service import ExplainabilityService
 from app.analytics.forecast_service import ForecastService
+from app.analytics.situation_service import SituationService
 from app.analytics.surveillance_service import SurveillanceService
 from app.config import Settings
 from app.database import Database
@@ -47,6 +50,9 @@ class AppContext:
     explainability: ExplainabilityService
     privacy: PrivacyService
     nodes: Optional[InProcessNodes]
+    ensemble: Optional[EnsembleService] = None
+    alerts: Optional[AlertService] = None
+    situation: Optional[SituationService] = None
     deadlines: Optional[DeadlineWatcher] = None
 
     def model_backends(self) -> Dict[str, Any]:
@@ -92,6 +98,8 @@ class AppContext:
         }
 
     def close(self) -> None:
+        if self.ensemble is not None:
+            self.ensemble.stop()
         if self.deadlines is not None:
             self.deadlines.stop()
         if self.nodes is not None:
@@ -118,6 +126,7 @@ def build_context(settings: Settings) -> AppContext:
         if settings.hospital_nodes == "in-process"
         else None
     )
+    ensemble = EnsembleService(db, surveillance)
     return AppContext(
         settings,
         db,
@@ -131,6 +140,9 @@ def build_context(settings: Settings) -> AppContext:
         explainability,
         privacy,
         nodes,
+        ensemble=ensemble,
+        alerts=AlertService(db, audit, surveillance),
+        situation=SituationService(db, audit, surveillance, ensemble, settings.app_version),
     )
 
 
@@ -179,3 +191,4 @@ def bootstrap(ctx: AppContext) -> None:
 
     ctx.explainability.bootstrap()
     ctx.surveillance.bootstrap([h.hospital_id for h in SIMULATED_HOSPITALS])
+    ctx.alerts.sync()

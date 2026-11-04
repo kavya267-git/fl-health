@@ -24,6 +24,7 @@ vi.mock('../services/endpoints', () => ({
     privacy: vi.fn(),
     analyticsOptions: vi.fn(),
     hotspots: vi.fn(),
+    situation: vi.fn(),
   },
 }))
 
@@ -57,8 +58,17 @@ describe('roles in the sidebar', () => {
   })
 
   it('gives a health officer only the jurisdiction pages', () => {
-    expect(paths(officer)).toEqual(['/surveillance', '/forecasting', '/how-it-works', '/settings'])
-    expect(homePathFor(officer)).toBe('/surveillance')
+    expect(paths(officer)).toEqual(['/situation', '/surveillance', '/alerts', '/forecasting', '/how-it-works', '/settings'])
+    expect(navItemsFor(officer).find((item) => item.to === '/surveillance').label).toBe('Jurisdiction map')
+    expect(homePathFor(officer)).toBe('/situation')
+  })
+
+  it('shows the situation report and alerts to administrators and coordinators, not to other roles', () => {
+    for (const role of ['admin', 'coordinator']) expect(paths({ ...viewerUser, role })).toEqual(expect.arrayContaining(['/situation', '/alerts']))
+    for (const user of [viewerUser, researcher, manager]) {
+      expect(paths(user)).not.toContain('/situation')
+      expect(paths(user)).not.toContain('/alerts')
+    }
   })
 
   it("gives a hospital manager their hospital's page but not the participation switch", () => {
@@ -78,10 +88,11 @@ describe('roles in the sidebar', () => {
 })
 
 describe('health officer home', () => {
-  it('sends a health officer from the dashboard address to surveillance, without asking for the overview', async () => {
+  it('sends a health officer from the dashboard address to the situation report, without asking for the overview', async () => {
+    api.situation.mockReturnValue(new Promise(() => {}))
     open('/', officer)
-    expect(await screen.findByRole('heading', { name: 'Disease Surveillance' })).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/surveillance')
+    await screen.findByText(/Loading the situation report/)
+    expect(window.location.pathname).toBe('/situation')
     expect(api.overview).not.toHaveBeenCalled()
   })
 })

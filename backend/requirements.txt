@@ -17,6 +17,9 @@ scipy>=1.11
 scikit-learn>=1.4
 Pillow>=10.2
 
+# PDF export of the situation report (fonts bundled in app/assets/fonts).
+fpdf2>=2.7
+
 # Models: TabNet, CNN-BiLSTM and EfficientNet-B3 run on PyTorch.
 # Without these two packages the app still runs, using labelled NumPy stand-in models.
 torch>=2.2

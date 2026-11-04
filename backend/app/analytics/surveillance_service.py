@@ -35,7 +35,7 @@ from app.utils.time import utc_now_iso
 HOTSPOT_DISCLAIMER = (
     "A potential hotspot is a statistical signal that a region's weekly count is unusually high "
     "compared with its own recent weeks. It is a candidate for further investigation, "
-    "not a confirmed outbreak."
+    "not a confirmed rise in illness."
 )
 
 
@@ -52,6 +52,7 @@ class SurveillanceService:
         self._unavailable_reason: Optional[str] = None
         self._geometry_attribution: Optional[str] = None
         self._geometry_notes: Optional[str] = None
+        self._population_source: Optional[str] = None
         self._series_cache: Dict[str, Tuple[str, Any]] = {}
 
     # ============================================================ bootstrap
@@ -73,6 +74,11 @@ class SurveillanceService:
                     "No region boundaries are configured. Set REGIONS_GEOJSON_PATH (see docs/setup.md)."
                 )
                 return
+            if settings.region_populations_csv:
+                matched = region_tools.apply_populations(collection, settings.region_populations_csv)
+                self._population_source = (
+                    f"{settings.region_population_source} population ({matched} of {len(collection['features'])} regions)"
+                )
             table = region_tools.region_table(collection)
             geometry_simulated = bool(collection["metadata"]["simulated_geometry"])
             self._geometry_attribution = collection["metadata"].get("attribution")
@@ -236,6 +242,8 @@ class SurveillanceService:
             "geometry_simulated": self.geometry_simulated(),
             "geometry_attribution": self._geometry_attribution,
             "geometry_notes": self._geometry_notes,
+            # Where the populations behind rates per 100,000 come from (None: simulated or from the boundary file).
+            "population_source": self._population_source,
             # Shown on the map itself and stamped on every export (PDF and CSV) while the counts are simulated.
             "watermark": SIMULATED_WATERMARK if simulated else None,
             "suppression_threshold": self.settings.suppression_threshold,
@@ -272,7 +280,8 @@ class SurveillanceService:
 
         Detection itself always runs on every region, so a region's status does not depend on who asks.
         """
-        payload = self._hotspots_all(disease, period, actor)
+        # The wording is attached when serving, so results cached under older wording never show it.
+        payload = {**self._hotspots_all(disease, period, actor), "disclaimer": HOTSPOT_DISCLAIMER}
         return payload if jurisdiction is None else scope_hotspots(payload, jurisdiction)
 
     def _hotspots_all(self, disease: Optional[str], period: Optional[str], actor: str) -> Dict[str, Any]:

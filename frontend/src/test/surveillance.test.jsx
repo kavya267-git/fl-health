@@ -106,13 +106,12 @@ describe('Surveillance page', () => {
     expect(within(panel).getAllByText('Not available')).toHaveLength(3)
   })
 
-  it('uses "Potential hotspot" and never calls a flag an outbreak', async () => {
+  it('uses "Potential hotspot" and never the word outbreak', async () => {
     render(<Surveillance />)
     await screen.findByTestId('map')
     expect(screen.getAllByText('Potential hotspot').length).toBeGreaterThan(0)
-    expect(screen.getByText(/not a confirmed outbreak/)).toBeInTheDocument()
-    const mentions = screen.getAllByText(/outbreak/i)
-    expect(mentions).toHaveLength(1) // only the disclaimer
+    expect(screen.getByText(/not a confirmed rise in illness/)).toBeInTheDocument()
+    expect(screen.queryAllByText(/outbreak/i)).toHaveLength(0)
   })
 
   it('requests data for the chosen disease', async () => {

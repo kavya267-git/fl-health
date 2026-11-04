@@ -85,3 +85,18 @@ permanent "SIMULATED DATA – NOT REAL CASES" watermark. Every PDF and CSV expor
 text, taken from `data_status.watermark`. Health officers' jurisdictions use these region ids,
 for example `KA-MYSORE`. The built-in demo officers cover the simulated regions R01–R12, so give real accounts
 a jurisdiction under Settings.
+
+## karnataka_census2011_population.csv
+
+District populations from the **Census of India 2011** (Office of the Registrar General & Census
+Commissioner, India), for rates per 100,000 (`REGION_POPULATIONS_CSV`; see docs/setup.md). Columns:
+`region_id` (matching `karnataka_districts.geojson`), `name` and `population`.
+
+- **Where the figures were taken from:** the district totals as tabulated at
+  <https://www.census2011.co.in/census/state/districtlist/karnataka.html>, which republishes the Census 2011
+  figures; they were not copied from the official Primary Census Abstract tables.
+- **Check:** the 30 district totals add up to 61,095,297, Karnataka's official 2011 population.
+- **Ballari:** in 2011 Ballari included the area that became Vijayanagara district in 2021. The Ballari
+  figure (2,452,595) therefore matches the Ballari boundary in this source, which also includes it.
+- **Age:** these are 2011 counts. Rates computed from them are per 100,000 people as counted in 2011, not
+  today's population, and the dashboard and exports label them "Census 2011 population".

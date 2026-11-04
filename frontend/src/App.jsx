@@ -18,6 +18,8 @@ import MyHospital from './pages/MyHospital'
 import NotFound from './pages/NotFound'
 import SettingsPage from './pages/Settings'
 import Surveillance from './pages/Surveillance'
+import SituationReport from './pages/SituationReport'
+import Alerts from './pages/Alerts'
 import { homePathFor } from './utils/constants'
 
 /** Blocks the app until the server's public configuration is known. */
@@ -80,6 +82,8 @@ export function AppRoutes() {
         <Route path="federated" element={<FederatedLearning />} />
         <Route path="models" element={<Models />} />
         <Route path="models/:modelId" element={<ModelDetail />} />
+        <Route path="situation" element={<SituationReport />} />
+        <Route path="alerts" element={<Alerts />} />
         <Route path="surveillance" element={<Surveillance />} />
         <Route path="forecasting" element={<Forecasting />} />
         <Route path="explainability" element={<Explainability />} />
