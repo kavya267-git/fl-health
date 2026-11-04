@@ -6,6 +6,21 @@ const post = async (url, body, shape, what) => expectShape((await http.post(url,
 
 const ROUND_KEYS = ['id', 'modality', 'status', 'participants']
 
+/** Downloads a file through the signed-in API client and hands it to the browser as a file. */
+async function download(url, fallbackName) {
+  const response = await http.get(url, { responseType: 'blob' })
+  const disposition = response.headers?.['content-disposition'] || ''
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] || fallbackName
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(response.data)
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(link.href)
+  return name
+}
+
 export const api = {
   // System and auth
   systemConfig: () => get('/api/system/config', undefined, { keys: ['demo_mode', 'auth_provider', 'model_backends'] }, 'configuration'),
@@ -29,6 +44,15 @@ export const api = {
       { keys: ['id', 'role'] },
       'user',
     ),
+
+  // Health officer
+  situation: () => get('/api/officer/situation', undefined, { keys: ['diseases', 'about_forecast', 'data_status'] }, 'situation report'),
+  forecastStatus: () => get('/api/officer/forecast-status', undefined, { keys: ['available'] }, 'forecast status'),
+  downloadSituation: (format) => download(`/api/officer/situation.${format}`, `situation-report.${format}`),
+  alerts: (state) => get('/api/alerts', state ? { state } : undefined, { array: true }, 'alerts'),
+  acknowledgeAlert: (id) => post(`/api/alerts/${encodeURIComponent(id)}/acknowledge`, {}, { keys: ['id', 'state'] }, 'alert'),
+  recordAlertOutcome: (id, outcome, note) =>
+    post(`/api/alerts/${encodeURIComponent(id)}/outcome`, { outcome, note }, { keys: ['id', 'state'] }, 'alert'),
 
   // Hospitals
   hospitals: () => get('/api/hospitals', undefined, { array: true }, 'hospital list'),

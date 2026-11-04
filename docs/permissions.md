@@ -41,6 +41,9 @@ summary are cut to those regions, and a forecast for any other region gets 403.
 | `rounds_manage` | POST /api/federated/rounds/start, /aggregate, /finalize, /cancel | yes | yes | - | - | - | - | - |
 | `models_read` | GET /api/models, /models/{id}, /models/{id}/metrics | yes | yes | yes | yes | yes | - | yes |
 | `audit_read` | GET /api/audit, /api/audit/verify | yes | yes | - | - | - | - | - |
+| `situation_report` | GET /api/officer/situation, /situation.csv, /situation.pdf, /forecast-status | yes | yes | - | - | - | jurisdiction | - |
+| `alerts_read` | GET /api/alerts | yes | yes | - | - | - | jurisdiction | - |
+| `alerts_manage` | POST /api/alerts/{id}/acknowledge, /{id}/outcome | yes | - | - | - | - | jurisdiction | - |
 | `users_manage` | GET /api/users, POST /api/users/{id}/role | yes | - | - | - | - | - | - |
 
 These need no role:

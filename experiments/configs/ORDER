@@ -19,3 +19,4 @@ sim_ecg_fedprox
 > ## Part C. Surveillance forecasting (simulated)
 > Forecasts of weekly case counts per region and disease, the ones the dashboard shows. The series are simulated (the same generator as the demo), so this part checks the forecasting pipeline and compares models on one simulated dataset; it is not evidence about real outbreaks.
 surveillance_forecasting
+hotspot_precision

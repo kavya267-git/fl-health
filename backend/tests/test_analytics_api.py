@@ -11,7 +11,8 @@ def test_overview_before_any_round(client, viewer):
     assert all(model["metrics"] is None for model in overview["models"])
     assert overview["data_status"]["simulated"] is True
     assert overview["surveillance"]["available"] is True
-    assert "not a confirmed outbreak" in overview["surveillance"]["disclaimer"]
+    assert "not a confirmed rise in illness" in overview["surveillance"]["disclaimer"]
+    assert "outbreak" not in overview["surveillance"]["disclaimer"].lower()
 
 
 def test_overview_includes_audit_activity_only_for_roles_that_may_read_the_audit_log(client, viewer, coordinator, admin):

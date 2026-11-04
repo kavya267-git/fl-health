@@ -51,6 +51,12 @@ PERMISSIONS: Dict[str, tuple] = {
     "rounds_manage": (("admin", "coordinator"), "POST /api/federated/rounds/start, /aggregate, /finalize, /cancel"),
     "models_read": (_READ_FEDERATION, "GET /api/models, /models/{id}, /models/{id}/metrics"),
     "audit_read": (("admin", "coordinator"), "GET /api/audit, /api/audit/verify"),
+    "situation_report": (
+        ("admin", "coordinator", "health_officer"),
+        "GET /api/officer/situation, /situation.csv, /situation.pdf, /forecast-status",
+    ),
+    "alerts_read": (("admin", "coordinator", "health_officer"), "GET /api/alerts"),
+    "alerts_manage": (("admin", "health_officer"), "POST /api/alerts/{id}/acknowledge, /{id}/outcome"),
     "users_manage": (("admin",), "GET /api/users, POST /api/users/{id}/role"),
 }
 

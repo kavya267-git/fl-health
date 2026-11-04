@@ -161,6 +161,27 @@ def load_regions(
     }
 
 
+def apply_populations(collection: dict, path: Path) -> int:
+    """Set each region's population from a CSV with columns region_id and population. Returns how many matched.
+
+    Regions missing from the file keep no population (their rates are left empty, never guessed).
+    """
+    import csv
+
+    with open(path, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows or not {"region_id", "population"} <= set(rows[0]):
+        raise ValueError(f"{Path(path).name} needs the columns region_id and population")
+    populations = {row["region_id"].strip(): int(row["population"]) for row in rows if row["population"].strip()}
+    matched = 0
+    for feature in collection["features"]:
+        properties = feature["properties"]
+        value = populations.get(properties["region_id"])
+        properties["population"] = value if value and value > 0 else None
+        matched += properties["population"] is not None
+    return matched
+
+
 def region_table(collection: dict) -> List[dict]:
     """Flat region records (id, name, population, centroid, neighbours)."""
     neighbours = adjacency(collection["features"])

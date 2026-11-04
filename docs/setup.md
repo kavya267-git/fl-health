@@ -153,6 +153,39 @@ Restart the API.
 
 `backend/tests/test_real_boundaries.py` loads this file through the API.
 
+## Ensemble forecasts (before a demo)
+
+The situation report uses the ensemble forecast (ARIMA, Prophet and a global LSTM; see RESULTS.md Part C)
+for every region and disease. Computing it takes several minutes on a laptop CPU, so it never runs inside a
+request:
+
+- the API starts it in the background after start-up and checks for new weeks every 10 minutes;
+- each finished run is stored in the database with the data it was computed from, so a restart with
+  unchanged data reuses it without retraining;
+- until the first run finishes, the report says "The forecast is still being computed".
+
+Before a demo, compute it in advance so nothing waits:
+
+```bash
+python scripts/precompute_forecasts.py      # same backend/.env and database as the API
+```
+
+`ENSEMBLE_FORECASTS=false` switches the background run off. It needs `prophet` and `statsmodels`
+(backend/requirements-optional.txt) and PyTorch.
+
+## Population for rates per 100,000
+
+Optional. A CSV with `region_id,population` sets the population behind rates per 100,000; the dashboard and
+exports then say which source was used:
+
+```bash
+REGION_POPULATIONS_CSV=data/boundaries/karnataka_census2011_population.csv
+REGION_POPULATION_SOURCE=Census 2011        # the label shown (default)
+```
+
+The included file holds the Census of India 2011 totals for Karnataka's 30 districts (see
+[data/boundaries/README.md](../data/boundaries/README.md)). Regions missing from the file have no rate.
+
 ## External hospital nodes
 
 To run each hospital as its own process (on this machine or others):

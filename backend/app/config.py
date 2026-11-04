@@ -80,6 +80,11 @@ class Settings(BaseModel):
     region_id_field: str = "region_id"
     region_name_field: str = "name"
     region_population_field: str = "population"
+    # Optional populations (region_id, population) for rates per 100,000, e.g. Census 2011 district totals.
+    region_populations_csv: Optional[Path] = None
+    region_population_source: str = "Census 2011"
+    # Background ensemble forecast for every region and disease (off in tests; on by default in the app).
+    ensemble_forecasts: bool = False
     surveillance_reports_csv: Optional[Path] = None
     suppression_threshold: int = 5
     surveillance_weeks: int = 104
@@ -153,6 +158,9 @@ def load_settings() -> Settings:
         region_id_field=os.getenv("REGION_ID_FIELD", "region_id"),
         region_name_field=os.getenv("REGION_NAME_FIELD", "name"),
         region_population_field=os.getenv("REGION_POPULATION_FIELD", "population"),
+        region_populations_csv=_optional_path("REGION_POPULATIONS_CSV"),
+        region_population_source=os.getenv("REGION_POPULATION_SOURCE", "Census 2011"),
+        ensemble_forecasts=_flag("ENSEMBLE_FORECASTS", True),
         surveillance_reports_csv=_optional_path("SURVEILLANCE_REPORTS_CSV"),
         suppression_threshold=int(os.getenv("SUPPRESSION_THRESHOLD", "5")),
         surveillance_weeks=int(os.getenv("SURVEILLANCE_WEEKS", "104")),

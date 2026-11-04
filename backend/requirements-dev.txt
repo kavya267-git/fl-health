@@ -6,3 +6,6 @@ ruff>=0.5
 # Experiment runner (scripts/run_experiment.py)
 matplotlib>=3.8
 pyyaml>=6.0
+
+# Reads the text of exported PDFs in tests (the watermark on every page)
+pypdf>=4
