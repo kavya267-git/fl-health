@@ -22,8 +22,13 @@ export const api = {
 
   // Users (administrators only)
   users: () => get('/api/users', undefined, { array: true }, 'user list'),
-  setUserRole: (id, role, hospitalId = null) =>
-    post(`/api/users/${encodeURIComponent(id)}/role`, { role, hospital_id: hospitalId }, { keys: ['id', 'role'] }, 'user'),
+  setUserRole: (id, role, hospitalId = null, jurisdiction = null) =>
+    post(
+      `/api/users/${encodeURIComponent(id)}/role`,
+      { role, hospital_id: hospitalId, jurisdiction },
+      { keys: ['id', 'role'] },
+      'user',
+    ),
 
   // Hospitals
   hospitals: () => get('/api/hospitals', undefined, { array: true }, 'hospital list'),

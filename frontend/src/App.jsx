@@ -18,6 +18,7 @@ import MyHospital from './pages/MyHospital'
 import NotFound from './pages/NotFound'
 import SettingsPage from './pages/Settings'
 import Surveillance from './pages/Surveillance'
+import { homePathFor } from './utils/constants'
 
 /** Blocks the app until the server's public configuration is known. */
 function SystemGate({ children }) {
@@ -25,7 +26,7 @@ function SystemGate({ children }) {
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <LoadingState label="Connecting to FL-Healthcare" />
+        <LoadingState label="Connecting to PrivaFuse" />
       </div>
     )
   }
@@ -54,6 +55,13 @@ function RequireAuth({ children }) {
   return children
 }
 
+/** The dashboard, except for roles whose home page is elsewhere (health officers have no dashboard access). */
+function Home() {
+  const { user } = useAuth()
+  const home = homePathFor(user)
+  return home === '/' || home === '/my-hospital' ? <Dashboard /> : <Navigate to={home} replace />
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -65,7 +73,7 @@ export function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route index element={<Dashboard />} />
+        <Route index element={<Home />} />
         <Route path="my-hospital" element={<MyHospital />} />
         <Route path="hospitals" element={<Hospitals />} />
         <Route path="hospitals/:hospitalId" element={<HospitalDetail />} />

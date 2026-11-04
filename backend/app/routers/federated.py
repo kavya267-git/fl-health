@@ -17,7 +17,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from analytics.privacy.dp import DPConfig
-from app.routers.deps import coordinator_user, current_user, get_ctx, is_hospital_operator, verify_node
+from app.routers.deps import coordinator_user, get_ctx, is_hospital_operator, permitted, verify_node
 from app.schemas.federated import (
     EvaluationAccepted,
     EvaluationRequest,
@@ -80,19 +80,19 @@ def start_round(
 def list_rounds(
     modality: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
-    user: Dict[str, Any] = Depends(current_user),
+    user: Dict[str, Any] = Depends(permitted("rounds_read")),
     ctx: AppContext = Depends(get_ctx),
 ):
     return ctx.coordinator.list_rounds(modality, limit)
 
 
 @router.get("/rounds/{round_id}", response_model=RoundDetail)
-def get_round(round_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
+def get_round(round_id: str, user: Dict[str, Any] = Depends(permitted("rounds_read")), ctx: AppContext = Depends(get_ctx)):
     return round_detail(ctx, round_id, viewer=user)
 
 
 @router.get("/rounds/{round_id}/metrics", response_model=RoundMetrics)
-def get_round_metrics(round_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
+def get_round_metrics(round_id: str, user: Dict[str, Any] = Depends(permitted("rounds_read")), ctx: AppContext = Depends(get_ctx)):
     metrics = ctx.coordinator.round_metrics(round_id)
     if is_hospital_operator(user):
         # Per-hospital figures of other hospitals are theirs; an operator sees its own and the global ones.

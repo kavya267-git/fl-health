@@ -39,6 +39,10 @@ HOTSPOT_DISCLAIMER = (
 )
 
 
+#: The one wording for simulated counts, on the map and in every export.
+SIMULATED_WATERMARK = "SIMULATED DATA \u2013 NOT REAL CASES"
+
+
 class SurveillanceService:
     def __init__(self, db: Database, audit: AuditService, settings):
         self.db = db
@@ -46,6 +50,8 @@ class SurveillanceService:
         self.settings = settings
         self.params = HotspotParams()
         self._unavailable_reason: Optional[str] = None
+        self._geometry_attribution: Optional[str] = None
+        self._geometry_notes: Optional[str] = None
         self._series_cache: Dict[str, Tuple[str, Any]] = {}
 
     # ============================================================ bootstrap
@@ -69,6 +75,8 @@ class SurveillanceService:
                 return
             table = region_tools.region_table(collection)
             geometry_simulated = bool(collection["metadata"]["simulated_geometry"])
+            self._geometry_attribution = collection["metadata"].get("attribution")
+            self._geometry_notes = collection["metadata"].get("notes")
             self.db.execute("DELETE FROM regions")
             self.db.insert_many(
                 "regions",
@@ -226,18 +234,25 @@ class SurveillanceService:
             "simulated": simulated,
             "label": self.settings.simulated_label if simulated else "Aggregated reports from configured source",
             "geometry_simulated": self.geometry_simulated(),
+            "geometry_attribution": self._geometry_attribution,
+            "geometry_notes": self._geometry_notes,
+            # Shown on the map itself and stamped on every export (PDF and CSV) while the counts are simulated.
+            "watermark": SIMULATED_WATERMARK if simulated else None,
             "suppression_threshold": self.settings.suppression_threshold,
         }
 
     # ============================================================== options
-    def options(self) -> Dict[str, Any]:
+    def options(self, jurisdiction: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Diseases, regions and weeks. ``jurisdiction`` (a health officer's region ids) limits the regions."""
         self._require_available()
         diseases = self.diseases()
         weeks = self.regional_series(diseases[0]["id"])["weeks"]
         return {
             "diseases": diseases,
             "regions": [
-                {"region_id": r["region_id"], "name": r["name"], "population": r["population"]} for r in self.regions()
+                {"region_id": r["region_id"], "name": r["name"], "population": r["population"]}
+                for r in self.regions()
+                if jurisdiction is None or r["region_id"] in jurisdiction
             ],
             "periods": [self._period(week) for week in reversed(weeks[-26:])],
             "latest_period": self._period(weeks[-1]),
@@ -246,8 +261,21 @@ class SurveillanceService:
 
     # ============================================================= hotspots
     def hotspots(
-        self, disease: Optional[str] = None, period: Optional[str] = None, actor: str = "system"
+        self,
+        disease: Optional[str] = None,
+        period: Optional[str] = None,
+        actor: str = "system",
+        jurisdiction: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
+        """Hotspot candidates for one disease and week. With ``jurisdiction`` (a health officer's region ids)
+        only those regions are returned, and neighbour references to other regions are removed.
+
+        Detection itself always runs on every region, so a region's status does not depend on who asks.
+        """
+        payload = self._hotspots_all(disease, period, actor)
+        return payload if jurisdiction is None else scope_hotspots(payload, jurisdiction)
+
+    def _hotspots_all(self, disease: Optional[str], period: Optional[str], actor: str) -> Dict[str, Any]:
         self._require_available()
         diseases = self.diseases()
         disease = disease or diseases[0]["id"]
@@ -407,3 +435,22 @@ class SurveillanceService:
                 }
             )
         return {"diseases": diseases, "disclaimer": HOTSPOT_DISCLAIMER, "data_status": self.data_status()}
+
+
+def scope_hotspots(payload: Dict[str, Any], jurisdiction: List[str]) -> Dict[str, Any]:
+    """The hotspot payload limited to the given regions (for health officers)."""
+    allowed = set(jurisdiction)
+    regions = [
+        {**r, "adjacent_flagged_regions": [a for a in r["adjacent_flagged_regions"] if a in allowed]}
+        for r in payload["regions"]
+        if r["region_id"] in allowed
+    ]
+    features = [f for f in payload["geojson"]["features"] if f["properties"]["region_id"] in allowed]
+    summary = {status: sum(1 for r in regions if r["status"] == status) for status in payload["summary"]}
+    return {
+        **payload,
+        "regions": regions,
+        "geojson": {**payload["geojson"], "features": features},
+        "summary": summary,
+        "jurisdiction": sorted(allowed),
+    }

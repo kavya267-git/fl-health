@@ -66,15 +66,31 @@ export const AUDIT_ACTION_LABELS = {
   HOSPITAL_DECLINED_ROUND: 'Hospital declined a round',
 }
 
-export const ROLE_LABELS = { admin: 'Administrator', coordinator: 'FL coordinator', viewer: 'Viewer', hospital: 'Hospital operator' }
-export const ROLE_ORDER = ['viewer', 'hospital', 'coordinator', 'admin']
+export const ROLE_LABELS = {
+  admin: 'Administrator',
+  coordinator: 'FL coordinator',
+  viewer: 'Viewer',
+  hospital: 'Hospital operator',
+  hospital_manager: 'Hospital manager',
+  health_officer: 'Health officer',
+  researcher: 'Researcher',
+}
+export const ROLE_ORDER = ['viewer', 'researcher', 'health_officer', 'hospital_manager', 'hospital', 'coordinator', 'admin']
 export const ROLE_DESCRIPTIONS = {
   viewer: 'Read-only: dashboards, models, surveillance, forecasts and explanations.',
+  researcher: "Read-only, like a viewer, but without any single hospital's detail pages.",
+  health_officer: 'Surveillance and forecasts for the regions in their jurisdiction only. No federation or hospital pages.',
+  hospital_manager:
+    "Works for one hospital: the general dashboards plus that hospital's own page. Cannot change its participation in rounds.",
   hospital:
     "Works for one hospital: sees the general dashboards like a viewer, plus that hospital's own page, node and participation switch. No other hospital's details.",
   coordinator: 'Everything a viewer can do, plus running rounds, hospital availability and the audit log.',
   admin: 'Everything a coordinator can do, plus managing users and their roles.',
 }
+/** Roles linked to one hospital (user.hospital_id); must match HOSPITAL_ROLES on the server. */
+export const HOSPITAL_ROLES = ['hospital', 'hospital_manager']
+/** Roles limited to a jurisdiction (user.jurisdiction, region ids); must match JURISDICTION_ROLES on the server. */
+export const JURISDICTION_ROLES = ['health_officer']
 /** Must match MIN_PASSWORD_LENGTH on the server, which is what actually enforces it. */
 export const MIN_PASSWORD_LENGTH = 8
 /**
@@ -87,11 +103,22 @@ export function availabilityLabel(hospital) {
   return hospital.node ? 'Disconnected' : 'Never connected'
 }
 
-/** Hospital operators act for one hospital (user.hospital_id). */
-export const isHospitalOperator = (user) => Boolean(user) && user.role === 'hospital'
-/** Where a user lands after signing in: hospital operators start on their own hospital's page. */
-export const homePathFor = (user) => (isHospitalOperator(user) ? '/my-hospital' : '/')
+/** Hospital operators and managers act for one hospital (user.hospital_id). */
+export const isHospitalOperator = (user) => Boolean(user) && HOSPITAL_ROLES.includes(user.role)
+export const isHealthOfficer = (user) => Boolean(user) && JURISDICTION_ROLES.includes(user.role)
+/** Only the hospital's operator (not its manager) switches its participation in rounds. */
+export const canChangeParticipation = (user) => Boolean(user) && user.role === 'hospital'
+/** Hospital detail pages: not for health officers or researchers; the server enforces the same rule. */
+export const canOpenHospitalDetails = (user) => Boolean(user) && !['health_officer', 'researcher'].includes(user.role)
+/** Where a user lands after signing in. */
+export const homePathFor = (user) => (isHospitalOperator(user) ? '/my-hospital' : isHealthOfficer(user) ? '/surveillance' : '/')
 /** The audit log is for coordinators and administrators; the server enforces the same rule. */
 export const canSeeAudit = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
 
 export const canManageRounds = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
+
+/**
+ * How forecast intervals are named on screen. They come from the model's past errors and, in the backtest,
+ * covered fewer weeks than their nominal level (RESULTS.md Part C), so the label says so.
+ */
+export const LIKELY_RANGE_NOTE = 'Likely range (based on past errors; often too narrow)'

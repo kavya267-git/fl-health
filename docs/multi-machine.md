@@ -94,8 +94,8 @@ everyone signed in across a server restart.
 **Firewall.** In an *Administrator* terminal, once:
 
 ```powershell
-netsh advfirewall firewall add rule name="FL-Healthcare API" dir=in action=allow protocol=TCP localport=8000 profile=any
-netsh advfirewall firewall add rule name="FL-Healthcare dashboard" dir=in action=allow protocol=TCP localport=5173 profile=any
+netsh advfirewall firewall add rule name="PrivaFuse API" dir=in action=allow protocol=TCP localport=8000 profile=any
+netsh advfirewall firewall add rule name="PrivaFuse dashboard" dir=in action=allow protocol=TCP localport=5173 profile=any
 ```
 
 The first time Python and Node listen on the network, Windows also shows **"Windows Defender Firewall has

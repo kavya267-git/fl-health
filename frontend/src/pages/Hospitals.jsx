@@ -11,7 +11,14 @@ import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
 import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { MODALITY_ORDER, PARTICIPANT_LABELS, availabilityLabel, canManageRounds, isHospitalOperator } from '../utils/constants'
+import {
+  MODALITY_ORDER,
+  PARTICIPANT_LABELS,
+  availabilityLabel,
+  canManageRounds,
+  canOpenHospitalDetails,
+  isHospitalOperator,
+} from '../utils/constants'
 import { DASH, formatDateTime, formatNumber, secondsAgo, timeAgo } from '../utils/format'
 
 const PARTICIPATION = {
@@ -221,7 +228,7 @@ export default function Hospitals() {
                 key={hospital.id}
                 hospital={hospital}
                 canManage={canManageRounds(user)}
-                canOpen={!isHospitalOperator(user) || user.hospital_id === hospital.id}
+                canOpen={canOpenHospitalDetails(user) && (!isHospitalOperator(user) || user.hospital_id === hospital.id)}
                 onToggle={toggle}
                 busy={busyId === hospital.id}
               />

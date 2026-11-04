@@ -1,0 +1,60 @@
+title: "Surveillance forecasting (simulated): weekly case counts per region and disease, 1-4 weeks ahead"
+description: >
+  Fixed before any run. Data: the SIMULATED weekly hospital reports the demo uses (12 simulated regions,
+  4 hospitals, 3 diseases, 104 weeks ending on the fixed week below, seed 2024, cells under 5 suppressed),
+  aggregated to one series per region and disease (36 series). A regional week with a suppressed hospital cell
+  has no total; such weeks are filled from earlier weeks only when they are inputs and are skipped when they
+  are targets. As in the live forecast, a series is not forecast when more than 20% of its weeks are
+  missing; the share is measured on weeks 1-64 only (the rule is fixed here, before any run). Week numbers count from 1 (the oldest week). Fitting window: weeks 1-64. Validation: forecasts
+  whose target falls in weeks 65-84. Test: forecasts whose target falls in weeks 85-104. Every model is refitted
+  at every forecast origin on all weeks up to and including that origin (rolling origin, expanding window), and
+  forecasts 1-4 weeks ahead; only targets inside the window being scored count. Ensemble weights and the
+  empirical intervals (LSTM, ensemble) use validation forecasts only and are frozen before the test window is
+  scored. All forecasts and interval bounds are clipped at 0 (counts cannot be negative). Reported per model
+  and horizon on the test window: MAE, RMSE, 80% interval coverage, and the MAE ratio against seasonal naive
+  at the same horizon (below 1 = better than seasonal naive). The ensemble is not called better than its
+  members unless the table shows it. One run; the LSTM uses a fixed seed.
+data:
+  end_week: "2026-10-26"
+  weeks: 104
+  seed: 2024
+  suppression_threshold: 5
+  max_missing_share_in_fit_window: 0.2
+windows:
+  fit: [1, 64]
+  validation: [65, 84]
+  test: [85, 104]
+horizons: [1, 2, 3, 4]
+interval_level: 0.8
+models:
+  - naive
+  - seasonal_naive
+  - arima_least_squares       # the existing ARIMA(p,d,0), order chosen inside each fit
+  - seasonal_arima_least_squares
+  - arima_statsmodels         # ARIMA(2,1,1), statsmodels
+  - prophet
+  - lstm
+  - ensemble
+prophet:
+  yearly_seasonality: true
+  weekly_seasonality: false
+  daily_seasonality: false
+  interval_width: 0.8
+  uncertainty_samples: 300
+lstm:
+  # One global network trained on all 36 series. Each series is divided by its own scale, the mean of its
+  # observed weeks 1-64 (at least 1), before training and multiplied back afterwards.
+  input_weeks: 8
+  hidden: 32
+  layers: 1
+  epochs: 150
+  batch_size: 64
+  learning_rate: 0.005
+  seed: 0
+  # Direct multi-output: one network predicts weeks t+1 .. t+4 from weeks t-7 .. t.
+  # 80% interval: 10th and 90th percentiles of its scaled validation errors per horizon.
+ensemble:
+  members: [arima_statsmodels, prophet, lstm]
+  # Per horizon: non-negative weights summing to 1 that minimise the squared scaled error
+  # (error / series scale) over all validation forecasts. Interval as for the LSTM, from the
+  # ensemble's own scaled validation errors.

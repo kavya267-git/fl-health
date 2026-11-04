@@ -6,28 +6,27 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends
 
-from app.routers.deps import coordinator_user, current_user, ensure_hospital_access, get_ctx, is_hospital_operator
+from app.routers.deps import ensure_hospital_access, get_ctx, is_hospital_operator, permitted
 from app.schemas.hospitals import AvailabilityRequest, Hospital, HospitalMetrics, ParticipationRequest
-from app.services.auth_service import require_role
 from app.services.context import AppContext
 
 router = APIRouter(prefix="/api/hospitals", tags=["hospitals"])
 
 
 @router.get("", response_model=List[Hospital])
-def list_hospitals(user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
+def list_hospitals(user: Dict[str, Any] = Depends(permitted("hospitals_list")), ctx: AppContext = Depends(get_ctx)):
     return ctx.hospitals.list()
 
 
 @router.get("/{hospital_id}", response_model=Hospital)
-def get_hospital(hospital_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)):
+def get_hospital(hospital_id: str, user: Dict[str, Any] = Depends(permitted("hospital_detail")), ctx: AppContext = Depends(get_ctx)):
     ensure_hospital_access(user, hospital_id)
     return ctx.hospitals.get(hospital_id)
 
 
 @router.get("/{hospital_id}/metrics", response_model=HospitalMetrics)
 def hospital_metrics(
-    hospital_id: str, user: Dict[str, Any] = Depends(current_user), ctx: AppContext = Depends(get_ctx)
+    hospital_id: str, user: Dict[str, Any] = Depends(permitted("hospital_detail")), ctx: AppContext = Depends(get_ctx)
 ):
     ensure_hospital_access(user, hospital_id)
     return ctx.hospitals.metrics(hospital_id)
@@ -37,7 +36,7 @@ def hospital_metrics(
 def set_availability(
     hospital_id: str,
     body: AvailabilityRequest,
-    user: Dict[str, Any] = Depends(coordinator_user),
+    user: Dict[str, Any] = Depends(permitted("hospital_availability")),
     ctx: AppContext = Depends(get_ctx),
 ):
     """Take a hospital node offline or bring it back (to demonstrate partial participation)."""
@@ -48,12 +47,10 @@ def set_availability(
 def set_participation(
     hospital_id: str,
     body: ParticipationRequest,
-    user: Dict[str, Any] = Depends(current_user),
+    user: Dict[str, Any] = Depends(permitted("hospital_participation")),
     ctx: AppContext = Depends(get_ctx),
 ):
     """"Take part in future rounds": the hospital's own operator, or an administrator or coordinator."""
     if is_hospital_operator(user):
         ensure_hospital_access(user, hospital_id)
-    else:
-        require_role(user, ("admin", "coordinator"))
     return ctx.hospitals.set_participation(hospital_id, body.participating, user["email"])

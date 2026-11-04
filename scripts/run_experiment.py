@@ -60,6 +60,8 @@ def build_results_md() -> None:
             parts.append(name[1:].strip() + "\n")
         elif (RESULTS_DIR / name / "rounds.csv").exists():
             parts.append(section(name))
+        elif (RESULTS_DIR / name / "section.md").exists():  # written by its own runner, e.g. experiments/forecasting.py
+            parts.append((RESULTS_DIR / name / "section.md").read_text(encoding="utf-8"))
         else:
             parts.append(not_run_section(name))
     if KNOWN_ISSUES.exists():
