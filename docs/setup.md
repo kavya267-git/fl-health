@@ -128,6 +128,31 @@ For real chest images use `--size 224` (or larger) when preparing and `XRAY_PRET
 hold a hospital's split in memory; very large image sets need a streaming loader, which this prototype does
 not include.
 
+## Real region boundaries
+
+Simulated regions are the default. To draw real districts instead, point `REGIONS_GEOJSON_PATH` at a
+GeoJSON FeatureCollection. The repository includes one public file: Karnataka's 30 districts from
+geoBoundaries (ODbL 1.0; source and credit in [data/boundaries/README.md](../data/boundaries/README.md)).
+
+```bash
+# backend/.env
+REGIONS_GEOJSON_PATH=data/boundaries/karnataka_districts.geojson
+REGION_ID_FIELD=region_id
+REGION_NAME_FIELD=name
+```
+
+Restart the API.
+- **Map:** the surveillance map shows only these districts. It cannot be panned away or zoomed out past
+  them, and it shows the file's credit line underneath. Base-map tiles appear only if `VITE_MAP_TILE_URL` is
+  set in `frontend/.env`.
+- **Case reports:** in demo mode the weekly reports are still simulated (for these districts) and labelled
+  SIMULATED.
+- **Population:** the file has no population field, so the map shows counts rather than rates.
+- **Health officers:** give them jurisdictions with the file's region ids (for example `KA-MYSORE`) under
+  Settings → Users. The built-in demo officers cover the simulated regions only.
+
+`backend/tests/test_real_boundaries.py` loads this file through the API.
+
 ## External hospital nodes
 
 To run each hospital as its own process (on this machine or others):
