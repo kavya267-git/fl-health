@@ -14,6 +14,7 @@ class DemoAccount(BaseModel):
     role: str
     display_name: str
     hospital_id: Optional[str] = None
+    jurisdiction: Optional[List[str]] = None
 
 
 class SystemConfig(BaseModel):

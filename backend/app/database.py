@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from app.models.tables import COLUMN_TYPES, TABLE_COLUMNS, create_statements
+from app.models.tables import COLUMN_TYPES, TABLE_COLUMNS, add_column_statements, create_statements
 
 _NAMED_PARAM = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -183,6 +183,13 @@ class Database:
 
     def create_schema(self) -> None:
         for statement in create_statements(self.dialect):
+            self.execute(statement)
+        self.add_missing_columns()
+
+    def add_missing_columns(self) -> None:
+        """Add columns that were introduced after a database was created (nullable columns only)."""
+        present = self.table_columns()
+        for statement in add_column_statements(self.dialect, present):
             self.execute(statement)
 
     def table_columns(self) -> Dict[str, List[str]]:

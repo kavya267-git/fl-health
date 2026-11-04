@@ -6,8 +6,9 @@ from typing import Any, Dict
 
 from fastapi import Depends, Request
 
-from app.services.auth_service import AUDIT_READER_ROLES, require_role
+from app.services.auth_service import require_role
 from app.services.context import AppContext
+from app.services.permissions import HOSPITAL_ROLES, ensure_hospital_scope, require_permission
 from app.utils.errors import AuthenticationFailed, PermissionDenied
 
 
@@ -33,9 +34,19 @@ def coordinator_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, 
     return user
 
 
-def audit_reader(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+def permitted(permission: str):
+    """Dependency: the signed-in user, if their role has ``permission`` (see app/services/permissions.py)."""
+
+    def dependency(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+        require_permission(user, permission)
+        return user
+
+    dependency.__name__ = f"permitted_{permission}"
+    return dependency
+
+
+def audit_reader(user: Dict[str, Any] = Depends(permitted("audit_read"))) -> Dict[str, Any]:
     """Who may read the audit log."""
-    require_role(user, AUDIT_READER_ROLES)
     return user
 
 
@@ -46,18 +57,18 @@ def admin_user(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
 
 
 def is_hospital_operator(user: Dict[str, Any]) -> bool:
-    return user.get("role") == "hospital"
+    """Acts for one hospital (operator or manager): sees only that hospital's own per-hospital results."""
+    return user.get("role") in HOSPITAL_ROLES
 
 
 def ensure_hospital_access(user: Dict[str, Any], hospital_id: str) -> None:
-    """Hospital operators may open detailed pages only for their own hospital."""
-    if is_hospital_operator(user) and user.get("hospital_id") != hospital_id:
-        raise PermissionDenied("Hospital operators can only open their own hospital's details.")
+    """Hospital operators and managers may open detailed pages only for their own hospital."""
+    ensure_hospital_scope(user, hospital_id)
 
 
 def hospital_operator(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
-    """A signed-in hospital operator who is linked to a hospital."""
-    require_role(user, ("hospital",))
+    """A signed-in hospital operator or manager who is linked to a hospital."""
+    require_role(user, HOSPITAL_ROLES)
     if not user.get("hospital_id"):
         raise PermissionDenied("Your account is not linked to a hospital yet. Ask an administrator.")
     return user

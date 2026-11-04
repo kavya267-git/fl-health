@@ -11,7 +11,7 @@ import {
   Settings,
   TrendingUp,
 } from 'lucide-react'
-import { canSeeAudit, isHospitalOperator } from '../../utils/constants'
+import { canSeeAudit, isHealthOfficer, isHospitalOperator } from '../../utils/constants'
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -28,8 +28,12 @@ export const NAV_ITEMS = [
 
 const MY_HOSPITAL = { to: '/my-hospital', label: 'My hospital', icon: Hospital }
 
+/** What a health officer may open (their jurisdiction's surveillance and forecasts; see docs/permissions.md). */
+const HEALTH_OFFICER_PAGES = ['/surveillance', '/forecasting', '/how-it-works', '/settings']
+
 /** The sidebar for this user. The server enforces the same rules; this only hides what it would refuse. */
 export function navItemsFor(user) {
+  if (isHealthOfficer(user)) return NAV_ITEMS.filter((item) => HEALTH_OFFICER_PAGES.includes(item.to))
   const items = NAV_ITEMS.filter((item) => item.to !== '/audit' || canSeeAudit(user))
   return isHospitalOperator(user) ? [MY_HOSPITAL, ...items] : items
 }

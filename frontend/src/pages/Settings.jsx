@@ -10,7 +10,15 @@ import { useSystem } from '../context/SystemContext'
 import { useApi } from '../hooks/useApi'
 import { API_BASE_URL, toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { MODALITIES, MODALITY_ORDER, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from '../utils/constants'
+import {
+  HOSPITAL_ROLES,
+  JURISDICTION_ROLES,
+  MODALITIES,
+  MODALITY_ORDER,
+  ROLE_DESCRIPTIONS,
+  ROLE_LABELS,
+  ROLE_ORDER,
+} from '../utils/constants'
 import { DASH, formatDateTime, formatNumber } from '../utils/format'
 
 const CHECK_ICONS = {
@@ -207,12 +215,54 @@ function Privacy() {
 
 const ROLE_OPTIONS = ROLE_ORDER.map((role) => ({ value: role, label: ROLE_LABELS[role] }))
 
+/** Checkboxes for a health officer's regions, saved together. */
+function JurisdictionPicker({ email, regions, value, pending, disabled, onSave }) {
+  const [chosen, setChosen] = useState(value)
+  if (!regions.length) {
+    return <p className="text-xs text-warn-ink">No regions are loaded, so a jurisdiction cannot be set yet.</p>
+  }
+  const toggle = (id) => setChosen((current) => (current.includes(id) ? current.filter((r) => r !== id) : [...current, id]))
+  const unchanged = chosen.length === value.length && chosen.every((id) => value.includes(id))
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-xs font-medium text-ink">Jurisdiction for {email}</legend>
+      <div className="grid max-h-40 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto rounded-md border border-line p-2">
+        {regions.map((region) => (
+          <label key={region.region_id} className="flex items-center gap-1.5 text-xs text-ink">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-[#24489a]"
+              checked={chosen.includes(region.region_id)}
+              onChange={() => toggle(region.region_id)}
+            />
+            {region.name} ({region.region_id})
+          </label>
+        ))}
+      </div>
+      <Button size="sm" disabled={disabled || chosen.length === 0 || (unchanged && !pending)} onClick={() => onSave(chosen)}>
+        Save jurisdiction
+      </Button>
+      {pending ? <p className="text-xs text-warn-ink">Choose at least one region and save to give this role.</p> : null}
+    </fieldset>
+  )
+}
+
 /** Administrators only: who has an account, and what each person may do. */
 function Users() {
   const { user: me } = useAuth()
   const state = useApi(async () => {
-    const [users, hospitals] = await Promise.all([api.users(), api.hospitals()])
-    return { users, hospitals }
+    const [users, hospitals, regions] = await Promise.all([
+      api.users(),
+      api.hospitals(),
+      // Regions for health officers' jurisdictions; the user list still works without surveillance data.
+      Promise.resolve()
+        .then(() => api.analyticsOptions())
+        .then(
+          (options) => options.regions,
+          () => [],
+        ),
+    ])
+    return { users, hospitals, regions }
   }, [])
   const [saving, setSaving] = useState(null)
   const [error, setError] = useState(null)
@@ -220,22 +270,36 @@ function Users() {
   // Just saved (shown at once while the list refreshes), or chosen but waiting for a hospital.
   const [changed, setChanged] = useState({})
 
-  async function save(target, role, hospitalId) {
+  async function save(target, role, { hospitalId = null, jurisdiction = null } = {}) {
     setError(null)
     setSaved(null)
-    if (role === 'hospital' && !hospitalId) {
-      // A hospital operator needs a hospital before anything is saved.
-      setChanged((current) => ({ ...current, [target.id]: { role, hospital_id: null, pending: true } }))
+    const needsHospital = HOSPITAL_ROLES.includes(role) && !hospitalId
+    const needsJurisdiction = JURISDICTION_ROLES.includes(role) && !jurisdiction?.length
+    if (needsHospital || needsJurisdiction) {
+      // A hospital operator or manager needs a hospital, a health officer a jurisdiction, before anything is saved.
+      setChanged((current) => ({
+        ...current,
+        [target.id]: { role, hospital_id: hospitalId, jurisdiction: jurisdiction || [], pending: true },
+      }))
       return
     }
     setSaving(target.id)
     try {
-      const updated =
-        role === 'hospital' ? await api.setUserRole(target.id, role, hospitalId) : await api.setUserRole(target.id, role)
-      setChanged((current) => ({ ...current, [target.id]: { role: updated.role, hospital_id: updated.hospital_id } }))
-      setSaved(
-        `${target.email} is now ${ROLE_LABELS[role]}${updated.hospital_id ? ` for ${updated.hospital_id}` : ''}.`,
-      )
+      const updated = HOSPITAL_ROLES.includes(role)
+        ? await api.setUserRole(target.id, role, hospitalId)
+        : JURISDICTION_ROLES.includes(role)
+          ? await api.setUserRole(target.id, role, null, jurisdiction)
+          : await api.setUserRole(target.id, role)
+      setChanged((current) => ({
+        ...current,
+        [target.id]: { role: updated.role, hospital_id: updated.hospital_id, jurisdiction: updated.jurisdiction },
+      }))
+      const scope = updated.hospital_id
+        ? ` for ${updated.hospital_id}`
+        : updated.jurisdiction?.length
+          ? ` for ${updated.jurisdiction.join(', ')}`
+          : ''
+      setSaved(`${target.email} is now ${ROLE_LABELS[role]}${scope}.`)
       state.reload({ silent: true })
     } catch (failure) {
       setError(toApiError(failure).message)
@@ -248,10 +312,10 @@ function Users() {
     <Card>
       <CardHeader
         title="Users and roles"
-        description="People who sign up start as viewers. Only an administrator can change a role, and only here. A hospital operator is linked to one hospital."
+        description="People who sign up start as viewers. Only an administrator can change a role, and only here. A hospital operator or manager is linked to one hospital; a health officer to the regions of their jurisdiction."
       />
       <AsyncView state={state} what="the user list">
-        {({ users, hospitals }) => (
+        {({ users, hospitals, regions }) => (
           <CardBody className="space-y-4">
             {error ? <Note tone="alert">{error}</Note> : null}
             {saved && !error ? <Note tone="ok">{saved}</Note> : null}
@@ -268,7 +332,11 @@ function Users() {
                 <tbody>
                   {users.map((user) => {
                     const isMe = user.id === me.id
-                    const current = changed[user.id] || { role: user.role, hospital_id: user.hospital_id }
+                    const current = changed[user.id] || {
+                      role: user.role,
+                      hospital_id: user.hospital_id,
+                      jurisdiction: user.jurisdiction,
+                    }
                     const lockedReason = isMe ? 'You cannot change your own role.' : user.role_locked_reason
                     const hospitalOptions = [
                       ...(current.hospital_id ? [] : [{ value: '', label: 'Choose a hospital…' }]),
@@ -287,6 +355,9 @@ function Users() {
                             <>
                               <Badge tone={current.role === 'admin' ? 'brand' : 'neutral'}>{ROLE_LABELS[current.role] || current.role}</Badge>
                               {current.hospital_id ? <p className="mt-1 text-xs text-ink">{current.hospital_id}</p> : null}
+                              {current.jurisdiction?.length ? (
+                                <p className="mt-1 text-xs text-ink">{current.jurisdiction.join(', ')}</p>
+                              ) : null}
                               <p className="mt-1 text-xs text-muted">{lockedReason}</p>
                             </>
                           ) : (
@@ -296,19 +367,34 @@ function Users() {
                                 value={current.role}
                                 options={ROLE_OPTIONS}
                                 disabled={saving !== null}
-                                onChange={(next) => save(user, next, next === 'hospital' ? current.hospital_id : null)}
+                                onChange={(next) =>
+                                  save(user, next, {
+                                    hospitalId: HOSPITAL_ROLES.includes(next) ? current.hospital_id : null,
+                                    jurisdiction: JURISDICTION_ROLES.includes(next) ? current.jurisdiction : null,
+                                  })
+                                }
                               />
-                              {current.role === 'hospital' ? (
+                              {HOSPITAL_ROLES.includes(current.role) ? (
                                 <>
                                   <Select
                                     aria-label={`Hospital for ${user.email}`}
                                     value={current.hospital_id || ''}
                                     options={hospitalOptions}
                                     disabled={saving !== null}
-                                    onChange={(next) => next && save(user, 'hospital', next)}
+                                    onChange={(next) => next && save(user, current.role, { hospitalId: next })}
                                   />
                                   {current.pending ? <p className="text-xs text-warn-ink">Choose the hospital to save this role.</p> : null}
                                 </>
+                              ) : null}
+                              {JURISDICTION_ROLES.includes(current.role) ? (
+                                <JurisdictionPicker
+                                  email={user.email}
+                                  regions={regions}
+                                  value={current.jurisdiction || []}
+                                  pending={current.pending}
+                                  disabled={saving !== null}
+                                  onSave={(next) => save(user, current.role, { jurisdiction: next })}
+                                />
                               ) : null}
                             </div>
                           )}

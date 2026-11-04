@@ -27,4 +27,4 @@ def set_role(
     ctx: AppContext = Depends(get_ctx),
 ):
     """Change another user's role. You cannot change your own."""
-    return ctx.auth.set_role(user, user_id, body.role, body.hospital_id)
+    return ctx.auth.set_role(user, user_id, body.role, body.hospital_id, body.jurisdiction)
