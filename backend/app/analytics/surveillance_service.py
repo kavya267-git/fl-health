@@ -39,6 +39,10 @@ HOTSPOT_DISCLAIMER = (
 )
 
 
+#: The one wording for simulated counts, on the map and in every export.
+SIMULATED_WATERMARK = "SIMULATED DATA \u2013 NOT REAL CASES"
+
+
 class SurveillanceService:
     def __init__(self, db: Database, audit: AuditService, settings):
         self.db = db
@@ -47,6 +51,7 @@ class SurveillanceService:
         self.params = HotspotParams()
         self._unavailable_reason: Optional[str] = None
         self._geometry_attribution: Optional[str] = None
+        self._geometry_notes: Optional[str] = None
         self._series_cache: Dict[str, Tuple[str, Any]] = {}
 
     # ============================================================ bootstrap
@@ -71,6 +76,7 @@ class SurveillanceService:
             table = region_tools.region_table(collection)
             geometry_simulated = bool(collection["metadata"]["simulated_geometry"])
             self._geometry_attribution = collection["metadata"].get("attribution")
+            self._geometry_notes = collection["metadata"].get("notes")
             self.db.execute("DELETE FROM regions")
             self.db.insert_many(
                 "regions",
@@ -229,6 +235,9 @@ class SurveillanceService:
             "label": self.settings.simulated_label if simulated else "Aggregated reports from configured source",
             "geometry_simulated": self.geometry_simulated(),
             "geometry_attribution": self._geometry_attribution,
+            "geometry_notes": self._geometry_notes,
+            # Shown on the map itself and stamped on every export (PDF and CSV) while the counts are simulated.
+            "watermark": SIMULATED_WATERMARK if simulated else None,
             "suppression_threshold": self.settings.suppression_threshold,
         }
 

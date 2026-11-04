@@ -54,6 +54,31 @@ describe('Surveillance page', () => {
     expect(screen.getByTestId('region-R03')).toHaveAttribute('data-fill', '#e3e6e5')
   })
 
+  it('stamps a permanent watermark on the map when real boundaries carry simulated counts', async () => {
+    const realBoundaries = {
+      ...hotspots,
+      data_status: {
+        ...hotspots.data_status,
+        simulated: true,
+        geometry_simulated: false,
+        watermark: 'SIMULATED DATA – NOT REAL CASES',
+        geometry_notes: 'Vijayanagara is not separate in this source.',
+        geometry_attribution: 'District boundaries: geoBoundaries, ODbL 1.0.',
+      },
+    }
+    api.hotspots.mockResolvedValue(realBoundaries)
+    render(<Surveillance />)
+    expect(await screen.findByTestId('map-watermark')).toHaveTextContent('SIMULATED DATA – NOT REAL CASES')
+    expect(screen.getByText('Vijayanagara is not separate in this source.')).toBeInTheDocument()
+    expect(screen.getByText('District boundaries: geoBoundaries, ODbL 1.0.')).toBeInTheDocument()
+  })
+
+  it('needs no watermark on the fictional regions, which already say they are not a real place', async () => {
+    render(<Surveillance />)
+    await screen.findByTestId('map')
+    expect(screen.queryByTestId('map-watermark')).not.toBeInTheDocument()
+  })
+
   it('draws no base map under simulated regions', async () => {
     render(<Surveillance />)
     await screen.findByTestId('map')
