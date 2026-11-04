@@ -293,11 +293,14 @@ def summarise(table: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         at_h = test if h == "all" else test[test["horizon"] == h]
         base = at_h[at_h["model"] == "seasonal_naive"]
         base_mae = float(np.mean(np.abs(base["actual"] - base["mean"])))
+        base_by_series = (base["actual"] - base["mean"]).abs().groupby(base["series_id"]).mean()
         for model in models:
             m = at_h[at_h["model"] == model]
             error = m["actual"] - m["mean"]
             covered = (m["actual"] >= m["lower"]) & (m["actual"] <= m["upper"])
             mae = float(np.mean(np.abs(error)))
+            # One ratio per series, so a gain on a few large series cannot dominate.
+            by_series = error.abs().groupby(m["series_id"]).mean() / base_by_series
             rows.append(
                 {
                     "model": model,
@@ -307,6 +310,9 @@ def summarise(table: pd.DataFrame, cfg: dict) -> pd.DataFrame:
                     "rmse": float(np.sqrt(np.mean(error**2))),
                     "coverage_80": float(covered.mean()),
                     "mae_ratio_vs_seasonal_naive": mae / base_mae if base_mae > 0 else float("nan"),
+                    "median_series_mae_ratio": float(by_series.replace([np.inf, -np.inf], np.nan).median()),
+                    "series_better_than_seasonal_naive": int((by_series < 1).sum()),
+                    "series": int(by_series.notna().sum()),
                 }
             )
     return pd.DataFrame(rows)
@@ -358,13 +364,24 @@ def write_section(out: Path) -> None:
         f"{int(every['forecasts'].iloc[0])} forecasts per model:"
     )
     lines.append("")
-    lines.append("| Model | MAE | RMSE | 80% interval coverage | MAE ratio vs seasonal naive |")
-    lines.append("| --- | --- | --- | --- | --- |")
+    lines.append(
+        "| Model | MAE | RMSE | 80% interval coverage | MAE ratio vs seasonal naive | "
+        "Median of per-series MAE ratios | Series better than seasonal naive |"
+    )
+    lines.append("| --- | --- | --- | --- | --- | --- | --- |")
     for row in every.itertuples():
+        better = f"{row.series_better_than_seasonal_naive} of {row.series}" if hasattr(row, "series") else "-"
+        median = f"{row.median_series_mae_ratio:.3f}" if hasattr(row, "median_series_mae_ratio") else "-"
         lines.append(
             f"| {MODEL_LABELS[row.model]} | {row.mae:.2f} | {row.rmse:.2f} | {row.coverage_80:.3f} | "
-            f"{row.mae_ratio_vs_seasonal_naive:.3f} |"
+            f"{row.mae_ratio_vs_seasonal_naive:.3f} | {median} | {better} |"
         )
+    lines.append("")
+    lines.append(
+        "The pooled MAE ratio weights each series by its size, so large series count for more. The median of "
+        "per-series ratios (each series' MAE divided by seasonal naive's MAE on the same series, horizons 1-4 "
+        "pooled) gives every series one vote; below 1 means the model beat seasonal naive on the typical series."
+    )
     lines.append("")
     lines.append("By horizon (MAE / 80% coverage / MAE ratio vs seasonal naive):")
     lines.append("")
@@ -415,6 +432,10 @@ def main() -> None:
     args = parser.parse_args()
     out = RESULTS_DIR / args.config.stem
     if args.report:
+        if (out / "forecasts.csv").exists():  # rescore the saved forecasts of the same run (nothing is refitted)
+            summarise(pd.read_csv(out / "forecasts.csv"), json.loads((out / "config.json").read_text(encoding="utf-8"))["config"]).to_csv(
+                out / "summary.csv", index=False
+            )
         write_section(out)
     else:
         run(load_config(args.config), out)

@@ -133,7 +133,8 @@ On the simulated test window (weeks 85-104, 2,008 forecasts per model), which co
 enough reported weeks (the 10 excluded series were mostly suppressed small counts), the ensemble of ARIMA(2,1,1), Prophet
 and the global LSTM has the lowest pooled MAE (14.52) and RMSE (24.85) in the table, and the lowest MAE at each
 horizon from 1 to 4 weeks. Its MAE ratio against seasonal naive is 0.792, against 0.837 for the best single
-model (the LSTM) and 0.895 for ARIMA(2,1,1). This is one simulated dataset and one run, and the differences
+model (the LSTM) and 0.895 for ARIMA(2,1,1). The gain is not only on large series: the median of
+per-series MAE ratios is 0.798, and the ensemble beats seasonal naive on 24 of the 26 series. This is one simulated dataset and one run, and the differences
 were not tested for significance, so it shows that the ensemble did best here, not that it will on real
 data. No model's 80% interval reaches 80% coverage except naive (0.870): the others lie between 0.736 and
 0.757, and Prophet's own interval covers only 0.581. The intervals are therefore too narrow on this data, and
