@@ -1,8 +1,8 @@
-# FL-Healthcare
+# PrivaFuse
 
 **Privacy-preserving collaborative healthcare intelligence.**
 
-FL-Healthcare is a working prototype of multimodal federated learning between hospitals. Four hospitals train
+PrivaFuse is a working prototype of multimodal federated learning between hospitals. Four hospitals train
 shared models on their own EHR, ECG and chest X-ray data; only model updates travel to a coordinator, which
 averages them into a global model and sends it back. Aggregated surveillance, forecasting, explainability,
 privacy checks and an audit trail sit on top, and a React dashboard shows the whole system.
@@ -99,5 +99,7 @@ The PyTorch model tests are skipped automatically when PyTorch is not installed.
 - [docs/multi-machine.md](docs/multi-machine.md) - coordinator on one laptop, hospitals on others: network, firewall, demo script
 - [docs/architecture.md](docs/architecture.md) - components, data boundaries, round lifecycle, database
 - [docs/api.md](docs/api.md) - every endpoint
+- [docs/permissions.md](docs/permissions.md) - roles (including health officers, researchers and hospital managers), what each may do, and the demo accounts
+- [data/boundaries/README.md](data/boundaries/README.md) - the Karnataka district boundaries (geoBoundaries, ODbL 1.0) and how to load them
 - [docs/methodology.md](docs/methodology.md) - models, FedAvg, evaluation, hotspot and forecast methods, explainability, privacy, and their limits
 - [docs/verification.md](docs/verification.md) - what has been executed (including PyTorch training results), and what has not

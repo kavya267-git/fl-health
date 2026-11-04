@@ -179,7 +179,7 @@ class NodeRunner:
                 f"Test from this machine: open {self.server}/api/health in a browser."
             ) from exc
         except CoordinatorError as exc:
-            raise NodeStartupError(f"{self.server} answered, but not as an FL-Healthcare coordinator: {exc}") from exc
+            raise NodeStartupError(f"{self.server} answered, but not as an PrivaFuse coordinator: {exc}") from exc
 
         local = local_architectures(sorted(summary))
         problems = compatibility_problems(server, local)

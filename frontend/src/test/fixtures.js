@@ -1,7 +1,7 @@
 /** Response fixtures shaped like the API's real responses. */
 
 export const systemConfig = {
-  app_name: 'FL-Healthcare',
+  app_name: 'PrivaFuse',
   version: '1.0.0',
   demo_mode: true,
   simulated_label: 'SIMULATED / DEMONSTRATION DATA',
