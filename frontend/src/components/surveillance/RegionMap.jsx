@@ -15,7 +15,7 @@ const TILE_ATTRIBUTION = import.meta.env.VITE_MAP_TILE_ATTRIBUTION || ''
  * drawn only for real boundaries and only when VITE_MAP_TILE_URL is set; simulated regions are not a real
  * place, so they always sit on a plain ground.
  */
-export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSelect, showTiles }) {
+export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSelect, showTiles, watermark }) {
   const bounds = useMemo(() => geojsonBounds(geojson), [geojson])
   const tiles = Boolean(showTiles && TILE_URL)
   const selectRef = useRef(onSelect)
@@ -49,7 +49,7 @@ export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSel
     <div
       role="group"
       aria-label="Map of regions coloured by disease intensity. The table below lists the same regions."
-      className="isolate"
+      className="relative isolate"
     >
       <MapContainer
         key={`${tiles ? 'tiles' : 'plain'}:${bounds.flat().join(',')}`}
@@ -67,6 +67,17 @@ export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSel
         {/* Flagged regions are drawn last so their outlines sit on top of their neighbours'. */}
         <GeoJSON key={dataKey} data={orderForDrawing(geojson)} style={style} onEachFeature={onEachFeature} />
       </MapContainer>
+      {watermark ? (
+        // Part of the map itself, above the regions and not dismissable; clicks pass through to the map.
+        <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center overflow-hidden rounded-lg">
+          <p
+            data-testid="map-watermark"
+            className="-rotate-12 select-none whitespace-nowrap rounded border-2 border-alert/60 bg-surface/70 px-4 py-2 text-lg font-bold uppercase tracking-wider text-alert sm:text-2xl"
+          >
+            {watermark}
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }

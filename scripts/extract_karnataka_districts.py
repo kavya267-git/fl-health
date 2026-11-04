@@ -10,7 +10,9 @@ Inputs, release 9469f09 of github.com/wmgeolab/geoBoundaries (gbOpen, India):
 
 The output holds only Karnataka's districts, so the map shows the state and no national boundary. Region ids
 are short and stable ("KA-" plus the district name); the geoBoundaries shapeID is kept as source_shape_id.
-Coordinates are rounded to 5 decimals (about 1 m).
+Coordinates are rounded to 5 decimals (about 1 m). District names are shown in their current official
+form (CURRENT_NAMES, mostly the 2014 renamings); the source spelling is kept as source_name. Region ids are
+built from the source spelling and do not change.
 """
 
 from __future__ import annotations
@@ -28,6 +30,23 @@ from analytics.geospatial.geometry import centroid  # noqa: E402
 
 OUTPUT = ROOT / "data" / "boundaries" / "karnataka_districts.geojson"
 STATE = "Karnataka"
+#: Source spelling -> current official name, for display.
+CURRENT_NAMES = {
+    "Bangalore": "Bengaluru Urban",
+    "Bangalore Rural": "Bengaluru Rural",
+    "Belgaum": "Belagavi",
+    "Bellary": "Ballari",
+    "Bijapur": "Vijayapura",
+    "Chikmagalur": "Chikkamagaluru",
+    "Gulbarga": "Kalaburagi",
+    "Mysore": "Mysuru",
+    "Shimoga": "Shivamogga",
+    "Tumkur": "Tumakuru",
+}
+NOTES = (
+    "District boundaries as of 2021 (30 districts). Vijayanagara, formed from Ballari in 2021, is not separate "
+    "in this source and is included in Ballari."
+)
 ATTRIBUTION = (
     "District boundaries: geoBoundaries (Runfola et al. 2020, www.geoboundaries.org), gbOpen IND ADM2, "
     "source Pathways Data Pvt. Ltd. / lgdirectory.gov.in, licensed under the Open Database License (ODbL) 1.0. "
@@ -77,7 +96,8 @@ def main(adm1_path: str, adm2_path: str) -> None:
                 "type": "Feature",
                 "properties": {
                     "region_id": f"KA-{slug}",
-                    "name": name,
+                    "name": CURRENT_NAMES.get(name, name),
+                    "source_name": name,
                     "source_shape_id": feature["properties"]["shapeID"],
                 },
                 "geometry": {"type": feature["geometry"]["type"], "coordinates": rounded(feature["geometry"]["coordinates"])},
@@ -89,13 +109,14 @@ def main(adm1_path: str, adm2_path: str) -> None:
         "name": "karnataka_districts",
         "attribution": ATTRIBUTION,
         "license": "ODbL-1.0",
+        "notes": NOTES,
         "features": features,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(collection, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     print(f"{len(features)} districts written to {OUTPUT}")
     for f in features:
-        print(" ", f["properties"]["region_id"], ascii(f["properties"]["name"]))
+        print(" ", f["properties"]["region_id"], ascii(f["properties"]["source_name"]), "->", ascii(f["properties"]["name"]))
 
 
 if __name__ == "__main__":

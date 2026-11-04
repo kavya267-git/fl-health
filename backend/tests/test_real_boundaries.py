@@ -37,7 +37,17 @@ def test_loader_reads_ids_names_and_attribution():
     assert collection["metadata"]["simulated_geometry"] is False
     assert "ODbL" in collection["metadata"]["attribution"]
     mysore = next(f for f in collection["features"] if f["properties"]["region_id"] == "KA-MYSORE")
-    assert mysore["properties"]["name"] == "Mysore" and mysore["properties"]["population"] is None
+    assert mysore["properties"]["name"] == "Mysuru" and mysore["properties"]["population"] is None
+    assert "Vijayanagara" in collection["metadata"]["notes"]
+
+
+def test_current_district_names_with_the_source_spelling_kept():
+    features = json.loads(KARNATAKA.read_text(encoding="utf-8"))["features"]
+    names = {f["properties"]["source_name"]: f["properties"]["name"] for f in features}
+    assert names["Bangalore"] == "Bengaluru Urban" and names["Bangalore Rural"] == "Bengaluru Rural"
+    assert names["Belgaum"] == "Belagavi" and names["Gulbarga"] == "Kalaburagi" and names["Shimoga"] == "Shivamogga"
+    assert names["Kodagu"] == "Kodagu"  # unchanged names stay as they are
+    assert {f["properties"]["region_id"] for f in features} >= {"KA-BANGALORE", "KA-MYSORE"}  # ids do not change
 
 
 @pytest.fixture()
@@ -54,6 +64,9 @@ def test_api_serves_karnataka_districts_with_simulated_reports_labelled(karnatak
     assert options["data_status"]["simulated"] is True  # the weekly reports are still simulated
     assert options["data_status"]["geometry_simulated"] is False
     assert "geoBoundaries" in options["data_status"]["geometry_attribution"]
+    assert "Vijayanagara" in options["data_status"]["geometry_notes"]
+    assert options["data_status"]["watermark"] == "SIMULATED DATA \u2013 NOT REAL CASES"
+    assert {r["name"] for r in options["regions"]} >= {"Bengaluru Urban", "Mysuru"}
 
     hotspots = karnataka_client.get("/api/analytics/hotspots", params={"disease": "dengue"}, headers=viewer).json()
     assert len(hotspots["geojson"]["features"]) == 30
