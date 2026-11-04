@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,8 +20,10 @@ class RegisterRequest(BaseModel):
 
 class RoleChangeRequest(BaseModel):
     role: str = Field(min_length=1, max_length=32)
-    #: Required when role is "hospital"; ignored otherwise.
+    #: Required for hospital operators and managers; ignored otherwise.
     hospital_id: Optional[str] = Field(default=None, max_length=64)
+    #: Region ids; required for health officers, ignored otherwise.
+    jurisdiction: Optional[List[str]] = Field(default=None, max_length=500)
 
 
 class User(BaseModel):
@@ -30,6 +32,7 @@ class User(BaseModel):
     display_name: Optional[str] = None
     role: str
     hospital_id: Optional[str] = None
+    jurisdiction: Optional[List[str]] = None
     provider: str
 
 
@@ -53,6 +56,7 @@ class ManagedUser(BaseModel):
     display_name: Optional[str] = None
     role: str
     hospital_id: Optional[str] = None
+    jurisdiction: Optional[List[str]] = None
     created_at: str
     last_login_at: Optional[str] = None
     built_in: bool

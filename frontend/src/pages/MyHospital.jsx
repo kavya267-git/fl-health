@@ -4,11 +4,12 @@ import { Badge, ModalityTag, ParticipantStatusBadge, RoundStatusBadge, Simulated
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { DefinitionList, Note, PageHeader, Td, Th } from '../components/ui/Misc'
 import { AsyncView, EmptyState } from '../components/ui/StateViews'
+import { useAuth } from '../context/AuthContext'
 import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
 import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { MODALITIES, availabilityLabel } from '../utils/constants'
+import { MODALITIES, availabilityLabel, canChangeParticipation } from '../utils/constants'
 import { DASH, classNames, formatBytes, formatDateTime, formatNumber, formatPercent, secondsAgo } from '../utils/format'
 import { DataSummary, LocalMetrics } from './HospitalDetail'
 
@@ -222,6 +223,7 @@ function ParticipationSwitch({ hospital, onChanged }) {
 }
 
 export default function MyHospital() {
+  const { user } = useAuth()
   const state = useApi(() => api.myHospital(), [])
   const data = state.status === 'success' ? state.data : null
   const active = Boolean(data?.latest_round) && !ROUND_OVER.includes(data.latest_round.round_status)
@@ -253,7 +255,14 @@ export default function MyHospital() {
               <Card>
                 <CardHeader title="Participation" />
                 <CardBody>
-                  <ParticipationSwitch hospital={hospital} onChanged={() => state.reload({ silent: true })} />
+                  {canChangeParticipation(user) ? (
+                    <ParticipationSwitch hospital={hospital} onChanged={() => state.reload({ silent: true })} />
+                  ) : (
+                    <p className="text-sm text-muted">
+                      {hospital.participating ? 'Taking part in future rounds.' : 'Not taking part in future rounds.'} Only the
+                      hospital&rsquo;s operator can change this.
+                    </p>
+                  )}
                 </CardBody>
               </Card>
             </div>

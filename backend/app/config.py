@@ -42,7 +42,7 @@ def _list(name: str, default: str = "") -> List[str]:
 
 
 class Settings(BaseModel):
-    app_name: str = "FL-Healthcare"
+    app_name: str = "PrivaFuse"
     app_version: str = __version__
 
     # Mode ------------------------------------------------------------------

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from analytics.forecasting.pipeline import InsufficientDataError, forecast_series
 from analytics.geospatial.surveillance import iso_week_label
 from app.analytics.surveillance_service import SurveillanceService
 from app.database import Database
 from app.services.audit_service import AuditService
-from app.utils.errors import NotFoundError, ValidationFailed
+from app.services.permissions import ensure_region_scope
+from app.utils.errors import NotFoundError, PermissionDenied, ValidationFailed
 from app.utils.time import utc_now_iso
 
 FORECAST_DISCLAIMER = (
@@ -26,8 +27,15 @@ class ForecastService:
         self.surveillance = surveillance
 
     def forecast(
-        self, region_id: Optional[str], disease: Optional[str], horizon: int = 8, actor: str = "system"
+        self,
+        region_id: Optional[str],
+        disease: Optional[str],
+        horizon: int = 8,
+        actor: str = "system",
+        jurisdiction: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
+        """Forecast for one region and disease. ``jurisdiction`` (a health officer's region ids) limits which
+        regions may be asked for, and the default region is chosen among them."""
         if horizon < 1 or horizon > 26:
             raise ValidationFailed("horizon must be between 1 and 26 weeks")
         self.surveillance._require_available()
@@ -38,6 +46,12 @@ class ForecastService:
             raise NotFoundError(f"Unknown disease '{disease}'")
         regions = {r["region_id"]: r for r in self.surveillance.regions()}
         series = self.surveillance.regional_series(disease)
+        if jurisdiction is not None:
+            if region_id is not None and region_id in regions:
+                ensure_region_scope({"role": "health_officer", "jurisdiction": jurisdiction}, [region_id])
+            regions = {k: v for k, v in regions.items() if k in jurisdiction}
+            if not regions:
+                raise PermissionDenied("Your jurisdiction has no regions. Ask an administrator to set it.")
 
         if region_id is None:
             # Default to the region with the most complete history.

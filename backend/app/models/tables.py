@@ -21,6 +21,8 @@ TABLES: Dict[str, List[Column]] = {
         ("hospital_id", "text", ""),
         ("created_at", "timestamp", "NOT NULL"),
         ("last_login_at", "timestamp", ""),
+        # Health officers: the region ids they may see (JSON list). Empty for every other role.
+        ("jurisdiction", "json", ""),
     ],
     # Passwords of accounts created through the sign-up form (demo provider only).
     # With Supabase configured, credentials live in Supabase Auth and this stays empty.
@@ -237,6 +239,19 @@ for _table, _columns in TABLES.items():
         if _previous != _kind and (_previous in _DECODED_KINDS or _kind in _DECODED_KINDS):
             raise RuntimeError(f"Column '{_name}' has conflicting types across tables")
 TABLE_COLUMNS: Dict[str, List[str]] = {table: [c[0] for c in columns] for table, columns in TABLES.items()}
+
+
+def add_column_statements(dialect: str, present: Dict[str, List[str]]) -> List[str]:
+    """``ALTER TABLE ... ADD COLUMN`` for columns missing from existing tables (only nullable columns qualify)."""
+    types = _SQLITE_TYPES if dialect == "sqlite" else _POSTGRES_TYPES
+    statements = []
+    for table, columns in TABLES.items():
+        if table not in present:
+            continue  # created in full by create_statements
+        for name, kind, extra in columns:
+            if name not in present[table] and not extra:
+                statements.append(f"ALTER TABLE {table} ADD COLUMN {name} {types[kind]}")
+    return statements
 
 
 def create_statements(dialect: str) -> List[str]:
