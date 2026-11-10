@@ -9,8 +9,9 @@ The regions flagged as potential hotspots are grouped by **where** they are and 
 
 Each feature is standardised across the flagged regions, so location (two features) and rate (one or two)
 count about equally. K-Means (scikit-learn, 20 starts, fixed seed) is run for k = 2 .. min(5, n - 1) and the k
-with the highest silhouette is kept. The grouping is reported only if that silhouette is at least 0.25
-(Kaufman & Rousseeuw's threshold for any substantial structure); otherwise, and with fewer than three flagged
+with the highest silhouette is kept. The grouping is reported only if that silhouette is at least 0.25: below
+it, Kaufman & Rousseeuw (Finding Groups in Data: An Introduction to Cluster Analysis, Wiley, 1990, ch. 2) find no
+substantial structure. Otherwise, and with fewer than three flagged
 regions, there is no cluster layer and the reason is given. Groups of one region are not called clusters.
 
 A cluster says that some flagged regions are near each other and have similar rates. It does not say they
