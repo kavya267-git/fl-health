@@ -13,17 +13,20 @@ on its own held-out split and returns a confusion matrix, which is pooled here.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import threading
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from analytics.explainability.service import pool_global_importance
-from analytics.privacy.dp import DPConfig
+from analytics.privacy.dp import DPConfig, next_clip_norm
 from app.database import Database
+from app.federated import screening
 from app.federated.fedavg import ClientUpdate, aggregation_weights, federated_average
 from app.federated.validation import UpdateRejected, validate_update
 from app.services.audit_service import AuditService
@@ -219,6 +222,7 @@ class Coordinator:
         dp: Optional[DPConfig] = None,
         is_simulated: bool = True,
         deadline_seconds: int = DEFAULT_DEADLINE_SECONDS,
+        simulated_missing_rate: float = 0.0,
     ) -> Dict[str, Any]:
         """Create a round, select the participating hospitals and open it for clients.
 
@@ -246,6 +250,12 @@ class Coordinator:
             raise ValidationFailed(str(exc)) from exc
         if min_participants < 1:
             raise ValidationFailed("min_participants must be at least 1")
+        if dp.enabled and dp.adaptive_clipping:
+            dp = self._adaptive_start(modality, dp)
+        if not 0.0 <= simulated_missing_rate <= 0.5:
+            raise ValidationFailed("simulated_missing_rate must be between 0 and 0.5")
+        if simulated_missing_rate > 0 and modality != "ehr":
+            raise ValidationFailed("Simulated missing values apply to EHR rounds only")
 
         selected = [
             h
@@ -278,6 +288,11 @@ class Coordinator:
                     "batch_size": batch_size,
                     "learning_rate": learning_rate,
                     "seed": self.default_seed + round_number,
+                    **(
+                        {"missingness": {"mcar_rate": simulated_missing_rate, "seed": self.default_seed}}
+                        if simulated_missing_rate > 0
+                        else {}
+                    ),
                 },
                 "differential_privacy": dp.to_dict(),
                 "min_participants": min_participants,
@@ -338,6 +353,56 @@ class Coordinator:
         return self.get_round(round_id)
 
     # ================================================================ 2. join
+    def _screen_updates(
+        self, round_id: str, modality: str, base_weights, client_updates: List[ClientUpdate], actor: str
+    ) -> None:
+        """Isolation Forest screening of this round's updates against earlier ones. Advisory: never rejects.
+
+        Runs after the average is computed and stored, so a screening problem can never change or block it.
+        """
+        try:
+            current = screening.update_features(base_weights, {u.hospital_id: u.weights for u in client_updates})
+            earlier = self.db.fetch_all(
+                "SELECT screening FROM model_updates WHERE modality = :modality AND round_id <> :round_id "
+                "AND screening IS NOT NULL ORDER BY received_at",
+                {"modality": modality, "round_id": round_id},
+            )
+            results = screening.screen(current, screening.history_rows(r["screening"] for r in earlier))
+        except Exception as exc:  # never let screening break a round
+            logger.warning("Update screening failed for %s: %s", round_id, exc)
+            return
+        for hospital_id, result in results.items():
+            self.db.update("model_updates", {"screening": result}, {"id": f"{round_id}:{hospital_id}"})
+            if result["flagged"]:
+                self.audit.record(
+                    "UPDATE_FLAGGED_UNUSUAL",
+                    SYSTEM_ACTOR,
+                    hospital_id=hospital_id,
+                    round_id=round_id,
+                    details={
+                        "score": result["score"],
+                        "relative_norm": result["relative_norm"],
+                        "cosine_distance": result["cosine_distance"],
+                        "history_size": result["history_size"],
+                        "action": "none: flag only, the update was aggregated",
+                        "requested_by": actor,
+                    },
+                )
+
+    def _adaptive_start(self, modality: str, dp: DPConfig) -> DPConfig:
+        """An adaptive round starts from the clip norm the last finished adaptive round of this modality computed."""
+        rows = self.db.fetch_all(
+            "SELECT id, config FROM fl_rounds WHERE modality = :modality AND status = :status "
+            "ORDER BY round_number DESC",
+            {"modality": modality, "status": COMPLETED},
+        )
+        for row in rows:
+            config = row["config"] if isinstance(row["config"], dict) else json.loads(row["config"] or "{}")
+            previous = (config or {}).get("differential_privacy") or {}
+            if previous.get("adaptive_clipping") and previous.get("next_clip_norm"):
+                return replace(dp, clip_norm=float(previous["next_clip_norm"]))
+        return dp
+
     def node_round_info(self, round_id: str) -> Dict[str, Any]:
         round_row = self.get_round(round_id)
         config = round_row["config"]
@@ -615,6 +680,7 @@ class Coordinator:
                 averaged = federated_average(client_updates)
                 coefficients = aggregation_weights(client_updates)
                 self._aggregated_file(round_id).write_bytes(weights_to_bytes(averaged))
+                base_weights = self.registry.load_weights(modality, round_row["base_model_version"])
             except Exception as exc:
                 self._set_round(round_id, aggregation_status="FAILED")
                 self.audit.record(
@@ -627,7 +693,22 @@ class Coordinator:
                 "UPDATE model_updates SET status = 'AGGREGATED' WHERE round_id = :round_id AND status = 'VALIDATED'",
                 {"round_id": round_id},
             )
+            self._screen_updates(round_id, modality, base_weights, client_updates, actor)
             config = dict(round_row["config"])
+            dp_settings = DPConfig.from_dict(config.get("differential_privacy"))
+            if dp_settings.enabled and dp_settings.adaptive_clipping:
+                # Andrew et al. (2021): the next clip norm, from the noised clipping bits of the updates aggregated.
+                step = next_clip_norm(
+                    dp_settings.clip_norm,
+                    [(u["dp_report"] or {}).get("noisy_clip_bit") for u in valid if (u["dp_report"] or {}).get("noisy_clip_bit") is not None],
+                    dp_settings.target_quantile,
+                    dp_settings.clip_learning_rate,
+                )
+                config["differential_privacy"] = {
+                    **config["differential_privacy"],
+                    "next_clip_norm": step["clip_norm"],
+                    "estimated_share_unclipped": step["estimated_share_unclipped"],
+                }
             config["aggregation"] = {
                 "algorithm": "FedAvg",
                 "coefficients": coefficients,

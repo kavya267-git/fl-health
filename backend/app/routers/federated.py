@@ -70,6 +70,7 @@ def start_round(
         dp=DPConfig(**body.differential_privacy.model_dump()),
         is_simulated=ctx.settings.demo_mode,
         deadline_seconds=body.deadline_seconds,
+        simulated_missing_rate=body.simulated_missing_rate,
     )
     if ctx.nodes is not None:
         ctx.nodes.submit(created["id"])

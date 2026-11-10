@@ -1,0 +1,16 @@
+{
+  "name": "PIMA Indians Diabetes Database",
+  "url": "https://openml.org/data/v1/download/37/diabetes.arff",
+  "md5": "3cbaa3e54586aa88cf6aacb4033e4470",
+  "records": 768,
+  "positives": 268,
+  "zeros_treated_as_missing": {
+    "plas": 5,
+    "pres": 35,
+    "skin": 227,
+    "insu": 374,
+    "mass": 11
+  },
+  "rows_with_any_missing": 376,
+  "missing_in_held_out": 149
+}

@@ -81,9 +81,26 @@ coordinator or admin.
   "min_participants": 2,
   "auto_aggregate": true,
   "differential_privacy": { "enabled": false, "clip_norm": 1.0, "noise_multiplier": 0.0, "delta": 1e-5 },
+  "simulated_missing_rate": 0.0,
   "deadline_seconds": 600
 }
 ```
+
+`differential_privacy` may also set `adaptive_clipping` (default false), `target_quantile` (0 to 1, default
+0.5), `clip_learning_rate` (default 0.2) and `quantile_budget_share` (0 to 1, default 0.1): the clip norm then
+tracks that quantile of update norms (docs/methodology.md, "Adaptive clipping"). `clip_norm` is the starting
+value; once an adaptive round of the same modality has finished, the next one starts from its
+`config.differential_privacy.next_clip_norm` instead.
+
+After aggregation, each participant in `GET /api/federated/rounds/{id}` carries `screening`: the update's
+`norm`, `relative_norm`, `cosine_distance`, Isolation Forest `score`, `flagged`, `scored`, `history_size` and a
+`reason` (docs/methodology.md, "Screening of incoming updates"). Advisory only; a hospital operator sees only
+its own hospital's.
+
+`simulated_missing_rate` (EHR only, 0 to 0.5, default 0 = off) is a test setting: each hospital blanks that
+share of its feature values completely at random and fills them in by KNN imputation fitted on its own
+training split (docs/methodology.md, "Missing values"). It is stored in the round's
+`config.training.missingness`; a non-zero value for another modality is refused with 422.
 
 Only `modality` is required. `hospital_ids` defaults to every online hospital that holds the modality (with
 `HOSPITAL_NODES=external`: every hospital whose node sent a heartbeat in the last 30 s).
@@ -131,7 +148,7 @@ A model is identified by its modality: `ehr`, `ecg` or `xray`.
 | --- | --- | --- |
 | GET | `/api/analytics/overview` | Dashboard summary: KPIs, model status, rounds, hospitals, surveillance and forecast highlights, recent activity |
 | GET | `/api/analytics/options` | Diseases, regions and weeks available |
-| GET | `/api/analytics/hotspots?disease=&period=` | Regional statistics and hotspot candidates for one disease and week (`period` = week start, `YYYY-MM-DD`), with GeoJSON |
+| GET | `/api/analytics/hotspots?disease=&period=` | Regional statistics and hotspot candidates for one disease and week (`period` = week start, `YYYY-MM-DD`), with GeoJSON. `hotspot_clusters` holds the K-Means layer (clusters of potential hotspots, or the reason there are none); each region and feature carries `potential_hotspot_cluster` |
 | GET | `/api/analytics/forecast?region_id=&disease=&horizon=` | Forecast (1-26 weeks) with model, MAE, RMSE, intervals and the candidates compared |
 | GET | `/api/analytics/explainability?modality=&scope=global\|individual&case_id=` | Explanation for the modality's current global model |
 | GET | `/api/analytics/privacy` | Privacy statement, what is shared, DP configuration and accounting, validation checks |

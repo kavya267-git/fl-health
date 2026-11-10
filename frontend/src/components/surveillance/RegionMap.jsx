@@ -15,7 +15,10 @@ const TILE_ATTRIBUTION = import.meta.env.VITE_MAP_TILE_ATTRIBUTION || ''
  * drawn only for real boundaries and only when VITE_MAP_TILE_URL is set; simulated regions are not a real
  * place, so they always sit on a plain ground.
  */
-export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSelect, showTiles, watermark }) {
+/** Colour of the "cluster of potential hotspots" layer: a halo around the regions, distinct from the status outlines. */
+export const CLUSTER_COLOR = '#6b3fa0'
+
+export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSelect, showTiles, watermark, showClusters = false }) {
   const bounds = useMemo(() => geojsonBounds(geojson), [geojson])
   const tiles = Boolean(showTiles && TILE_URL)
   const selectRef = useRef(onSelect)
@@ -39,9 +42,15 @@ export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSel
     [scale, valueKey, selectedId, tiles],
   )
 
+  const clustered = useMemo(
+    () => ({ ...geojson, features: geojson.features.filter((f) => f.properties.potential_hotspot_cluster) }),
+    [geojson],
+  )
+
   const onEachFeature = (feature, layer) => {
-    const { region_name: name, status_label: label } = feature.properties
-    layer.bindTooltip(`${name}: ${label}`, { sticky: true })
+    const { region_name: name, status_label: label, potential_hotspot_cluster: cluster } = feature.properties
+    const clusterText = showClusters && cluster ? ` (cluster of potential hotspots ${cluster})` : ''
+    layer.bindTooltip(`${name}: ${label}${clusterText}`, { sticky: true })
     layer.on({ click: () => selectRef.current(feature.properties.region_id) })
   }
 
@@ -65,7 +74,16 @@ export function RegionMap({ geojson, dataKey, scale, valueKey, selectedId, onSel
       >
         {tiles ? <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} /> : null}
         {/* Flagged regions are drawn last so their outlines sit on top of their neighbours'. */}
-        <GeoJSON key={dataKey} data={orderForDrawing(geojson)} style={style} onEachFeature={onEachFeature} />
+        <GeoJSON key={`${dataKey}:${showClusters}`} data={orderForDrawing(geojson)} style={style} onEachFeature={onEachFeature} />
+        {/* Extra layer: a translucent halo around regions in a cluster of potential hotspots. Not clickable. */}
+        {showClusters && clustered.features.length ? (
+          <GeoJSON
+            key={`${dataKey}:clusters`}
+            data={clustered}
+            interactive={false}
+            style={() => ({ fill: false, color: CLUSTER_COLOR, weight: 9, opacity: 0.38, lineJoin: 'round' })}
+          />
+        ) : null}
       </MapContainer>
       {watermark ? (
         // Part of the map itself, above the regions and not dismissable; clicks pass through to the map.

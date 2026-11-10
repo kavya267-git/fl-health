@@ -98,6 +98,7 @@ The PyTorch model tests are skipped automatically when PyTorch is not installed.
 - [docs/setup.md](docs/setup.md) - installation, configuration, Supabase, real datasets, external nodes, deployment
 - [docs/multi-machine.md](docs/multi-machine.md) - coordinator on one laptop, hospitals on others: network, firewall, demo script
 - [docs/architecture.md](docs/architecture.md) - components, data boundaries, round lifecycle, database
+- [docs/design-changes.md](docs/design-changes.md) - where the build differs from the approved plan (React instead of Flutter, our own coordinator instead of Flower) and why
 - [docs/api.md](docs/api.md) - every endpoint
 - [docs/resource-planning.md](docs/resource-planning.md) - how the hospital bed projection is calculated, with a worked example
 - [docs/permissions.md](docs/permissions.md) - roles (including health officers, researchers and hospital managers), what each may do, and the demo accounts

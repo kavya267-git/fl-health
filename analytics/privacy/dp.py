@@ -7,6 +7,16 @@ What is implemented, for real, at the hospital node before an update leaves:
 2. Gaussian noise with standard deviation ``noise_multiplier * clip_norm`` is
    added to every clipped coordinate.
 
+Optionally, the clip norm is **adaptive** (Andrew et al., "Differentially
+Private Learning with Adaptive Clipping", NeurIPS 2021): instead of a fixed
+value it tracks a target quantile of the hospitals' update norms. Each
+hospital also releases one noised bit, whether its update norm was within the
+round's clip norm, and the coordinator moves the clip norm geometrically
+towards the target quantile using the noised bits only (see
+``next_clip_norm``). The round's privacy budget is split between the bit and
+the update exactly as in the paper, so the total per round is the same as a
+fixed-clip round with the same noise multiplier.
+
 What is *not* claimed: this is a prototype. The accounting below is a simple
 zero-concentrated-DP bound under stated assumptions, it has not been audited,
 and batch-normalisation running statistics are sent unmodified (they are
@@ -34,8 +44,17 @@ ACCOUNTING_ASSUMPTIONS = [
     "Epsilon is derived with epsilon = rho + 2 * sqrt(rho * ln(1 / delta)).",
     "No amplification by subsampling is assumed.",
     "Batch-normalisation running statistics are transmitted without clipping or noise and fall outside this bound.",
+    "When DP is enabled, the hospital does not report its update norm before clipping or whether it was clipped: "
+    "neither is noised, so they would fall outside this bound. The coordinator only sees the noised update.",
     "A round run without DP has no formal bound, so the cumulative figure only holds if every round used DP.",
+    "With adaptive clipping, each hospital also releases its clipping bit (b - 1/2, sensitivity 1/2) with Gaussian "
+    "noise sigma_b, and noises its update with z_update = (z^-2 - (2 sigma_b)^-2)^(-1/2) (Andrew et al., 2021). The "
+    "two releases compose to rho = 1 / (2 z^2) per round, the same as a fixed-clip round with multiplier z. The "
+    "clip norm itself is computed from noised bits only (post-processing).",
 ]
+
+#: Andrew et al. (2021) defaults: geometric clip-norm update rate.
+DEFAULT_CLIP_LEARNING_RATE = 0.2
 
 
 @dataclass
@@ -44,6 +63,14 @@ class DPConfig:
     clip_norm: float = 1.0
     noise_multiplier: float = 0.0
     delta: float = 1e-5
+    #: Adaptive clipping (Andrew et al., 2021). ``clip_norm`` is then the norm used in this round; the first
+    #: adaptive round starts from it, later rounds from the value the previous round computed.
+    adaptive_clipping: bool = False
+    target_quantile: float = 0.5
+    clip_learning_rate: float = DEFAULT_CLIP_LEARNING_RATE
+    #: Share of each round's privacy budget (rho) spent on the clipping bit. Fixes sigma_b relative to the
+    #: noise multiplier, so the split is valid at every noise level: sigma_b = z / (2 sqrt(share)).
+    quantile_budget_share: float = 0.1
 
     def validate(self) -> None:
         if not self.enabled:
@@ -54,6 +81,26 @@ class DPConfig:
             raise ValueError("noise_multiplier must be positive when differential privacy is enabled")
         if not (0 < self.delta < 1):
             raise ValueError("delta must be in (0, 1)")
+        if self.adaptive_clipping:
+            if not (0 < self.target_quantile < 1):
+                raise ValueError("target_quantile must be in (0, 1)")
+            if not (self.clip_learning_rate > 0):
+                raise ValueError("clip_learning_rate must be positive")
+            if not (0 < self.quantile_budget_share < 1):
+                raise ValueError("quantile_budget_share must be in (0, 1)")
+
+    @property
+    def bit_noise_std(self) -> float:
+        """sigma_b: noise on each hospital's clipping bit (adaptive clipping only)."""
+        return self.noise_multiplier / (2.0 * math.sqrt(self.quantile_budget_share))
+
+    @property
+    def update_noise_multiplier(self) -> float:
+        """Noise multiplier applied to the update: z itself, or z_update when part of the budget goes to the bit."""
+        if not self.adaptive_clipping:
+            return self.noise_multiplier
+        # Andrew et al. (2021): z_update = (z^-2 - (2 sigma_b)^-2)^(-1/2) = z / sqrt(1 - share).
+        return (self.noise_multiplier**-2 - (2.0 * self.bit_noise_std) ** -2) ** -0.5
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -66,6 +113,10 @@ class DPConfig:
             clip_norm=float(payload.get("clip_norm", 1.0)),
             noise_multiplier=float(payload.get("noise_multiplier", 0.0)),
             delta=float(payload.get("delta", 1e-5)),
+            adaptive_clipping=bool(payload.get("adaptive_clipping", False)),
+            target_quantile=float(payload.get("target_quantile", 0.5)),
+            clip_learning_rate=float(payload.get("clip_learning_rate", DEFAULT_CLIP_LEARNING_RATE)),
+            quantile_budget_share=float(payload.get("quantile_budget_share", 0.1)),
         )
 
 
@@ -114,8 +165,11 @@ def privatize_update(
         return {key: np.asarray(value).copy() for key, value in local_weights.items()}, report
 
     config.validate()
+    # Neither is noised, so neither may leave the hospital (outside the accounting); see ACCOUNTING_ASSUMPTIONS.
+    report["update_norm_before"] = None
+    report["withheld"] = ["update_norm_before", "clipped"]
     scale = min(1.0, config.clip_norm / norm_before) if norm_before > 0 else 1.0
-    noise_std = config.noise_multiplier * config.clip_norm
+    noise_std = config.update_noise_multiplier * config.clip_norm
     trainable = set(_trainable_keys(global_weights))
     private: Weights = {}
     for key, local in local_weights.items():
@@ -132,7 +186,7 @@ def privatize_update(
         {
             "mechanism": "gaussian",
             "clip_norm": float(config.clip_norm),
-            "clipped": bool(scale < 1.0),
+            "clipped": None,
             "noise_multiplier": float(config.noise_multiplier),
             "noise_std": float(noise_std),
             "delta": float(config.delta),
@@ -140,7 +194,38 @@ def privatize_update(
             "unprotected_tensors": sorted(k for k in local_weights if k not in trainable),
         }
     )
+    if config.adaptive_clipping:
+        # The bit is centred (b - 1/2, sensitivity 1/2) and noised before it leaves the hospital; the true bit
+        # is not reported. Drawn after the update noise so a fixed-clip round's noise is unchanged.
+        bit = 1.0 if norm_before <= config.clip_norm else 0.0
+        report.update(
+            {
+                "adaptive_clipping": True,
+                "target_quantile": float(config.target_quantile),
+                "update_noise_multiplier": float(config.update_noise_multiplier),
+                "bit_noise_std": float(config.bit_noise_std),
+                "noisy_clip_bit": float(bit - 0.5 + rng.normal(0.0, config.bit_noise_std)),
+            }
+        )
     return private, report
+
+
+def next_clip_norm(clip_norm: float, noisy_bits: Iterable[float], target_quantile: float, learning_rate: float) -> dict:
+    """The next round's clip norm from this round's noised clipping bits (Andrew et al., 2021, geometric update).
+
+    ``noisy_bits`` are the hospitals' ``noisy_clip_bit`` values (b - 1/2 + noise). Their mean plus 1/2 estimates
+    the share of updates whose norm was within the clip norm; the clip norm grows when that share is below the
+    target quantile and shrinks when it is above: C <- C * exp(-learning_rate * (estimate - target)).
+    """
+    bits = [float(b) for b in noisy_bits]
+    if not bits:
+        return {"clip_norm": float(clip_norm), "estimated_share_unclipped": None, "hospitals": 0}
+    estimate = sum(bits) / len(bits) + 0.5
+    return {
+        "clip_norm": float(clip_norm * math.exp(-learning_rate * (estimate - target_quantile))),
+        "estimated_share_unclipped": float(estimate),
+        "hospitals": len(bits),
+    }
 
 
 def gaussian_rho(noise_multiplier: float) -> float:

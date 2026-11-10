@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PipelineDiagram } from '../components/federated/PipelineDiagram'
 import { RoundStepper } from '../components/federated/RoundStepper'
 import { StartRoundDialog } from '../components/federated/StartRoundDialog'
-import { ModalityTag, ParticipantStatusBadge, RoundStatusBadge, SimulatedTag } from '../components/ui/Badge'
+import { Badge, ModalityTag, ParticipantStatusBadge, RoundStatusBadge, SimulatedTag } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { DefinitionList, Note, PageHeader, Tabs, Td, Th } from '../components/ui/Misc'
@@ -37,7 +37,7 @@ function GlobalMetrics({ round }) {
   )
 }
 
-function ParticipantsTable({ round }) {
+export function ParticipantsTable({ round }) {
   const coefficients = round.config?.aggregation?.coefficients || {}
   return (
     <div className="overflow-x-auto">
@@ -50,6 +50,7 @@ function ParticipantsTable({ round }) {
             <Th align="right">FedAvg weight (n / N)</Th>
             <Th align="right">Local training loss</Th>
             <Th align="right">Local model F1</Th>
+            <Th>Update check</Th>
           </tr>
         </thead>
         <tbody>
@@ -69,6 +70,9 @@ function ParticipantsTable({ round }) {
                 </Td>
                 <Td align="right">{lastEpoch ? lastEpoch.loss.toFixed(3) : DASH}</Td>
                 <Td align="right">{validation ? formatPercent(validation.f1) : DASH}</Td>
+                <Td className="whitespace-nowrap">
+                  <ScreeningCell screening={participant.screening} />
+                </Td>
               </tr>
             )
           })}
@@ -76,7 +80,49 @@ function ParticipantsTable({ round }) {
       </table>
       <p className="px-4 py-3 text-xs leading-relaxed text-muted">
         Local model F1 is each hospital&rsquo;s own model after local training, before averaging, on that hospital&rsquo;s held-out records.
+        Update check: an Isolation Forest compares each update&rsquo;s size (relative to this round&rsquo;s median) and direction (cosine
+        distance to the average of the other hospitals&rsquo; updates) with earlier updates of this model. &ldquo;Unusual&rdquo; is a flag for a person to look at, not a
+        rejection: the update is still averaged. Different patients, a small hospital or privacy noise can all make an update unusual.
       </p>
+      <FlaggedUpdates round={round} />
+    </div>
+  )
+}
+
+function ScreeningCell({ screening }) {
+  if (!screening) return <span className="text-faint">{DASH}</span>
+  if (!screening.scored) {
+    return (
+      <span className="text-xs text-muted" title={screening.reason || ''}>
+        Not scored yet
+      </span>
+    )
+  }
+  return screening.flagged ? (
+    <Badge tone="warn" title={screening.reason || ''}>
+      Unusual
+    </Badge>
+  ) : (
+    <span className="text-xs text-muted">Typical</span>
+  )
+}
+
+function FlaggedUpdates({ round }) {
+  const flagged = round.participants.filter((p) => p.screening?.flagged)
+  if (!flagged.length) return null
+  return (
+    <div className="px-4 pb-4">
+      <Note tone="warn" title={`${flagged.length} unusual update${flagged.length === 1 ? '' : 's'} flagged (still used)`}>
+        <ul className="mt-1 space-y-1">
+          {flagged.map((p) => (
+            <li key={p.hospital_id}>
+              <span className="font-medium">{p.hospital_name || p.hospital_id}</span>: {p.screening.reason} Anomaly score{' '}
+              {p.screening.score.toFixed(2)}, compared with {p.screening.history_size} earlier updates.
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2">Recorded in the audit log. Nothing was rejected automatically.</p>
+      </Note>
     </div>
   )
 }

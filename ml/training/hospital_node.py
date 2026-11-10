@@ -24,12 +24,13 @@ from typing import Optional, Protocol
 import numpy as np
 
 from analytics.explainability.service import local_global_importance
-from analytics.privacy.dp import DPConfig, privatize_update
-from ml.common.datasets import load_local_dataset, local_data_summary
+from analytics.privacy.dp import DPConfig, privatize_update, update_norm
+from ml.common.datasets import local_data_summary
 from ml.common.types import TrainConfig
 from ml.common.weights import architecture_signature, weights_from_bytes, weights_to_bytes
+from ml.ehr.imputation import MissingnessConfig
 from ml.registry import get_adapter
-from ml.training.local_trainer import evaluate_on_local_data, train_on_local_data
+from ml.training.local_trainer import evaluate_on_local_data, load_training_splits, train_on_local_data
 
 
 class CoordinatorTransport(Protocol):
@@ -67,6 +68,9 @@ class HospitalNode:
         self.backend = backend
         #: Size of the last update sent and the last evaluation computed, for the node's console.
         self.last_update_bytes: Optional[int] = None
+        #: Norm of the last update before clipping. A local diagnostic (the experiment harness reads it); with DP
+        #: enabled it is never sent to the coordinator.
+        self.last_update_norm: Optional[float] = None
         self.last_evaluation = None
 
     # ------------------------------------------------------------- metadata
@@ -94,8 +98,10 @@ class HospitalNode:
             class_weighting=str(training.get("class_weighting", "none")),
             proximal_mu=float(training.get("proximal_mu", 0.0)),
         )
-        output = train_on_local_data(self.data_dir, modality, global_weights, config, self.backend)
+        missingness = MissingnessConfig.from_dict(training.get("missingness"))
+        output = train_on_local_data(self.data_dir, modality, global_weights, config, self.backend, missingness)
 
+        self.last_update_norm = update_norm(global_weights, output.weights)
         dp_config = DPConfig.from_dict(round_info.get("differential_privacy"))
         private_weights, dp_report = privatize_update(
             global_weights, output.weights, dp_config, np.random.default_rng(seed + 1)
@@ -108,6 +114,8 @@ class HospitalNode:
             "backend": adapter.backend,
             "architecture": adapter.architecture,
         }
+        if output.missing_values is not None:
+            metrics["missing_values"] = output.missing_values
         payload = weights_to_bytes(private_weights)
         self.last_update_bytes = len(payload)
         return self.transport.submit_update(
@@ -124,13 +132,13 @@ class HospitalNode:
         modality = round_info["modality"]
         adapter = get_adapter(modality, self.backend)
         weights = weights_from_bytes(self.transport.fetch_global_model(round_id, self.hospital_id, "result"))
-        evaluation = evaluate_on_local_data(self.data_dir, modality, weights, self.backend)
+        missingness = MissingnessConfig.from_dict(round_info.get("training", {}).get("missingness"))
+        evaluation = evaluate_on_local_data(self.data_dir, modality, weights, self.backend, missingness=missingness)
         self.last_evaluation = evaluation
 
         explanation = None
         if modality == "ehr" and round_info.get("explainability", {}).get("global_importance", True):
-            validation = load_local_dataset(self.data_dir, modality, "val")
-            train = load_local_dataset(self.data_dir, modality, "train")
+            train, validation, _ = load_training_splits(self.data_dir, modality, missingness)
             explanation = local_global_importance(
                 adapter,
                 weights,

@@ -118,13 +118,17 @@ def prepare_ehr_csv(
     seed: int = 0,
     alpha: Optional[float] = 1.0,
     val_fraction: float = 0.25,
+    keep_missing: bool = False,
 ) -> Dict[str, dict]:
     """Partition a tabular extract (for example one row per MIMIC-IV admission).
 
     The CSV must provide the 14 features in ``ml.ehr.features`` and a binary
     label. ``column_mapping`` renames your columns to those feature names
     (``{"your_column": "feature_name"}``). Rows with missing values are dropped
-    and counted in the description.
+    and counted in the description, unless ``keep_missing`` is set: then rows
+    with missing *feature* values are kept and each hospital node fills them in
+    by KNN imputation fitted on its own training split (``ml.ehr.imputation``).
+    Rows without a label are always dropped.
     """
     frame = pd.read_csv(csv_path)
     if column_mapping:
@@ -139,8 +143,10 @@ def prepare_ehr_csv(
 
     keep = EHR_FEATURE_NAMES + [EHR_LABEL_COLUMN] + ([group_column] if group_column else [])
     before = len(frame)
-    frame = frame[keep].dropna().reset_index(drop=True)
+    frame = frame[keep]
+    frame = (frame.dropna(subset=[EHR_LABEL_COLUMN]) if keep_missing else frame.dropna()).reset_index(drop=True)
     dropped = before - len(frame)
+    gaps = int(frame[EHR_FEATURE_NAMES].isna().sum().sum())
     labels = frame[EHR_LABEL_COLUMN].to_numpy()
     if not set(np.unique(labels)) <= {0, 1}:
         raise ValueError("The EHR label must be binary (0 or 1)")
@@ -153,7 +159,12 @@ def prepare_ehr_csv(
         groups,
         hospital_ids,
         source,
-        f"Prepared from {Path(csv_path).name}; {dropped} row(s) with missing values dropped.",
+        (
+            f"Prepared from {Path(csv_path).name}; {dropped} row(s) without a label dropped; {gaps} missing "
+            "feature value(s) kept for KNN imputation at the hospital node."
+            if keep_missing
+            else f"Prepared from {Path(csv_path).name}; {dropped} row(s) with missing values dropped."
+        ),
         seed,
         alpha,
         val_fraction,

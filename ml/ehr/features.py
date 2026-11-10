@@ -54,6 +54,8 @@ NUM_EHR_FEATURES = len(EHR_FEATURES)
 
 _REF_MEAN = np.array([f.ref_mean for f in EHR_FEATURES], dtype=np.float32)
 _REF_STD = np.array([f.ref_std for f in EHR_FEATURES], dtype=np.float32)
+#: (centre, spread) per feature, the fixed reference values above; also used for imputation distances.
+EHR_REFERENCE_SCALE = (_REF_MEAN, _REF_STD)
 
 
 def standardize_ehr(X: np.ndarray) -> np.ndarray:

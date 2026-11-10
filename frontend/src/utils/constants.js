@@ -70,6 +70,7 @@ export const AUDIT_ACTION_LABELS = {
   SITUATION_REPORT_EXPORTED: 'Situation report exported',
   HOSPITAL_CAPACITY_CHANGED: 'Hospital capacity changed',
   PLANNING_ASSUMPTIONS_CHANGED: 'Planning assumptions changed',
+  UPDATE_FLAGGED_UNUSUAL: 'Unusual model update flagged',
 }
 
 export const ROLE_LABELS = {

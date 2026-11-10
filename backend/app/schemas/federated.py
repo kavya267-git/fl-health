@@ -16,6 +16,17 @@ class DifferentialPrivacyConfig(BaseModel):
     clip_norm: float = Field(default=1.0, gt=0, le=1000)
     noise_multiplier: float = Field(default=0.0, ge=0, le=100)
     delta: float = Field(default=1e-5, gt=0, lt=1)
+    adaptive_clipping: bool = Field(
+        default=False,
+        description=(
+            "Adaptive clip norm (Andrew et al., 2021): the clip norm tracks target_quantile of the hospitals' update "
+            "norms, estimated from noised clipping bits. clip_norm is the starting value when no earlier adaptive "
+            "round of this modality has finished."
+        ),
+    )
+    target_quantile: float = Field(default=0.5, gt=0, lt=1)
+    clip_learning_rate: float = Field(default=0.2, gt=0, le=5)
+    quantile_budget_share: float = Field(default=0.1, gt=0, lt=1)
 
 
 class StartRoundRequest(BaseModel):
@@ -27,6 +38,15 @@ class StartRoundRequest(BaseModel):
     min_participants: int = Field(default=2, ge=1, le=16)
     auto_aggregate: bool = True
     differential_privacy: DifferentialPrivacyConfig = Field(default_factory=DifferentialPrivacyConfig)
+    simulated_missing_rate: float = Field(
+        default=0.0,
+        ge=0,
+        le=0.5,
+        description=(
+            "EHR only. Share of feature values each hospital blanks completely at random before training, to "
+            "exercise KNN imputation (fitted on its own training split). 0 = off."
+        ),
+    )
     deadline_seconds: int = Field(
         default=600,
         ge=10,

@@ -18,6 +18,7 @@ from analytics.geospatial.surveillance import (
     simulate_reports,
     validate_reports,
 )
+from analytics.hotspot.clusters import cluster_flagged
 from analytics.hotspot.detector import (
     CANDIDATE_HOTSPOT,
     ELEVATED,
@@ -283,7 +284,40 @@ class SurveillanceService:
         """
         # The wording is attached when serving, so results cached under older wording never show it.
         payload = {**self._hotspots_all(disease, period, actor, audit=True), "disclaimer": HOTSPOT_DISCLAIMER}
+        payload = self._with_clusters(payload)
         return payload if jurisdiction is None else scope_hotspots(payload, jurisdiction)
+
+    def _with_clusters(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Add the K-Means layer: clusters of potential hotspots (analytics/hotspot/clusters.py).
+
+        Computed when serving, from the stored result, so results cached before this layer existed get it too.
+        """
+        centroids = {r["region_id"]: r for r in self.regions()}
+        flagged = [
+            {
+                "region_id": r["region_id"],
+                "region_name": r["region_name"],
+                "centroid_lon": centroids[r["region_id"]]["centroid_lon"],
+                "centroid_lat": centroids[r["region_id"]]["centroid_lat"],
+                "case_rate": r["case_rate"],
+                "anomaly_score": r["anomaly_score"],
+            }
+            for r in payload["regions"]
+            if r["hotspot_flag"] and r["region_id"] in centroids
+        ]
+        result = cluster_flagged(flagged)
+        member = {rid: c["cluster"] for c in result["clusters"] for rid in c["region_ids"]}
+        regions = [{**r, "potential_hotspot_cluster": member.get(r["region_id"])} for r in payload["regions"]]
+        features = [
+            {**f, "properties": {**f["properties"], "potential_hotspot_cluster": member.get(f["properties"]["region_id"])}}
+            for f in payload["geojson"]["features"]
+        ]
+        return {
+            **payload,
+            "regions": regions,
+            "geojson": {**payload["geojson"], "features": features},
+            "hotspot_clusters": result,
+        }
 
     def _hotspots_all(self, disease: Optional[str], period: Optional[str], actor: str, audit: bool = False) -> Dict[str, Any]:
         """Hotspot results for every region (cached per data version).
@@ -475,10 +509,28 @@ def scope_hotspots(payload: Dict[str, Any], jurisdiction: List[str]) -> Dict[str
     ]
     features = [f for f in payload["geojson"]["features"] if f["properties"]["region_id"] in allowed]
     summary = {status: sum(1 for r in regions if r["status"] == status) for status in payload["summary"]}
-    return {
+    scoped = {
         **payload,
         "regions": regions,
         "geojson": {**payload["geojson"], "features": features},
         "summary": summary,
         "jurisdiction": sorted(allowed),
     }
+    if payload.get("hotspot_clusters"):
+        # Clusters are found on every flagged region (like detection); an officer sees the members in their
+        # jurisdiction, and a cluster only if at least two of its regions are theirs.
+        clusters = []
+        for cluster in payload["hotspot_clusters"]["clusters"]:
+            keep = [i for i, rid in enumerate(cluster["region_ids"]) if rid in allowed]
+            if len(keep) >= 2:
+                clusters.append({**cluster, "region_ids": [cluster["region_ids"][i] for i in keep],
+                                 "region_names": [cluster["region_names"][i] for i in keep]})
+        kept = {rid for c in clusters for rid in c["region_ids"]}
+        scoped["hotspot_clusters"] = {**payload["hotspot_clusters"], "clusters": clusters}
+        scoped["regions"] = [{**r, "potential_hotspot_cluster": r.get("potential_hotspot_cluster") if r["region_id"] in kept else None} for r in regions]
+        scoped["geojson"] = {**scoped["geojson"], "features": [
+            {**f, "properties": {**f["properties"], "potential_hotspot_cluster": f["properties"].get("potential_hotspot_cluster")
+                                 if f["properties"]["region_id"] in kept else None}}
+            for f in features
+        ]}
+    return scoped

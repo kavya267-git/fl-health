@@ -86,7 +86,11 @@ def save_local_dataset(
     return manifest
 
 
-def load_local_dataset(hospital_dir: Path, modality: str, split: str) -> ArrayDataset:
+def load_local_dataset(
+    hospital_dir: Path, modality: str, split: str, allow_missing_features: bool = False
+) -> ArrayDataset:
+    """Load one split. EHR feature gaps (NaN) are refused unless ``allow_missing_features``: only the hospital
+    node's training code allows them, because it fills them in (``ml.ehr.imputation``) before use."""
     path = _split_path(hospital_dir, modality, split)
     if not path.exists():
         raise DatasetUnavailableError(
@@ -102,7 +106,9 @@ def load_local_dataset(hospital_dir: Path, modality: str, split: str) -> ArrayDa
         missing = [c for c in EHR_FEATURE_NAMES + [EHR_LABEL_COLUMN] if c not in frame.columns]
         if missing:
             raise ValueError(f"{path} is missing columns: {missing}")
-        if frame[EHR_FEATURE_NAMES + [EHR_LABEL_COLUMN]].isna().any().any():
+        if frame[EHR_LABEL_COLUMN].isna().any():
+            raise ValueError(f"{path} contains missing values in '{EHR_LABEL_COLUMN}'; drop those rows during preparation")
+        if not allow_missing_features and frame[EHR_FEATURE_NAMES].isna().any().any():
             raise ValueError(f"{path} contains missing values; impute or drop them during preparation")
         X = frame[EHR_FEATURE_NAMES].to_numpy(dtype=np.float32)
         y = frame[EHR_LABEL_COLUMN].to_numpy(dtype=np.int64)

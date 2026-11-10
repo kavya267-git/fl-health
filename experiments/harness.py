@@ -37,7 +37,7 @@ import shutil
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -56,7 +56,7 @@ if os.getenv("FL_EXPERIMENT_THREADS"):
 
     torch.set_num_threads(int(os.environ["FL_EXPERIMENT_THREADS"]))
 
-from analytics.privacy.dp import DPConfig, account_rounds, is_statistic, update_norm  # noqa: E402
+from analytics.privacy.dp import DPConfig, account_rounds, is_statistic, next_clip_norm, update_norm  # noqa: E402
 from app.federated.fedavg import ClientUpdate, federated_average  # noqa: E402
 from app.federated.validation import UpdateRejected, validate_update  # noqa: E402
 from ml import __version__  # noqa: E402
@@ -65,10 +65,12 @@ from ml.common.real_data import DEFAULT_HOSPITALS, partition_groups, split_train
 from ml.common.types import ArrayDataset, EvalResult, TrainConfig  # noqa: E402
 from ml.common.weights import weights_from_bytes, weights_to_bytes  # noqa: E402
 from ml.ecg.preprocess import ECG_BEAT_LENGTH  # noqa: E402
+from ml.ehr.imputation import MissingnessConfig  # noqa: E402
 from ml.evaluation.metrics import per_class_metrics, pool_evaluations  # noqa: E402
 from ml.registry import adapter_override, get_adapter  # noqa: E402
 from ml.simulation.hospitals import SIMULATED_HOSPITALS, generate_hospital_data  # noqa: E402
 from ml.training.hospital_node import HospitalNode  # noqa: E402
+from ml.training.local_trainer import load_training_splits  # noqa: E402
 
 RESULTS_DIR = ROOT / "experiments" / "results"
 WORK_DIR = ROOT / "experiments" / ".work"
@@ -90,7 +92,11 @@ DEFAULTS = {
         "learning_rate": 0.003,
         "class_weighting": "none",
         "proximal_mu": 0.0,
+        # EHR only: {"mcar_rate": r, "seed": s} blanks a share of feature values at random; each hospital
+        # fills them by KNN imputation fitted on its own training split (ml.ehr.imputation).
+        "missingness": None,
     },
+    # adaptive_clipping / target_quantile / clip_learning_rate / quantile_budget_share: see analytics.privacy.dp.
     "dp": {"enabled": False, "clip_norm": 1.0, "noise_multiplier": 0.0, "delta": 1e-5},
     "methods": ["local", "fedavg", "centralised"],
     "seeds": [0, 1, 2],
@@ -163,9 +169,16 @@ class Partition:
     excluded: Dict[str, str] = field(default_factory=dict)
     sizes: Dict[str, dict] = field(default_factory=dict)
     records: Dict[str, dict] = field(default_factory=dict)  # patient-wise setting: records per hospital
+    missingness: Optional[dict] = None
 
     def load(self, hospital_id: str, split: str) -> ArrayDataset:
-        return load_local_dataset(self.root / hospital_id, self.modality, split)
+        """What the hospital node trains / evaluates on: for EHR, gaps filled from its own training split."""
+        if self.modality != "ehr":
+            return load_local_dataset(self.root / hospital_id, self.modality, split)
+        train, val, _ = load_training_splits(
+            self.root / hospital_id, self.modality, MissingnessConfig.from_dict(self.missingness)
+        )
+        return train if split == "train" else val
 
 
 def load_mitbih(csv_paths: Iterable[str]) -> tuple:
@@ -249,7 +262,7 @@ def build_partition(config: dict, seed: int, run_dir: Path) -> Partition:
     if run_dir.exists():
         shutil.rmtree(run_dir)
     hospitals = list(DEFAULT_HOSPITALS)
-    partition = Partition(run_dir, modality, source, [])
+    partition = Partition(run_dir, modality, source, [], missingness=config["training"].get("missingness"))
 
     if scheme["scheme"] == "natural":
         if source != "simulated":
@@ -442,6 +455,7 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
     rows = []
     for round_number in range(1, int(training["rounds"]) + 1):
         started = time.perf_counter()
+        clip_this_round = dp.clip_norm
         round_id = f"{config.get('round_id_name') or config['name']}-seed{seed}-r{round_number:03d}"
         transport.base = weights_to_bytes(weights)
         transport.updates, transport.evaluations, transport.failures = {}, {}, {}
@@ -457,6 +471,7 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
                 "seed": seed * 100_000 + round_number,
                 "class_weighting": training["class_weighting"],
                 "proximal_mu": training["proximal_mu"],
+                **({"missingness": training["missingness"]} if training.get("missingness") else {}),
             },
             "differential_privacy": dp.to_dict(),
             "model": {"architecture": adapter.architecture, "backend": adapter.backend},
@@ -498,12 +513,29 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
             raise RuntimeError(f"Round {round_id}: only {len(accepted)} valid update(s); rejected {rejected}")
         weights = federated_average(accepted)
         transport.result = weights_to_bytes(weights)
+        clip_step = None
+        if dp.enabled and dp.adaptive_clipping:
+            # As the coordinator does after aggregation: the next clip norm from the accepted updates' noised bits.
+            clip_step = next_clip_norm(
+                dp.clip_norm,
+                [transport.updates[u.hospital_id]["dp_report"]["noisy_clip_bit"] for u in accepted],
+                dp.target_quantile,
+                dp.clip_learning_rate,
+            )
+            dp = replace(dp, clip_norm=clip_step["clip_norm"])
         for hospital_id, node in nodes.items():
             if hospital_id in {u.hospital_id for u in accepted}:
                 node.evaluate_and_report(round_id, transport.round_info)
 
         uploads = [len(u["payload"]) for u in transport.updates.values()]
-        norms = [u["dp_report"]["update_norm_before"] for u in transport.updates.values()]
+        # With DP the reports withhold the raw norm and the clipped flag; the harness reads the nodes' local
+        # diagnostic instead (never sent), so the experiment logs keep the same columns.
+        norms = [nodes[h].last_update_norm for h in transport.updates]
+        clipped = [
+            u["dp_report"]["clipped"] if u["dp_report"].get("clipped") is not None
+            else bool(u["dp_report"].get("clip_norm") and nodes[h].last_update_norm > u["dp_report"]["clip_norm"])
+            for h, u in transport.updates.items()
+        ]
         accounting = account_rounds(dp_reports[accepted[0].hospital_id], dp.delta)
         epsilon = accounting["epsilon_over_dp_rounds"]
         row = pooled_row(list(transport.evaluations.values()), modality)
@@ -512,9 +544,11 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
             n_hospitals=len(accepted),
             upload_bytes_per_hospital=float(np.mean(uploads)),
             download_bytes_per_hospital=float(np.mean(list(transport.downloaded.values()))),
-            median_update_norm=float(np.median(norms)),
-            clipped_share=float(np.mean([u["dp_report"]["clipped"] for u in transport.updates.values()])),
+            median_update_norm=float(np.median(norms)) if norms else None,
+            clipped_share=float(np.mean(clipped)) if clipped else None,
             epsilon=math.inf if epsilon is None else float(epsilon),
+            clip_norm=float(clip_this_round) if dp.enabled else None,
+            estimated_share_unclipped=clip_step["estimated_share_unclipped"] if clip_step else None,
             rejected=len(rejected),
             seconds=time.perf_counter() - started,
         )

@@ -51,6 +51,28 @@ clinical performance.
 Each round also records, per hospital, the local training loss and the locally trained model's validation
 metrics before averaging, so local and global models can be compared.
 
+## Missing values (EHR)
+
+Each hospital node fills gaps in its EHR features before training, with k-nearest-neighbour imputation
+(k = 5, scikit-learn's `KNNImputer`): a missing value becomes the mean of that feature over the five most
+similar training records that have it (`ml/ehr/imputation.py`).
+
+- **Fitted on the hospital's own training split only.** Held-out records are filled from training
+  neighbours; they never become neighbours, so held-out data cannot shape the training data or its own
+  imputation. Tests check this directly (`ml/tests/test_imputation.py`, `ml/tests/test_hospital_node.py`).
+- **Nothing leaves the hospital** except, when gaps were filled, counts: missing values per split and the
+  number of training rows the imputer was fitted on.
+- **Real gaps.** `prepare_real_data.py ehr --keep-missing` keeps rows with missing feature values for the node
+  to impute (rows without a label are always dropped). Without the flag, such rows are dropped as before.
+- **Simulated gaps.** The simulated hospitals have no gaps, so a round (or an experiment config) can blank a
+  share of values completely at random (MCAR), for example 10%, to exercise the pipeline. The pattern is
+  fixed per hospital and differs between hospitals. It is a test setting, not a property of the data.
+- **Limits.** KNN imputation assumes values are missing at random given the other features; values that are
+  missing *because* of the patient's state (a test not ordered for a well patient) are not modelled.
+  Distances are measured on features scaled by the fixed clinical reference values in `ml/ehr/features.py`
+  (the same ones the model uses), so a feature in large units does not dominate; nothing is fitted for the
+  scaling.
+
 ## Simulated data
 
 Used only in demo mode and labelled as simulated everywhere.
@@ -97,6 +119,20 @@ multiple-comparison correction across regions. Rates use a population denominato
 **Small-count suppression.** A hospital reports no count between 1 and 4. If any hospital's cell for a
 region-week is suppressed, the regional total would only be a lower bound, so it is shown as not available
 and the week is treated as missing.
+
+**Clusters of potential hotspots (extra map layer).** The regions flagged as potential hotspots in the
+week are grouped with K-Means (`analytics/hotspot/clusters.py`) on their location (centroid projected to
+kilometres, equirectangular around the flagged regions' mean latitude) and their rates (case rate per
+100,000 when populations are loaded, and the anomaly score), each standardised across the flagged regions.
+k runs from 2 to min(5, n − 1) and the k with the highest silhouette is kept; the layer is shown only if
+that silhouette is at least 0.25, the floor below which Kaufman & Rousseeuw (*Finding Groups in Data: An
+Introduction to Cluster Analysis*, Wiley, 1990, ch. 2) find no substantial structure; and only
+for groups of two or more regions. With fewer than three flagged regions there is nothing to cluster, and
+the map says so. On the map, clustered regions get a purple halo labelled "cluster of potential hotspots",
+which can be switched off. A cluster says that some flagged regions are close together and have similar
+rates; it does not say they share a cause and is not a confirmed event. With only 12 simulated regions
+and usually 0 to 4 flagged a week, the layer is often empty. A health officer sees a cluster only when at
+least two of its regions are in their jurisdiction.
 
 ## Forecasting
 
@@ -172,7 +208,31 @@ Accounting (`analytics/privacy/dp.py`), with its assumptions stated in the UI:
 - each round is ρ-zCDP with ρ = 1 / (2 · noise_multiplier²); rounds add; ε = ρ + 2·√(ρ · ln(1/δ)), δ = 10⁻⁵;
 - no subsampling amplification;
 - batch-norm running statistics are sent unclipped and un-noised and fall outside the bound;
+- with DP on (fixed or adaptive clip), the hospital does not report its update norm before clipping or
+  whether it was clipped: neither is noised, so both would fall outside the bound. Without DP they are
+  reported, for monitoring;
 - a round run without DP has no bound, so a cumulative ε only holds if every round used DP.
+
+**Adaptive clipping (option).** Instead of a fixed `clip_norm`, the clip norm can track a target quantile
+γ of the hospitals' update norms (Andrew et al., "Differentially Private Learning with Adaptive Clipping",
+NeurIPS 2021):
+
+1. each hospital clips with the round's clip norm C and computes its bit b = 1 if ‖Δ‖₂ ≤ C, else 0;
+2. it sends the centred bit (b − ½) plus Gaussian noise N(0, σ_b²); as with any DP round, it does not send its
+   raw norm or whether it was clipped (here either would also reveal the bit);
+3. its update is noised with z_Δ · C, where z_Δ = (z⁻² − (2σ_b)⁻²)^(−½) as in the paper, so that the update
+   (sensitivity C) and the bit (sensitivity ½) together cost ρ = 1 / (2z²) per round: the same as a
+   fixed-clip round with noise multiplier z, and the accounting above is unchanged;
+4. after aggregation the coordinator computes b̄ = mean of the noised bits + ½ and sets the next round's
+   clip norm to C · exp(−η (b̄ − γ)), η = 0.2 by default (the paper's geometric update). This uses noised
+   bits only, so it is post-processing. The next adaptive round of the same model starts from that value.
+
+σ_b is set from the share of each round's budget given to the bit (`quantile_budget_share`, default 0.1):
+σ_b = z / (2√share), which keeps the split valid at every noise level. One difference from the paper: the
+paper's server adds noise once to the sum of the bits and of the updates (central DP over many clients),
+while here, as for the fixed clip, each hospital noises its own bit and update before they leave. With four
+hospitals the bit average is therefore noisy, and the clip norm moves slowly: when every update is clipped
+it grows on average by a factor exp(η γ) per round (about 1.105 for η = 0.2, γ = 0.5).
 
 This is an unaudited prototype. With four hospitals, noise large enough to give a small ε destroys model
 quality, and noise small enough to preserve quality gives an ε in the hundreds or thousands - the UI shows
@@ -181,6 +241,26 @@ whichever it is. It is not patient-level DP (that would need DP-SGD inside local
 **Not implemented:** secure aggregation (the coordinator sees each hospital's update), encryption of
 updates at rest, protection against a malicious coordinator or malicious hospitals (no robust
 aggregation).
+
+**Screening of incoming updates (advisory).** At aggregation, the coordinator describes each valid update by
+two numbers: its size relative to the round's median update, and its cosine distance to the mean direction
+of the *other* hospitals' updates (each scaled to unit length, so one very large update cannot drag the
+reference towards itself). An Isolation Forest (scikit-learn, 200 trees, fixed seed) is fitted on those
+numbers for the most recent 100 earlier updates of the same model plus the current round, and an update is
+flagged as unusual when its anomaly score is above 0.6. Liu, Ting & Zhou ("Isolation Forest", ICDM 2008):
+scores close to 1 indicate anomalies, while scores around 0.5 or below mean there is no distinct anomaly.
+Nothing is scored
+until 20 earlier updates exist (`backend/app/federated/screening.py`). A flag appears on the round page and
+as `UPDATE_FLAGGED_UNUSUAL` in the audit log. **It never rejects an update**: the flagged update is averaged
+like any other. Honest updates can be flagged too: hospitals with different patients move the model in
+different directions, update directions drift as training converges, DP noise changes both numbers, and the
+history is small. In the tests, an update reversed and scaled ×5 stands out clearly, while an honest
+hospital can sit near the threshold. In a demo run of six honest EHR rounds (simulated hospitals, TabNet,
+10 November 2026), the first round that was scored (round 6) flagged 2 of its 4 honest updates, with
+scores of 0.51 and 0.50, just above the threshold then in use (scikit-learn's "auto" 0.5). **The threshold was
+raised to 0.6 after observing these borderline flags on honest updates**, so it was chosen after seeing data,
+not fixed in advance. The page still shows each update's raw score. Honest updates can still be flagged. It is a
+prompt for a person to look, not a defence against poisoning (there is still no robust aggregation).
 
 **Validation checks** (Settings page) inspect the running system: no patient-identifier-like columns in
 the central schema; coordinator storage separate from hospital data and free of raw-data file types; every

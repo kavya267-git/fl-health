@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { MapLegend } from '../components/surveillance/MapLegend'
-import { RegionMap } from '../components/surveillance/RegionMap'
+import { CLUSTER_COLOR, RegionMap } from '../components/surveillance/RegionMap'
 import { RegionPanel } from '../components/surveillance/RegionPanel'
 import { buildScale } from '../components/surveillance/scale'
 import { HotspotStatusBadge, SimulatedTag } from '../components/ui/Badge'
@@ -12,7 +12,39 @@ import { api } from '../services/endpoints'
 import { HOTSPOT_ORDER } from '../utils/constants'
 import { DASH, formatNumber } from '../utils/format'
 
+/** The K-Means layer: which potential hotspots group together by location and rate, or why none do. */
+export function ClusterLayerNote({ layer, shown, onToggle }) {
+  if (!layer) return null
+  const clusters = layer.clusters || []
+  return (
+    <div className="rounded-md border border-line bg-canvas px-3 py-2.5 text-xs leading-relaxed text-muted">
+      <label className="flex items-center gap-2 font-semibold text-ink">
+        <input type="checkbox" className="h-4 w-4 accent-[#6b3fa0]" checked={shown} disabled={!clusters.length} onChange={(e) => onToggle(e.target.checked)} />
+        <span className="h-3 w-5 rounded-sm bg-surface" style={{ border: `3px solid ${CLUSTER_COLOR}`, opacity: 0.7 }} />
+        Cluster of potential hotspots
+      </label>
+      {clusters.length ? (
+        <ul className="mt-1.5 space-y-0.5">
+          {clusters.map((c) => (
+            <li key={c.cluster}>
+              <span className="font-medium text-ink">{c.label}:</span> {c.region_names.join(', ')}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1">{layer.reason}</p>
+      )}
+      <p className="mt-1.5">
+        Potential hotspots grouped by k-means on location and rate ({(layer.features || []).join(', ') || 'location and rate'}
+        {layer.silhouette !== null && layer.silhouette !== undefined ? `; silhouette ${layer.silhouette.toFixed(2)}` : ''}). A cluster means
+        nearby regions with similar rates; it does not mean a shared cause, and it is not a confirmed event.
+      </p>
+    </div>
+  )
+}
+
 function SurveillanceResult({ data, selectedId, onSelect }) {
+  const [showClusters, setShowClusters] = useState(true)
   const hasRates = data.regions.some((r) => r.case_rate !== null)
   const valueKey = hasRates ? 'case_rate' : 'case_count'
   const scale = useMemo(() => buildScale(data.regions.map((r) => r[valueKey])), [data, valueKey])
@@ -52,7 +84,9 @@ function SurveillanceResult({ data, selectedId, onSelect }) {
               showTiles={!data.data_status.geometry_simulated}
               // Real boundaries with simulated counts could be mistaken for real cases, so the map says so.
               watermark={data.data_status.geometry_simulated ? null : data.data_status.watermark}
+              showClusters={showClusters && Boolean(data.hotspot_clusters?.clusters?.length)}
             />
+            <ClusterLayerNote layer={data.hotspot_clusters} shown={showClusters} onToggle={setShowClusters} />
             <MapLegend
               scale={scale}
               valueLabel={hasRates ? 'cases per 100,000 residents' : 'reported cases'}

@@ -93,7 +93,8 @@ def test_differential_privacy_clips_the_transmitted_update(hospital_dir):
     _, payload, _, _, report, _ = next(c for c in transport.calls if c[0] == "update")
     sent = weights_from_bytes(payload)
     norm = np.sqrt(sum(np.sum((sent[k].astype(np.float64) - transport.global_weights[k]) ** 2) for k in sent))
-    assert report["clipped"] is True and report["update_norm_before"] > 0.05
+    assert report["clipped"] is None and report["update_norm_before"] is None  # withheld under DP
+    assert node.last_update_norm > 0.05  # clipping did happen (local diagnostic, never sent)
     assert norm == pytest.approx(0.05, rel=0.02)
 
 
@@ -117,3 +118,37 @@ def test_failures_are_reported_to_the_coordinator(tmp_path):
     with pytest.raises(FileNotFoundError):
         node.run_round("r1")
     assert transport.calls[-1][0] == "failure" and transport.calls[-1][1] == "training"
+
+
+def test_simulated_gaps_are_imputed_from_the_training_split_and_reported_as_counts(hospital_dir, monkeypatch):
+    from ml.common.datasets import load_local_dataset
+    from ml.ehr import imputation
+
+    fitted = []
+    original = imputation.EHRImputer.fit
+    monkeypatch.setattr(imputation.EHRImputer, "fit", lambda self, X: (fitted.append(np.array(X)), original(self, X))[1])
+
+    class GapsTransport(RecordingTransport):
+        def join_round(self, round_id, hospital_id, data_summary):
+            info = super().join_round(round_id, hospital_id, data_summary)
+            info["training"]["missingness"] = {"mcar_rate": 0.1, "seed": 0}
+            return info
+
+    transport = GapsTransport("ehr")
+    node = HospitalNode("hospital_a", hospital_dir, transport, "numpy-reference")
+    info = node.join("r1")
+    node.train_and_submit("r1", info)
+    metrics = next(c for c in transport.calls if c[0] == "update")[3]
+    report = metrics["missing_values"]
+    assert set(report) == {"simulated_mcar_rate", "missing_train_values", "missing_val_values", "imputation"}
+    assert report["simulated_mcar_rate"] == 0.1 and report["missing_train_values"] > 0
+    assert report["imputation"] == {"method": "k-nearest neighbours", "k": 5, "fitted_on": "training split", "rows": 180}
+
+    # Every fit saw exactly the training rows (with the simulated gaps), never a held-out row.
+    train = load_local_dataset(hospital_dir, "ehr", "train").X
+    assert fitted and all(f.shape == train.shape for f in fitted)
+    observed = ~np.isnan(fitted[0])
+    np.testing.assert_allclose(fitted[0][observed], train[observed], rtol=1e-6)
+
+    node.evaluate_and_report("r1", info)
+    assert all(f.shape == train.shape for f in fitted)
