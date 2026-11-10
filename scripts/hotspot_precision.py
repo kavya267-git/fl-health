@@ -35,7 +35,8 @@ def section(result: dict) -> str:
         "An alert opens when a region becomes a potential hotspot; a health officer acknowledges it and records "
         "whether the rise was confirmed, not confirmed, or a reporting artefact. Precision = confirmed / all "
         "recorded outcomes; the second figure leaves reporting artefacts out (confirmed / (confirmed + not "
-        "confirmed)). Alerts without a recorded outcome are not counted.",
+        "confirmed)). Only outcomes recorded by health officers count; outcomes an administrator recorded are "
+        "listed separately below and left out of precision. Alerts without a recorded outcome are not counted.",
         "",
         "| Alerts from | Alerts raised | Outcomes recorded | Confirmed | Not confirmed | Reporting artefact | Precision | Precision without artefacts |",
         "| --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -46,6 +47,18 @@ def section(result: dict) -> str:
             f"| {label} | {result['raised'][key]} | {r['outcomes']} | {r['confirmed']} | {r['not_confirmed']} | "
             f"{r['reporting_artefact']} | {fmt(r['precision'])} | {fmt(r['precision_excluding_artefacts'])} |"
         )
+    others = [(key, result.get(f"{key}_by_others", {})) for key in ("demo", "real")]
+    lines += [
+        "",
+        "Outcomes recorded by administrators (not counted in precision): "
+        + "; ".join(
+            f"{'simulated data' if key == 'demo' else 'real data'} {o.get('outcomes', 0)} "
+            f"({o.get('confirmed', 0)} confirmed, {o.get('not_confirmed', 0)} not confirmed, "
+            f"{o.get('reporting_artefact', 0)} reporting artefact)"
+            for key, o in others
+        )
+        + ".",
+    ]
     lines += [
         "",
         "**The simulated-data row uses demo outcomes.** They were entered by hand during a demo walk-through of the "

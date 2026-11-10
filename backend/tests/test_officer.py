@@ -159,7 +159,8 @@ def test_alert_workflow_is_scoped_ordered_and_audited(client, admin):
     alert = mine[0]
     url = f"/api/alerts/{alert['id']}"
 
-    assert client.post(f"{url}/acknowledge", headers=south).status_code == 403  # outside the south jurisdiction
+    hidden = client.post(f"{url}/acknowledge", headers=south)  # outside the south jurisdiction
+    assert hidden.status_code == 404 and hidden.json()["detail"] == "No such alert."
     early = client.post(f"{url}/outcome", headers=north, json={"outcome": "CONFIRMED", "note": "Checked"})
     assert early.status_code == 409  # acknowledge first
     acknowledged = client.post(f"{url}/acknowledge", headers=north).json()
@@ -180,17 +181,91 @@ def test_alert_workflow_is_scoped_ordered_and_audited(client, admin):
     assert {"ALERT_CREATED", "ALERT_ACKNOWLEDGED", "ALERT_OUTCOME_RECORDED"} <= set(actions)
 
 
-def test_hotspot_precision_counts_outcomes_and_marks_demo_ones(ctx):
-    officer = {"email": "officer@example.org", "role": "admin"}
-    alerts = ctx.alerts.list()[:3]
-    for alert, outcome in zip(alerts, ("CONFIRMED", "NOT_CONFIRMED", "REPORTING_ARTEFACT")):
+def test_hotspot_precision_counts_only_health_officer_outcomes(ctx):
+    everywhere = [r["region_id"] for r in ctx.surveillance.regions()]
+    officer = {"email": "officer_north@fl-healthcare.demo", "role": "health_officer", "jurisdiction": everywhere}
+    admin = {"email": "admin@fl-healthcare.demo", "role": "admin"}
+    alerts = ctx.alerts.list()[:4]
+    for alert, outcome in zip(alerts[:3], ("CONFIRMED", "NOT_CONFIRMED", "REPORTING_ARTEFACT")):
         ctx.alerts.acknowledge(alert["id"], officer)
         ctx.alerts.record_outcome(alert["id"], officer, outcome, "demo")
+    ctx.alerts.acknowledge(alerts[3]["id"], admin)
+    ctx.alerts.record_outcome(alerts[3]["id"], admin, "CONFIRMED", "recorded by an administrator")
     result = ctx.alerts.precision()
     assert result["real"]["outcomes"] == 0 and result["real"]["precision"] is None
     demo = result["demo"]
-    assert demo["outcomes"] == 3 and demo["confirmed"] == 1
+    assert demo["outcomes"] == 3 and demo["confirmed"] == 1  # the administrator's outcome is not counted
     assert demo["precision"] == pytest.approx(1 / 3) and demo["precision_excluding_artefacts"] == pytest.approx(1 / 2)
+    assert result["demo_by_others"]["outcomes"] == 1 and result["demo_by_others"]["confirmed"] == 1
+
+
+def test_alerts_outside_the_jurisdiction_look_like_unknown_ids(client):
+    north = login(client, "officer_north@fl-healthcare.demo")
+    south = login(client, "officer_south@fl-healthcare.demo")
+    theirs = client.get("/api/alerts", headers=south).json()[0]
+    for path, body in (("acknowledge", None), ("outcome", {"outcome": "CONFIRMED", "note": "x"})):
+        outside = client.post(f"/api/alerts/{theirs['id']}/{path}", headers=north, json=body)
+        unknown = client.post(f"/api/alerts/99999999/{path}", headers=north, json=body)
+        assert outside.status_code == unknown.status_code == 404
+        assert outside.json() == unknown.json() == {"detail": "No such alert."}
+        assert theirs["region_id"] not in outside.text
+
+
+def test_concurrent_alert_syncs_never_raise_or_duplicate(ctx):
+    import threading
+
+    before = ctx.db.fetch_one("SELECT COUNT(*) AS n FROM alerts")["n"]
+    alert = ctx.alerts.list()[0]
+    region = {"region_id": alert["region_id"], "case_count": 1, "baseline_mean": 1.0}
+    assert ctx.alerts._create(alert["disease"], region, alert["week_start"], True) == 0  # already there: ignored
+
+    ctx.db.execute("DELETE FROM alerts")
+    ctx.alerts._synced_version = None
+    errors = []
+
+    def sync():
+        try:
+            ctx.alerts._synced_version = None
+            ctx.alerts.sync()
+        except Exception as exc:  # pragma: no cover - the assertion below reports it
+            errors.append(exc)
+
+    threads = [threading.Thread(target=sync) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert ctx.db.fetch_one("SELECT COUNT(*) AS n FROM alerts")["n"] == before
+
+
+def test_internal_recomputation_writes_no_analytics_audit_but_user_requests_do(ctx):
+    entries = ctx.audit.list_entries(None, "ANALYTICS_GENERATED", None, None, None, None, None, 200, 0)["items"]
+    assert entries == []  # bootstrap ran the alert sync over 13 weeks x 3 diseases without auditing it
+    assert ctx.audit.list_entries(None, "ALERT_CREATED", None, None, None, None, None, 200, 0)["items"]
+
+    ctx.surveillance.hotspots("dengue", None, "viewer@example.org")  # cached by the sync, first served to a user
+    ctx.surveillance.hotspots("dengue", None, "viewer@example.org")  # already audited for users
+    entries = ctx.audit.list_entries(None, "ANALYTICS_GENERATED", None, None, None, None, None, 200, 0)["items"]
+    assert [e["actor"] for e in entries] == ["viewer@example.org"]
+
+
+def test_background_job_limits_pytorch_threads_and_restores_them(ctx, monkeypatch):
+    import torch
+
+    from app.analytics import ensemble_service
+
+    seen = {}
+
+    def fake_run(series, weeks, config, progress):
+        seen["threads"] = torch.get_num_threads()
+        raise RuntimeError("stop after recording")
+
+    monkeypatch.setattr(ensemble_service, "run_live_ensemble", fake_run)
+    before = torch.get_num_threads()
+    ctx.ensemble.run(torch_threads=2)
+    assert seen["threads"] == 2
+    assert torch.get_num_threads() == before
 
 
 # ------------------------------------------------------------------ Census 2011 populations

@@ -70,11 +70,16 @@ class EnsembleService:
     def needs_run(self) -> bool:
         return self.latest() is None
 
-    def run(self) -> Optional[Dict[str, Any]]:
-        """Compute and store a run for the current data (blocking). Returns None if one is already running."""
+    def run(self, torch_threads: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Compute and store a run for the current data (blocking). Returns None if one is already running.
+
+        ``torch_threads`` caps PyTorch's threads for the duration of the run (restored afterwards). PyTorch's
+        setting is process-wide, so in-process training running at the same time is capped too.
+        """
         if not self._lock.acquire(blocking=False):
             return None
         run_id = None
+        previous_threads = _set_torch_threads(torch_threads)
         try:
             version = self.surveillance._data_version()
             started = utc_now_iso()
@@ -107,17 +112,21 @@ class EnsembleService:
                 )
             return None
         finally:
+            _set_torch_threads(previous_threads)
             self.progress = None
             self._lock.release()
 
-    def start_background(self, check_seconds: float = 600.0) -> None:
-        """Run now if needed, then re-check every ``check_seconds`` for new data."""
+    def start_background(self, check_seconds: float = 600.0, torch_threads: int = 2) -> None:
+        """Run now if needed, then re-check every ``check_seconds`` for new data.
+
+        The background job trains with ``torch_threads`` (2) PyTorch threads so the API stays responsive.
+        """
 
         def loop() -> None:
             while not self._stop.is_set():
                 try:
                     if self.needs_run():
-                        self.run()
+                        self.run(torch_threads=torch_threads)
                 except Exception:  # noqa: BLE001 - keep checking; the failure is logged in run()
                     logger.exception("Ensemble background check failed")
                 self._stop.wait(check_seconds)
@@ -127,3 +136,16 @@ class EnsembleService:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+def _set_torch_threads(threads: Optional[int]) -> Optional[int]:
+    """Set PyTorch's intra-op thread count and return the previous one (None: leave it, or no PyTorch)."""
+    if threads is None:
+        return None
+    try:
+        import torch
+    except ImportError:
+        return None
+    previous = torch.get_num_threads()
+    torch.set_num_threads(threads)
+    return previous

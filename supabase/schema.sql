@@ -164,6 +164,36 @@ CREATE TABLE IF NOT EXISTS regions (
     is_simulated BOOLEAN NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS ensemble_runs (
+    id BIGSERIAL PRIMARY KEY,
+    data_version TEXT NOT NULL,
+    status TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL,
+    finished_at TIMESTAMPTZ,
+    payload JSONB,
+    error TEXT,
+    is_simulated BOOLEAN NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id BIGSERIAL PRIMARY KEY,
+    region_id TEXT NOT NULL,
+    disease TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    state TEXT NOT NULL,
+    case_count BIGINT,
+    usual_level DOUBLE PRECISION,
+    created_at TIMESTAMPTZ NOT NULL,
+    acknowledged_by TEXT,
+    acknowledged_at TIMESTAMPTZ,
+    outcome TEXT,
+    outcome_note TEXT,
+    outcome_by TEXT,
+    outcome_by_role TEXT,
+    outcome_at TIMESTAMPTZ,
+    is_simulated BOOLEAN NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS surveillance_reports (
     id BIGSERIAL PRIMARY KEY,
     hospital_id TEXT NOT NULL,
@@ -204,6 +234,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_forecasts_region_id_disease_horizon ON fore
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_surveillance_reports_hospital_id_region_id_disease_week_start ON surveillance_reports (hospital_id, region_id, disease, week_start);
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_region_id_disease_week_start ON alerts (region_id, disease, week_start);
+
 CREATE INDEX IF NOT EXISTS ix_fl_rounds_modality_round_number ON fl_rounds (modality, round_number);
 
 CREATE INDEX IF NOT EXISTS ix_training_metrics_round_id ON training_metrics (round_id);
@@ -237,6 +269,8 @@ ALTER TABLE analytics_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE forecasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE regions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ensemble_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE surveillance_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE node_heartbeats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hospital_settings ENABLE ROW LEVEL SECURITY;

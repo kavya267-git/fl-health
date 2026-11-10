@@ -16,7 +16,7 @@ from analytics.hotspot.detector import CANDIDATE_HOTSPOT
 from app.analytics.surveillance_service import SurveillanceService
 from app.database import Database
 from app.services.audit_service import AuditService
-from app.services.permissions import ensure_region_scope
+from app.services.permissions import jurisdiction_of
 from app.utils.errors import ConflictError, NotFoundError, ValidationFailed
 from app.utils.time import utc_now_iso
 
@@ -66,22 +66,25 @@ class AlertService:
         return created
 
     def _create(self, disease: str, region: Dict[str, Any], week: str, simulated: bool) -> int:
-        key = {"r": region["region_id"], "d": disease, "w": week}
-        if self.db.fetch_one("SELECT id FROM alerts WHERE region_id = :r AND disease = :d AND week_start = :w", key):
-            return 0
-        row = self.db.insert(
-            "alerts",
+        """Insert the alert unless one exists for this region, disease and week (insert-or-ignore on the unique
+        index), so two syncs running at once never raise and never create a duplicate."""
+        inserted = self.db.fetch_all(
+            "INSERT INTO alerts (region_id, disease, week_start, state, case_count, usual_level, created_at, is_simulated) "
+            "VALUES (:region_id, :disease, :week_start, 'OPEN', :case_count, :usual_level, :created_at, :is_simulated) "
+            "ON CONFLICT (region_id, disease, week_start) DO NOTHING RETURNING id",
             {
                 "region_id": region["region_id"],
                 "disease": disease,
                 "week_start": week,
-                "state": "OPEN",
                 "case_count": region["case_count"],
                 "usual_level": region["baseline_mean"],
                 "created_at": utc_now_iso(),
                 "is_simulated": simulated,
             },
         )
+        if not inserted:
+            return 0  # another sync created it first
+        row = inserted[0]
         self.audit.record(
             "ALERT_CREATED",
             "system",
@@ -113,10 +116,12 @@ class AlertService:
         }
 
     def _get(self, alert_id: int, user: Dict[str, Any]) -> Dict[str, Any]:
+        """The alert, if this user may see it. An alert outside the user's jurisdiction answers exactly like an
+        unknown id, so the response does not reveal that it exists or which region it is about."""
         row = self.db.fetch_one("SELECT * FROM alerts WHERE id = :id", {"id": alert_id})
-        if row is None:
+        allowed = jurisdiction_of(user)
+        if row is None or (allowed is not None and row["region_id"] not in allowed):
             raise NotFoundError("No such alert.")
-        ensure_region_scope(user, [row["region_id"]])
         return row
 
     # ------------------------------------------------------------- workflow
@@ -150,7 +155,14 @@ class AlertService:
             raise ConflictError("An outcome has already been recorded for this alert.")
         self.db.update(
             "alerts",
-            {"state": "CLOSED", "outcome": outcome, "outcome_note": note, "outcome_by": user["email"], "outcome_at": utc_now_iso()},
+            {
+                "state": "CLOSED",
+                "outcome": outcome,
+                "outcome_note": note,
+                "outcome_by": user["email"],
+                "outcome_by_role": user["role"],
+                "outcome_at": utc_now_iso(),
+            },
             {"id": alert_id},
         )
         self.audit.record(
@@ -168,19 +180,30 @@ class AlertService:
 
     # ------------------------------------------------------------- evaluation
     def precision(self) -> Dict[str, Any]:
-        """Hotspot precision from recorded outcomes, separately for simulated (demo) and real alerts."""
-        rows = self.db.fetch_all("SELECT outcome, is_simulated FROM alerts WHERE state = 'CLOSED'")
-        result = {}
+        """Hotspot precision from outcomes recorded by health officers, separately for simulated (demo) and real
+        alerts. Outcomes recorded by anyone else (administrators) are counted separately and not in precision.
+
+        Rows from before the recorder's role was stored fall back to that user's role in the users table.
+        """
+        rows = self.db.fetch_all(
+            "SELECT a.outcome, a.is_simulated, COALESCE(a.outcome_by_role, u.role) AS role "
+            "FROM alerts a LEFT JOIN users u ON u.email = a.outcome_by WHERE a.state = 'CLOSED'"
+        )
+        result: Dict[str, Any] = {}
         for simulated in (True, False):
-            group = [r["outcome"] for r in rows if bool(r["is_simulated"]) == simulated]
+            key = "demo" if simulated else "real"
+            mine = [r for r in rows if bool(r["is_simulated"]) == simulated]
+            group = [r["outcome"] for r in mine if r["role"] == "health_officer"]
             counts = {o: group.count(o) for o in OUTCOMES}
             judged = counts["CONFIRMED"] + counts["NOT_CONFIRMED"]
-            result["demo" if simulated else "real"] = {
+            result[key] = {
                 "outcomes": len(group),
                 **{o.lower(): n for o, n in counts.items()},
                 # Artefacts are false alarms too; the second figure leaves them out to separate the two causes.
                 "precision": counts["CONFIRMED"] / len(group) if group else None,
                 "precision_excluding_artefacts": counts["CONFIRMED"] / judged if judged else None,
             }
+            others = [r["outcome"] for r in mine if r["role"] != "health_officer"]
+            result[f"{key}_by_others"] = {"outcomes": len(others), **{o.lower(): others.count(o) for o in OUTCOMES}}
         total_alerts = self.db.fetch_one("SELECT COUNT(*) AS n FROM alerts")["n"]
         return {**result, "alerts": total_alerts}

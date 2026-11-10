@@ -187,6 +187,8 @@ TABLES: Dict[str, List[Column]] = {
         ("outcome", "text", ""),
         ("outcome_note", "text", ""),
         ("outcome_by", "text", ""),
+        # The recorder's role: hotspot precision counts only outcomes recorded by health officers.
+        ("outcome_by_role", "text", ""),
         ("outcome_at", "timestamp", ""),
         ("is_simulated", "boolean", "NOT NULL"),
     ],

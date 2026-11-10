@@ -159,7 +159,8 @@ The situation report uses the ensemble forecast (ARIMA, Prophet and a global LST
 for every region and disease. Computing it takes several minutes on a laptop CPU, so it never runs inside a
 request:
 
-- the API starts it in the background after start-up and checks for new weeks every 10 minutes;
+- the API starts it in the background after start-up and checks for new weeks every 10 minutes; the
+  background job uses 2 PyTorch threads so the API stays responsive (the precompute script uses all of them);
 - each finished run is stored in the database with the data it was computed from, so a restart with
   unchanged data reuses it without retraining;
 - until the first run finishes, the report says "The forecast is still being computed".

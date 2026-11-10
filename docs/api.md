@@ -164,6 +164,11 @@ Scoped to a health officer's jurisdiction; administrators and coordinators see e
 | POST | `/api/alerts/{id}/acknowledge` | Acknowledge an open alert (✎) |
 | POST | `/api/alerts/{id}/outcome` | Body `{"outcome": "CONFIRMED"\|"NOT_CONFIRMED"\|"REPORTING_ARTEFACT", "note": "..."}`; only after acknowledging (✎) |
 
+An alert id outside the officer's jurisdiction answers `404 No such alert.`, exactly like an unknown id, so
+the response does not reveal that the alert exists or which region it concerns. Hotspot precision
+(`scripts/hotspot_precision.py`) counts only outcomes recorded by health officers; outcomes an administrator
+records are listed separately.
+
 Exports, acknowledgements and outcomes are written to the audit log (`SITUATION_REPORT_EXPORTED`,
 `ALERT_ACKNOWLEDGED`, `ALERT_OUTCOME_RECORDED`; alerts themselves are logged as `ALERT_CREATED`).
 

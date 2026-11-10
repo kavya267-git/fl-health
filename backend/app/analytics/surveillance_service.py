@@ -281,10 +281,15 @@ class SurveillanceService:
         Detection itself always runs on every region, so a region's status does not depend on who asks.
         """
         # The wording is attached when serving, so results cached under older wording never show it.
-        payload = {**self._hotspots_all(disease, period, actor), "disclaimer": HOTSPOT_DISCLAIMER}
+        payload = {**self._hotspots_all(disease, period, actor, audit=True), "disclaimer": HOTSPOT_DISCLAIMER}
         return payload if jurisdiction is None else scope_hotspots(payload, jurisdiction)
 
-    def _hotspots_all(self, disease: Optional[str], period: Optional[str], actor: str) -> Dict[str, Any]:
+    def _hotspots_all(self, disease: Optional[str], period: Optional[str], actor: str, audit: bool = False) -> Dict[str, Any]:
+        """Hotspot results for every region (cached per data version).
+
+        Only a user's request (``audit=True``) writes ANALYTICS_GENERATED; internal recomputation (alert sync,
+        precompute) does not. A result first computed internally is audited the first time a user receives it.
+        """
         self._require_available()
         diseases = self.diseases()
         disease = disease or diseases[0]["id"]
@@ -304,7 +309,12 @@ class SurveillanceService:
             "SELECT payload FROM analytics_results WHERE kind = 'hotspot' AND result_key = :key", {"key": key}
         )
         if cached and cached["payload"].get("data_version") == version:
-            return cached["payload"]
+            payload = cached["payload"]
+            if audit and not payload.get("audited"):
+                payload = {**payload, "audited": True}
+                self._store_hotspots(key, payload)
+                self._audit_hotspots(actor, disease, payload)
+            return payload
 
         regions = self.regions()
         neighbours = {r["region_id"]: r["neighbours"] or [] for r in regions}
@@ -391,7 +401,14 @@ class SurveillanceService:
             "data_status": self.data_status(),
             "generated_at": utc_now_iso(),
             "data_version": version,
+            "audited": audit,
         }
+        self._store_hotspots(key, payload)
+        if audit:
+            self._audit_hotspots(actor, disease, payload)
+        return payload
+
+    def _store_hotspots(self, key: str, payload: Dict[str, Any]) -> None:
         self.db.execute(
             "INSERT INTO analytics_results (kind, result_key, payload, model_version, is_simulated, generated_at) "
             "VALUES ('hotspot', :key, :payload, NULL, :simulated, :now) "
@@ -399,17 +416,18 @@ class SurveillanceService:
             "is_simulated = excluded.is_simulated, generated_at = excluded.generated_at",
             {"key": key, "payload": payload, "simulated": self.is_simulated(), "now": payload["generated_at"]},
         )
+
+    def _audit_hotspots(self, actor: str, disease: str, payload: Dict[str, Any]) -> None:
         self.audit.record(
             "ANALYTICS_GENERATED",
             actor,
             details={
                 "kind": "hotspot candidates",
                 "disease": disease,
-                "time_period": time_period["label"],
-                "candidates": summary[CANDIDATE_HOTSPOT],
+                "time_period": payload["time_period"]["label"],
+                "candidates": payload["summary"][CANDIDATE_HOTSPOT],
             },
         )
-        return payload
 
     # ============================================================= overview
     def overview(self, actor: str = "system") -> Dict[str, Any]:
