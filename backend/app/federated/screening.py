@@ -106,7 +106,7 @@ def _reason(features: dict) -> str:
     if features["relative_norm"] >= 2 or features["relative_norm"] <= 0.5:
         parts.append(f"its size is {features['relative_norm']:.1f}× this round's median")
     if features["cosine_distance"] >= 0.5:
-        parts.append(f"its direction differs from the average update (cosine distance {features['cosine_distance']:.2f})")
+        parts.append(f"its direction differs from the other hospitals' average (cosine distance {features['cosine_distance']:.2f})")
     detail = " and ".join(parts) if parts else "its combination of size and direction is rare among earlier updates"
     return f"Unusual compared with earlier updates: {detail}. Still used in the average."
 

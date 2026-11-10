@@ -249,7 +249,9 @@ as `UPDATE_FLAGGED_UNUSUAL` in the audit log. **It never rejects an update**: th
 like any other. Honest updates can be flagged too: hospitals with different patients move the model in
 different directions, update directions drift as training converges, DP noise changes both numbers, and the
 history is small. In the tests, an update reversed and scaled ×5 stands out clearly, while an honest
-hospital can sit near the threshold. It is a prompt for a person to look, not a defence against poisoning
+hospital can sit near the threshold. In a demo run of six honest EHR rounds (simulated hospitals, TabNet,
+10 November 2026), the first round that was scored (round 6) flagged 2 of its 4 honest updates, with
+scores of 0.51 and 0.50, just above the threshold: in this setting, expect flags on honest updates. It is a prompt for a person to look, not a defence against poisoning
 (there is still no robust aggregation).
 
 **Validation checks** (Settings page) inspect the running system: no patient-identifier-like columns in

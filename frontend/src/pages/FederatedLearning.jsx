@@ -81,7 +81,7 @@ export function ParticipantsTable({ round }) {
       <p className="px-4 py-3 text-xs leading-relaxed text-muted">
         Local model F1 is each hospital&rsquo;s own model after local training, before averaging, on that hospital&rsquo;s held-out records.
         Update check: an Isolation Forest compares each update&rsquo;s size (relative to this round&rsquo;s median) and direction (cosine
-        distance to the average update) with earlier updates of this model. &ldquo;Unusual&rdquo; is a flag for a person to look at, not a
+        distance to the average of the other hospitals&rsquo; updates) with earlier updates of this model. &ldquo;Unusual&rdquo; is a flag for a person to look at, not a
         rejection: the update is still averaged. Different patients, a small hospital or privacy noise can all make an update unusual.
       </p>
       <FlaggedUpdates round={round} />
