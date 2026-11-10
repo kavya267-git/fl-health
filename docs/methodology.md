@@ -225,6 +225,20 @@ whichever it is. It is not patient-level DP (that would need DP-SGD inside local
 updates at rest, protection against a malicious coordinator or malicious hospitals (no robust
 aggregation).
 
+**Screening of incoming updates (advisory).** At aggregation, the coordinator describes each valid update by
+two numbers: its size relative to the round's median update, and its cosine distance to the mean direction
+of the *other* hospitals' updates (each scaled to unit length, so one very large update cannot drag the
+reference towards itself). An Isolation Forest (scikit-learn, 200 trees, fixed seed) is fitted on those
+numbers for the most recent 100 earlier updates of the same model plus the current round, and an update is
+flagged as unusual when its anomaly score is above 0.5 (scikit-learn's "auto" threshold). Nothing is scored
+until 20 earlier updates exist (`backend/app/federated/screening.py`). A flag appears on the round page and
+as `UPDATE_FLAGGED_UNUSUAL` in the audit log. **It never rejects an update**: the flagged update is averaged
+like any other. Honest updates can be flagged too: hospitals with different patients move the model in
+different directions, update directions drift as training converges, DP noise changes both numbers, and the
+history is small. In the tests, an update reversed and scaled ×5 stands out clearly, while an honest
+hospital can sit near the threshold. It is a prompt for a person to look, not a defence against poisoning
+(there is still no robust aggregation).
+
 **Validation checks** (Settings page) inspect the running system: no patient-identifier-like columns in
 the central schema; coordinator storage separate from hospital data and free of raw-data file types; every
 accepted update passed structural validation; no stored count between 1 and 4; DP status; transport

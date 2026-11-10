@@ -92,6 +92,11 @@ tracks that quantile of update norms (docs/methodology.md, "Adaptive clipping").
 value; once an adaptive round of the same modality has finished, the next one starts from its
 `config.differential_privacy.next_clip_norm` instead.
 
+After aggregation, each participant in `GET /api/federated/rounds/{id}` carries `screening`: the update's
+`norm`, `relative_norm`, `cosine_distance`, Isolation Forest `score`, `flagged`, `scored`, `history_size` and a
+`reason` (docs/methodology.md, "Screening of incoming updates"). Advisory only; a hospital operator sees only
+its own hospital's.
+
 `simulated_missing_rate` (EHR only, 0 to 0.5, default 0 = off) is a test setting: each hospital blanks that
 share of its feature values completely at random and fills them in by KNN imputation fitted on its own
 training split (docs/methodology.md, "Missing values"). It is stored in the round's

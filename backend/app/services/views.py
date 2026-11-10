@@ -39,8 +39,13 @@ def round_detail(ctx: AppContext, round_id: str, viewer: Optional[Dict[str, Any]
     row = ctx.coordinator.get_round(round_id)
     participants = ctx.coordinator.participants(round_id)
     own = viewer.get("hospital_id") if viewer and viewer.get("role") in HOSPITAL_ROLES else None
+    screened = {u["hospital_id"]: u.get("screening") for u in ctx.coordinator.updates(round_id)}
     for participant in participants:
         participant.pop("evaluation", None)  # raw confusion matrices are available via /metrics
+        # Isolation Forest flag (advisory). Like local results, a hospital operator sees only its own.
+        participant["screening"] = screened.get(participant["hospital_id"])
+        if own and participant["hospital_id"] != own:
+            participant["screening"] = None
         if own and participant["hospital_id"] != own:
             # A hospital operator sees every hospital's progress, but only its own local results.
             participant["local_metrics"] = None

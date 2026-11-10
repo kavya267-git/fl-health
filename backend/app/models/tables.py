@@ -101,6 +101,8 @@ TABLES: Dict[str, List[Column]] = {
         ("size_bytes", "integer", ""),
         ("update_norm", "real", ""),
         ("dp_report", "json", ""),
+        # Isolation Forest screening at aggregation (backend/app/federated/screening.py); advisory only.
+        ("screening", "json", ""),
         ("status", "text", "NOT NULL"),
         ("rejection_reason", "text", ""),
         ("storage_path", "text", ""),

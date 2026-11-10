@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS model_updates (
     size_bytes BIGINT,
     update_norm DOUBLE PRECISION,
     dp_report JSONB,
+    screening JSONB,
     status TEXT NOT NULL,
     rejection_reason TEXT,
     storage_path TEXT,
