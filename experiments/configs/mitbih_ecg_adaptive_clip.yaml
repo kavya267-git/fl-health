@@ -1,15 +1,25 @@
 title: "3c. Privacy cost with adaptive clipping: ECG, MIT-BIH"
 description: >
-  PROPOSED, NOT RUN: waiting for approval of the settings below. Same data, split, seeds, rounds and noise grid as
-  3b; the only change is the clip norm, which adapts (Andrew et al., NeurIPS 2021) instead of staying at 1.0. Each
-  hospital clips with the round's clip norm C, sends its clipping bit with Gaussian noise (sigma_b) and its update
-  with noise z_update x C, where z_update = (z^-2 - (2 sigma_b)^-2)^(-1/2); together they cost the same as a 3b
-  round with noise multiplier z, so the epsilon column is comparable with 3b. After aggregation the coordinator sets
-  C <- C x exp(-eta (mean noised bit + 1/2 - 0.5)): the clip norm moves towards the median update norm (target
-  quantile 0.5). sigma_b takes 10% of each round's budget: sigma_b = z / (2 sqrt(0.1)). The sigma = 0 row is the
-  no-DP reference, rerun here with the same thread count. Under adaptive clipping the hospitals' raw update norms
-  are not reported (they would reveal the bit), so the median-norm column is empty; the clip norm per round and the
-  estimated share of unclipped updates are reported instead. Fixed before any run.
+  Fixed before any run (10 November 2026), including the hypothesis below; nothing here is changed after a
+  result. Same data, split, seeds, rounds and noise grid as 3b; the only change is the clip norm, which adapts
+  (Andrew et al., NeurIPS 2021) instead of staying at 1.0. Each hospital clips with the round's clip norm C,
+  sends its clipping bit with Gaussian noise sigma_b and its update with noise z_update x C, where
+  z_update = (z^-2 - (2 sigma_b)^-2)^(-1/2); together they cost the same as a 3b round with noise multiplier z,
+  so the epsilon column is comparable with 3b. After aggregation the coordinator sets
+  C <- C x exp(-eta (mean noised bit + 1/2 - 0.5)), moving C towards the median update norm (target quantile
+  0.5). sigma_b takes 10% of each round's budget: sigma_b = z / (2 sqrt(0.1)). Starting clip norm 1.0 (3b's
+  value). Two learning rates. eta = 0.2 is the primary setting (the paper's default). eta = 0.5 is a
+  sensitivity setting, justified by the update rule alone: with eta = 0.2 and target 0.5 the clip norm can
+  grow at most by exp(0.2 x 0.5) per round when every update is clipped (noise aside), so by at most
+  exp(0.2 x 0.5 x 20) = 7.4x in 20 rounds from an uninformed start; eta = 0.5 allows exp(0.5 x 0.5 x 20) = 148x.
+  HYPOTHESIS, recorded before running: adaptive clipping may remove the small-sigma collapse that 3b showed
+  (known issue 4: clipping at C = 1.0 alone collapses the model), but it cannot change the noise-to-signal
+  conclusion, because the noise added per coordinate is z_update x C and the clipped update's norm is at most
+  C, so the noise-to-signal ratio is about sigma x sqrt(d), independent of C (d = number of trainable
+  parameters). The sigma = 0 row is the no-DP reference, rerun here with the same thread count. With DP on,
+  hospitals do not report their raw update norm or whether they were clipped; the harness logs the nodes'
+  local, never-sent norm for the median-norm and clipped-share columns, plus the clip norm per round and the
+  estimated share of unclipped updates. One process, run overnight.
 dataset:
   modality: ecg
   source: mit-bih
@@ -20,13 +30,17 @@ training: {rounds: 20}
 target_f1: 0.8
 partition: {scheme: dirichlet, alpha: 1.0}
 methods: [fedavg]
-# Shared by every DP row: starting clip norm 1.0 (3b's fixed value), target quantile 0.5, eta 0.2 (the paper's
-# default), 10% of the budget to the bit.
 variants:
   - {label: "sigma=0 (no DP)"}
-  - {label: "sigma=0.001, adaptive", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.001, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
-  - {label: "sigma=0.003, adaptive", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.003, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
-  - {label: "sigma=0.01, adaptive", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.01, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
-  - {label: "sigma=0.03, adaptive", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.03, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
-  - {label: "sigma=0.1, adaptive", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.1, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
-  - {label: "sigma=1.0, adaptive", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 1.0, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.001, adaptive, eta=0.2", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.001, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.003, adaptive, eta=0.2", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.003, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.01, adaptive, eta=0.2", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.01, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.03, adaptive, eta=0.2", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.03, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.1, adaptive, eta=0.2", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.1, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=1.0, adaptive, eta=0.2", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 1.0, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.2, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.001, adaptive, eta=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.001, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.5, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.003, adaptive, eta=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.003, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.5, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.01, adaptive, eta=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.01, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.5, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.03, adaptive, eta=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.03, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.5, quantile_budget_share: 0.1}}
+  - {label: "sigma=0.1, adaptive, eta=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 0.1, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.5, quantile_budget_share: 0.1}}
+  - {label: "sigma=1.0, adaptive, eta=0.5", dp: {enabled: true, clip_norm: 1.0, noise_multiplier: 1.0, adaptive_clipping: true, target_quantile: 0.5, clip_learning_rate: 0.5, quantile_budget_share: 0.1}}
