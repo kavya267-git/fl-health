@@ -484,6 +484,43 @@ def _mean_sd(values: List[float]) -> str:
     return f"{a.mean():.3f} ± {a.std(ddof=1):.3f}" if len(a) > 1 else f"{a.mean():.3f}"
 
 
+def _mean(summary: List[dict], model: str, method: str, metric: str) -> float:
+    return float(np.mean([float(r[metric]) for r in summary if r["model"] == model and r["method"] == method]))
+
+
+def reading_lines(summary: List[dict], partitions: List[dict]) -> List[str]:
+    """How to read the table. Every number is taken from summary.csv / partitions.csv."""
+    auc = {(m, k): _mean(summary, m, k, "roc_auc") for m in MODEL_LABELS for k in METHOD_LABELS
+           if any(r["model"] == m and r["method"] == k for r in summary)}
+    shares = [int(p["val_positive"]) / int(p["val"]) for p in partitions if not p.get("excluded")]
+    fed_below_local = all(auc[(m, "fedavg")] < auc[(m, "local")] for m in ("tabnet", "logistic_regression"))
+    lines = ["**Reading the results.**", ""]
+    if fed_below_local:
+        lines.append(
+            "- FedAvg scores below local-only training for both models that can be averaged (mean ROC-AUC: TabNet "
+            f"{auc[('tabnet', 'fedavg')]:.3f} vs {auc[('tabnet', 'local')]:.3f}; logistic regression "
+            f"{auc[('logistic_regression', 'fedavg')]:.3f} vs {auc[('logistic_regression', 'local')]:.3f}) and below "
+            "centralised training. On this partition the run shows no benefit from federation."
+        )
+    lines.append(
+        f"- The hospitals' held-out diabetes shares range from {min(shares):.0%} to {max(shares):.0%}. Each local "
+        "model learns its own hospital's base rate, and pooled ROC-AUC and Brier score reward that, which is one "
+        "reason local-only training can match or beat centralised training here"
+        + (" (logistic regression)." if auc[("logistic_regression", "local")] >= auc[("logistic_regression", "centralised")] else ".")
+        + " Per-hospital scores were not part of the fixed protocol and are not reported."
+    )
+    lines.append(
+        "- A possible reason for the FedAvg gap, not tested: each hospital standardises its features with its own "
+        "training mean and SD (fixed in the protocol so that nothing is shared), so the averaged model sees "
+        "differently scaled inputs at each hospital."
+    )
+    lines.append(
+        "- These are results on one small public dataset split four ways; they show the pipeline on real records, "
+        "not how the methods compare on real hospital EHR."
+    )
+    return lines
+
+
 def write_section(config: dict) -> Path:
     summary = _read_csv(OUT / "summary.csv")
     dataset = json.loads((OUT / "dataset.json").read_text(encoding="utf-8"))
@@ -537,9 +574,11 @@ def write_section(config: dict) -> Path:
         "Local only: each hospital's own model, scored on its own held-out records. FedAvg: the final global "
         "model (30 rounds), scored on every hospital's held-out records with that hospital's own preprocessing. "
         "Centralised: one model trained on the union of the training splits (preprocessing fitted on the union), "
-        "an upper bound that the platform does not offer. FedAvg is shown only for TabNet and logistic "
+        "the usual reference point, which the platform does not offer; it is not guaranteed to score highest. FedAvg is shown only for TabNet and logistic "
         "regression, whose parameters can be averaged. F1 and recall use the 0.5 threshold; the threshold was "
         "not tuned.",
+        "",
+        *reading_lines(summary, partitions),
         "",
         f"![Reliability plot](results/{NAME}/reliability.png)",
         "",

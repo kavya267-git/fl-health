@@ -8,6 +8,9 @@ mitbih_ecg_noniid
 mitbih_ecg_privacy
 mitbih_ecg_dp_diagnostic
 mitbih_ecg_fedprox
+> ## Part A2. Real records: EHR (PIMA Indians Diabetes)
+> The EHR results in Part B use simulated hospitals. This part runs the EHR comparison on a small public set of real records instead, split across the four hospitals. It is real data, but not hospital EHR: 768 women of one population, 8 features, one outcome.
+pima_ehr_baselines
 > ## Part B. Simulated data: pipeline validation, not evidence
 > These runs check that the experiment pipeline, the methods and the reporting behave as expected on every modality. The simulated hospitals are fictional and the simulators are easy (simulated ECG reaches macro-F1 near 0.99), so a high score here shows that the simulator is easy, not that a method works. Do not cite these numbers as results.
 sim_ecg_baselines

@@ -1,0 +1,5 @@
+hospital,train,train_positive,val,val_positive,missing_values_train,missing_values_val
+hospital_a,164,81,54,26,159,42
+hospital_b,72,43,24,13,53,22
+hospital_c,119,31,40,9,112,38
+hospital_d,221,43,74,22,179,47
