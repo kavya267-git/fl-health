@@ -109,3 +109,14 @@ def test_models_build_with_eight_inputs():
         weights = adapter.init_weights(0)
         proba = adapter.predict_proba(weights, np.zeros((3, 8), dtype=np.float32))
         assert proba.shape == (3, 2)
+
+
+def test_rank_auc_matches_scikit_learn_including_ties():
+    from sklearn.metrics import roc_auc_score
+
+    rng = np.random.default_rng(3)
+    for _ in range(20):
+        y = rng.integers(0, 2, 60)
+        p = np.round(rng.random(60), 1)  # many ties
+        assert pima._auc(y, p) == pytest.approx(roc_auc_score(y, p))
+    assert np.isnan(pima._auc(np.ones(5, dtype=int), np.linspace(0, 1, 5)))

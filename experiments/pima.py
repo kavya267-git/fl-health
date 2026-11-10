@@ -500,14 +500,16 @@ def reading_lines(summary: List[dict], partitions: List[dict]) -> List[str]:
             "- FedAvg scores below local-only training for both models that can be averaged (mean ROC-AUC: TabNet "
             f"{auc[('tabnet', 'fedavg')]:.3f} vs {auc[('tabnet', 'local')]:.3f}; logistic regression "
             f"{auc[('logistic_regression', 'fedavg')]:.3f} vs {auc[('logistic_regression', 'local')]:.3f}) and below "
-            "centralised training. On this partition the run shows no benefit from federation."
+            "centralised training on the pooled scores. On those scores the run shows no benefit from federation; "
+            "the per-hospital scores added after the results (below) read differently."
         )
     lines.append(
         f"- The hospitals' held-out diabetes shares range from {min(shares):.0%} to {max(shares):.0%}. Each local "
         "model learns its own hospital's base rate, and pooled ROC-AUC and Brier score reward that, which is one "
         "reason local-only training can match or beat centralised training here"
         + (" (logistic regression)." if auc[("logistic_regression", "local")] >= auc[("logistic_regression", "centralised")] else ".")
-        + " Per-hospital scores were not part of the fixed protocol and are not reported."
+        + " Per-hospital scores were not part of the fixed protocol; they are below, as an analysis added after"
+        " seeing the results."
     )
     lines.append(
         "- A possible reason for the FedAvg gap, not tested: each hospital standardises its features with its own "
@@ -521,6 +523,136 @@ def reading_lines(summary: List[dict], partitions: List[dict]) -> List[str]:
     return lines
 
 
+# ======================================================= added after results
+#: Not part of the fixed protocol: requested in review on 10 November 2026, after the results were seen.
+BOOTSTRAP_RESAMPLES = 1000
+BOOTSTRAP_SEED = 0
+
+
+def _auc(y: np.ndarray, p: np.ndarray) -> float:
+    """ROC-AUC by the rank-sum (Mann-Whitney) formula, ties averaged; NaN if only one class is present."""
+    pos = y == 1
+    n_pos, n_neg = int(pos.sum()), int((~pos).sum())
+    if n_pos == 0 or n_neg == 0:
+        return float("nan")
+    order = np.argsort(p, kind="mergesort")
+    sorted_p = p[order]
+    ranks = np.empty(len(p))
+    i = 0
+    while i < len(p):  # average ranks over ties
+        j = i
+        while j + 1 < len(p) and sorted_p[j + 1] == sorted_p[i]:
+            j += 1
+        ranks[order[i : j + 1]] = (i + j) / 2 + 1
+        i = j + 1
+    return float((ranks[pos].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+
+
+def added_analyses(config: dict) -> List[dict]:
+    """Per-hospital ROC-AUC (mean over hospitals) next to the pooled one, with bootstrap 95% CIs.
+
+    Each resample draws every hospital's held-out records with replacement, within that hospital (sizes kept),
+    and the same resamples are used for every model, method and seed, so comparisons are paired. A statistic is
+    the mean over the 3 seeds; a hospital whose resample holds only one class is left out of that resample's
+    per-hospital mean. Percentile intervals.
+    """
+    predictions = _read_csv(OUT / "predictions.csv")
+    hospitals = sorted({r["hospital"] for r in predictions})
+    groups: Dict[tuple, Dict[str, list]] = {}
+    for r in predictions:
+        groups.setdefault((r["model"], r["method"], r["seed"]), {}).setdefault(r["hospital"], []).append(r)
+    data: Dict[tuple, Dict[str, tuple]] = {}
+    for key, by_h in groups.items():
+        data[key] = {}
+        for h, rows in by_h.items():
+            rows = sorted(rows, key=lambda r: int(r["record"]))
+            data[key][h] = (np.array([int(r["label"]) for r in rows]), np.array([float(r["p_positive"]) for r in rows]))
+    sizes = {h: len(next(iter(data.values()))[h][0]) for h in hospitals}
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    resamples = [{h: rng.integers(0, sizes[h], sizes[h]) for h in hospitals} for _ in range(BOOTSTRAP_RESAMPLES)]
+
+    def stats(by_h: Dict[str, tuple], idx: Optional[dict]) -> tuple:
+        ys, ps, per = [], [], []
+        for h in hospitals:
+            y, p = by_h[h]
+            if idx is not None:
+                y, p = y[idx[h]], p[idx[h]]
+            ys.append(y)
+            ps.append(p)
+            per.append(_auc(y, p))
+        return _auc(np.concatenate(ys), np.concatenate(ps)), float(np.nanmean(per))
+
+    out = []
+    for model, methods in config["methods"].items():
+        for method in methods:
+            seeds = sorted({k[2] for k in data if k[0] == model and k[1] == method}, key=int)
+            if not seeds:
+                continue
+            point = np.mean([stats(data[(model, method, s)], None) for s in seeds], axis=0)
+            boot = np.array([np.mean([stats(data[(model, method, s)], idx) for s in seeds], axis=0) for idx in resamples])
+            lo, hi = np.nanpercentile(boot, [2.5, 97.5], axis=0)
+            out.append({
+                "model": model, "method": method,
+                "pooled_roc_auc": float(point[0]), "pooled_ci_low": float(lo[0]), "pooled_ci_high": float(hi[0]),
+                "per_hospital_mean_roc_auc": float(point[1]), "per_hospital_ci_low": float(lo[1]),
+                "per_hospital_ci_high": float(hi[1]),
+            })
+    _write_csv(OUT / "added_analyses.csv", out)
+    return out
+
+
+def added_analysis_lines(config: dict) -> List[str]:
+    rows = added_analyses(config)
+    lines = [
+        "#### Analyses added after seeing the results",
+        "",
+        "Not part of the protocol fixed before the run: requested in review on 10 November 2026, after the "
+        "results above were seen. Same predictions, no model rerun. *Pooled*: ROC-AUC on all held-out records "
+        "together (as in the table above). *Per hospital*: ROC-AUC on each hospital's own held-out records, "
+        "averaged over the hospitals; it does not reward a model for learning each hospital's base rate. Both are "
+        "means over the 3 seeds. 95% intervals: percentile bootstrap, "
+        f"{BOOTSTRAP_RESAMPLES:,} resamples (seed {BOOTSTRAP_SEED}) of the held-out records, drawn within each hospital "
+        "and shared by every model and method. The intervals cover only the sampling of these held-out records, "
+        "not a different partition.",
+        "",
+        "| Model | Method | ROC-AUC, pooled (95% CI) | ROC-AUC, per hospital, mean (95% CI) |",
+        "| --- | --- | --- | --- |",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {MODEL_LABELS[r['model']]} | {METHOD_LABELS[r['method']]} | "
+            f"{r['pooled_roc_auc']:.3f} ({r['pooled_ci_low']:.3f}-{r['pooled_ci_high']:.3f}) | "
+            f"{r['per_hospital_mean_roc_auc']:.3f} ({r['per_hospital_ci_low']:.3f}-{r['per_hospital_ci_high']:.3f}) |"
+        )
+    by = {(r["model"], r["method"]): r for r in rows}
+
+    all_overlap = all(
+        max(r[f"{c}_ci_low"] for r in rows) <= min(r[f"{c}_ci_high"] for r in rows) for c in ("pooled", "per_hospital")
+    )
+
+    def fmt(model: str, method: str) -> str:
+        return f"{by[(model, method)]['per_hospital_mean_roc_auc']:.3f}"
+
+    lines += [
+        "",
+        "Per hospital, FedAvg compares differently with local-only training than on the pooled scores: TabNet "
+        f"{fmt('tabnet', 'fedavg')} (FedAvg) vs {fmt('tabnet', 'local')} (local only), logistic regression "
+        f"{fmt('logistic_regression', 'fedavg')} vs {fmt('logistic_regression', 'local')}. So the pooled FedAvg gap "
+        "comes at least partly from base rates: local models are rewarded on pooled scores for knowing their "
+        "hospital's share of diabetes. "
+        + (
+            "Every interval in this table overlaps every other in the same column; with this few held-out records, "
+            "no difference between methods here is clearly established."
+            if all_overlap
+            else "Some intervals in the same column do not overlap; see added_analyses.csv."
+        ),
+        "",
+        "Per-row values: `experiments/results/pima_ehr_baselines/added_analyses.csv`.",
+        "",
+    ]
+    return lines
+
+
 def write_section(config: dict) -> Path:
     summary = _read_csv(OUT / "summary.csv")
     dataset = json.loads((OUT / "dataset.json").read_text(encoding="utf-8"))
@@ -531,9 +663,12 @@ def write_section(config: dict) -> Path:
     lines += [
         f"*Config:* `experiments/configs/{NAME}.yaml`. *Run:* `python -m experiments.pima`. "
         f"*Data:* {dataset['name']}, {dataset['records']} records, {dataset['positives']} with diabetes "
-        f"({dataset['positives'] / dataset['records']:.0%}). Source: OpenML dataset 37 (the UCI file; original owners "
-        "the National Institute of Diabetes and Digestive and Kidney Diseases; donor V. Sigillito, Johns Hopkins "
-        "APL; Smith et al., 1988), downloaded from "
+        f"({dataset['positives'] / dataset['records']:.0%}). Source: the National Institute of Diabetes and Digestive "
+        "and Kidney Diseases (NIDDK), original owner of the data (donor V. Sigillito, Johns Hopkins University Applied "
+        "Physics Laboratory), first described in Smith, J. W., Everhart, J. E., Dickson, W. C., Knowler, W. C. and "
+        "Johannes, R. S. (1988), 'Using the ADAP learning algorithm to forecast the onset of diabetes mellitus', "
+        "*Proceedings of the Annual Symposium on Computer Application in Medical Care*, pp. 261-265; obtained as "
+        "OpenML dataset 37 (the UCI Machine Learning Repository file), downloaded from "
         f"<{dataset['url']}> and checked against MD5 `{dataset['md5']}`. Licence: listed by OpenML as \"Public\"; "
         "the file is not redistributed here (git-ignored, downloaded on first run). "
         f"Zeros treated as missing: {zeros}; {dataset['rows_with_any_missing']} records have at least one gap.",
@@ -584,6 +719,7 @@ def write_section(config: dict) -> Path:
         "",
         "Calibration data per bin: `experiments/results/pima_ehr_baselines/reliability.csv`.",
         "",
+        *added_analysis_lines(config),
     ]
     path = OUT / "section.md"
     path.write_text("\n".join(lines), encoding="utf-8")
