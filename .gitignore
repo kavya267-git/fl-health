@@ -49,3 +49,4 @@ experiments/.work/
 # Per-round experiment logs are large; RESULTS.md and each experiment's summary.csv are committed instead
 experiments/results/*/rounds.csv
 experiments/results/*/forecasts.csv
+experiments/results/*/predictions.csv

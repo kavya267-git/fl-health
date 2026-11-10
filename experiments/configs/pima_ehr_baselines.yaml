@@ -1,0 +1,64 @@
+title: "1g. EHR baselines on real data: PIMA Indians Diabetes, four hospitals"
+description: >
+  Fixed before any run (10 November 2026); nothing below was changed after seeing a result. Real records:
+  the PIMA Indians Diabetes Database (768 women of Pima heritage, 8 numeric features, diabetes within five
+  years yes / no), split across the 4 hospitals with a Dirichlet label split (alpha = 1.0) drawn once with
+  partition_seed. Each hospital holds out 25% of its records; held-out records are used only for the final
+  scores, never for training, early stopping or choosing settings. Every setting is a default: the platform's
+  TabNet and training settings for EHR (as in 1b), scikit-learn defaults for the forests and boosting.
+  Zero values in glucose, blood pressure, skin fold, insulin and BMI are physiologically impossible and are
+  treated as missing, as is usual for this dataset (the file itself codes them as 0); each hospital fills them by KNN
+  imputation (k = 5) fitted on its own training split, and standardises with its own training-split mean and
+  SD (nothing shared). The centralised model does the same on the union of the training splits. Scores are
+  computed on the held-out records of all hospitals pooled (positive = diabetes); F1 and recall use the 0.5
+  threshold. 3 seeds (model initialisation, data order, forest / boosting random state); the partition is
+  the same in every seed.
+
+dataset:
+  name: "PIMA Indians Diabetes Database"
+  # OpenML dataset 37 ("diabetes"), the UCI file; the download is checked against OpenML's MD5.
+  url: "https://openml.org/data/v1/download/37/diabetes.arff"
+  md5: "3cbaa3e54586aa88cf6aacb4033e4470"
+  # Downloaded here on first use (git-ignored); or point PIMA_ARFF at your own copy.
+  path: "data/raw/pima/diabetes.arff"
+  missing_if_zero: [plas, pres, skin, insu, mass]
+
+partition:
+  scheme: dirichlet
+  alpha: 1.0
+  partition_seed: 0
+  val_fraction: 0.25
+  hospitals: [hospital_a, hospital_b, hospital_c, hospital_d]
+  min_train_records: 8
+
+preprocessing:
+  imputation: {method: knn, k: 5, fitted_on: "each hospital's training split"}
+  scaling: "each hospital's training-split mean and SD"
+
+seeds: [0, 1, 2]
+
+# The torch models (TabNet, logistic regression) use the platform's EHR training settings. FedAvg: 30 rounds of
+# 2 local epochs. Local only and centralised: the same 30 x 2 epochs on their own data / on the union.
+training:
+  rounds: 30
+  local_epochs: 2
+  batch_size: 32
+  learning_rate: 0.003
+  class_weighting: none
+
+models:
+  tabnet: {kind: torch, settings: "platform TabNet: n_d = n_a = 16, 3 steps, gamma 1.3, ghost batch 64, sparsity weight 1e-3"}
+  logistic_regression: {kind: torch, settings: "one linear layer, softmax cross-entropy, no weight decay"}
+  random_forest: {kind: sklearn, settings: "RandomForestClassifier defaults (100 trees)"}
+  gradient_boosting: {kind: sklearn, settings: "GradientBoostingClassifier defaults (100 stages, depth 3, learning rate 0.1)"}
+
+# FedAvg only for the models whose parameters can be averaged.
+methods:
+  tabnet: [local, fedavg, centralised]
+  logistic_regression: [local, fedavg, centralised]
+  random_forest: [local, centralised]
+  gradient_boosting: [local, centralised]
+
+metrics:
+  threshold: 0.5
+  reliability_bins: 10
