@@ -148,7 +148,7 @@ A model is identified by its modality: `ehr`, `ecg` or `xray`.
 | --- | --- | --- |
 | GET | `/api/analytics/overview` | Dashboard summary: KPIs, model status, rounds, hospitals, surveillance and forecast highlights, recent activity |
 | GET | `/api/analytics/options` | Diseases, regions and weeks available |
-| GET | `/api/analytics/hotspots?disease=&period=` | Regional statistics and hotspot candidates for one disease and week (`period` = week start, `YYYY-MM-DD`), with GeoJSON |
+| GET | `/api/analytics/hotspots?disease=&period=` | Regional statistics and hotspot candidates for one disease and week (`period` = week start, `YYYY-MM-DD`), with GeoJSON. `hotspot_clusters` holds the K-Means layer (clusters of potential hotspots, or the reason there are none); each region and feature carries `potential_hotspot_cluster` |
 | GET | `/api/analytics/forecast?region_id=&disease=&horizon=` | Forecast (1-26 weeks) with model, MAE, RMSE, intervals and the candidates compared |
 | GET | `/api/analytics/explainability?modality=&scope=global\|individual&case_id=` | Explanation for the modality's current global model |
 | GET | `/api/analytics/privacy` | Privacy statement, what is shared, DP configuration and accounting, validation checks |

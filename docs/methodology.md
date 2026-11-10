@@ -120,6 +120,19 @@ multiple-comparison correction across regions. Rates use a population denominato
 region-week is suppressed, the regional total would only be a lower bound, so it is shown as not available
 and the week is treated as missing.
 
+**Clusters of potential hotspots (extra map layer).** The regions flagged as potential hotspots in the
+week are grouped with K-Means (`analytics/hotspot/clusters.py`) on their location (centroid projected to
+kilometres, equirectangular around the flagged regions' mean latitude) and their rates (case rate per
+100,000 when populations are loaded, and the anomaly score), each standardised across the flagged regions.
+k runs from 2 to min(5, n − 1) and the k with the highest silhouette is kept; the layer is shown only if
+that silhouette is at least 0.25 (Kaufman & Rousseeuw's threshold for any substantial structure), and only
+for groups of two or more regions. With fewer than three flagged regions there is nothing to cluster, and
+the map says so. On the map, clustered regions get a purple halo labelled "cluster of potential hotspots",
+which can be switched off. A cluster says that some flagged regions are close together and have similar
+rates; it does not say they share a cause and is not a confirmed event. With only 12 simulated regions
+and usually 0 to 4 flagged a week, the layer is often empty. A health officer sees a cluster only when at
+least two of its regions are in their jurisdiction.
+
 ## Forecasting
 
 Candidates (`analytics/forecasting/models.py`):
