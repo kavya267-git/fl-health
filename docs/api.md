@@ -172,6 +172,19 @@ records are listed separately.
 Exports, acknowledgements and outcomes are written to the audit log (`SITUATION_REPORT_EXPORTED`,
 `ALERT_ACKNOWLEDGED`, `ALERT_OUTCOME_RECORDED`; alerts themselves are logged as `ALERT_CREATED`).
 
+## Resource planning
+
+See [resource-planning.md](resource-planning.md) for the method. Hospital managers see their own hospital;
+administrators pass `hospital_id`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/planning?hospital_id=` | Capacity, assumptions and the bed projection per disease for weeks 1-4 (admissions, beds, ICU beds and total beds, low / central / high, with over-capacity flags), weeks grouped for plain sentences, and all diseases together. `available: false` with a `reason` until capacity is entered and the forecast is ready |
+| POST | `/api/planning/capacity` | Body `{"total_beds", "icu_beds", "occupancy_percent"}`; hospital managers only, for their own hospital; every entry is kept (✎) |
+| GET | `/api/planning/capacity/history?hospital_id=` | Every capacity entry, newest first |
+| GET | `/api/planning/assumptions` | Per disease: `admission_rate`, `icu_share`, `length_of_stay_days`, `is_default` and the label ("Assumed values, replace with local figures" for defaults) |
+| POST | `/api/planning/assumptions/{disease}` | Administrators only; same three fields (✎) |
+
 ## Audit (✎)
 
 | Method | Path | Description |

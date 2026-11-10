@@ -61,8 +61,10 @@ def section(result: dict) -> str:
     ]
     lines += [
         "",
-        "**The simulated-data row uses demo outcomes.** They were entered by hand during a demo walk-through of the "
-        "alert workflow, not found by investigating anything, and the rises they refer to were injected by the "
+        "**The simulated-data row uses demo outcomes.** They were entered through the alerts page, as a health "
+        "officer, during a scripted demo walk-through of the alert workflow (demo database pinned to "
+        "SIMULATION_END_WEEK=2026-11-02), not found by investigating anything, and the rises they refer to were "
+        "injected by the "
         "simulator. The figures check that outcomes are recorded and counted correctly; they say nothing about "
         "how often the detector is right. Precision on real data needs real alerts with outcomes established by "
         "health officers.",

@@ -57,6 +57,12 @@ PERMISSIONS: Dict[str, tuple] = {
     ),
     "alerts_read": (("admin", "coordinator", "health_officer"), "GET /api/alerts"),
     "alerts_manage": (("admin", "health_officer"), "POST /api/alerts/{id}/acknowledge, /{id}/outcome"),
+    "planning_read": (
+        ("admin", "hospital_manager"),
+        "GET /api/planning, /api/planning/capacity/history, /api/planning/assumptions",
+    ),
+    "capacity_write": (("hospital_manager",), "POST /api/planning/capacity"),
+    "assumptions_write": (("admin",), "POST /api/planning/assumptions/{disease}"),
     "users_manage": (("admin",), "GET /api/users, POST /api/users/{id}/role"),
 }
 

@@ -38,6 +38,13 @@ REQUESTS = {
     "situation_report": ("get", "/api/officer/forecast-status", None),
     "alerts_read": ("get", "/api/alerts", None),
     "alerts_manage": ("post", "/api/alerts/999999/acknowledge", None),
+    "planning_read": ("get", "/api/planning/assumptions", None),
+    "capacity_write": ("post", "/api/planning/capacity", {"total_beds": 40, "icu_beds": 4, "occupancy_percent": 70}),
+    "assumptions_write": (
+        "post",
+        "/api/planning/assumptions/dengue",
+        {"admission_rate": 0.2, "icu_share": 0.05, "length_of_stay_days": 4},
+    ),
     "users_manage": ("get", "/api/users", None),
 }
 

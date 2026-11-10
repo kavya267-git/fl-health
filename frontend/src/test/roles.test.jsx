@@ -71,10 +71,12 @@ describe('roles in the sidebar', () => {
     }
   })
 
-  it("gives a hospital manager their hospital's page but not the participation switch", () => {
-    expect(paths(manager)[0]).toBe('/my-hospital')
+  it("gives a hospital manager resource planning first, their hospital's page, but not the participation switch", () => {
+    expect(paths(manager).slice(0, 2)).toEqual(['/planning', '/my-hospital'])
     expect(paths(manager)).not.toContain('/audit')
-    expect(homePathFor(manager)).toBe('/my-hospital')
+    expect(homePathFor(manager)).toBe('/planning')
+    for (const user of [viewerUser, researcher, officer, { ...manager, role: 'hospital' }]) expect(paths(user)).not.toContain('/planning')
+    expect(paths({ ...viewerUser, role: 'admin' })).toContain('/planning')
     expect(canChangeParticipation(manager)).toBe(false)
     expect(canChangeParticipation({ ...manager, role: 'hospital' })).toBe(true)
   })

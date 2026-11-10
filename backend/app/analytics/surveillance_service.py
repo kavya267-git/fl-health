@@ -107,7 +107,8 @@ class SurveillanceService:
                 frame = validate_reports(frame, region_ids, hospital_ids, settings.suppression_threshold)
                 self._replace_reports(frame, is_simulated=False)
             elif settings.demo_mode:
-                end_week = last_complete_week()
+                # A fixed end week (SIMULATION_END_WEEK) keeps a demo identical from day to day.
+                end_week = settings.simulation_end_week or last_complete_week()
                 latest = self.db.fetch_one(
                     "SELECT MAX(week_start) AS week FROM surveillance_reports WHERE is_simulated = :flag",
                     {"flag": True},

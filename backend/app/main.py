@@ -14,7 +14,19 @@ from fastapi.responses import JSONResponse
 from app.config import Settings, load_settings
 from app.database import DatabaseError
 from app.federated.deadlines import DeadlineWatcher
-from app.routers import analytics, audit, auth, federated, hospitals, models, my_hospital, officer, system, users
+from app.routers import (
+    analytics,
+    audit,
+    auth,
+    federated,
+    hospitals,
+    models,
+    my_hospital,
+    officer,
+    planning,
+    system,
+    users,
+)
 from app.services.context import bootstrap, build_context
 from app.utils.errors import ServiceError
 
@@ -85,7 +97,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         logger.exception("Unhandled error on %s %s", request.method, request.url.path)
         return JSONResponse(status_code=500, content={"detail": "The server hit an unexpected error."})
 
-    for module in (system, auth, users, hospitals, my_hospital, federated, models, analytics, audit, officer):
+    for module in (system, auth, users, hospitals, my_hospital, federated, models, analytics, audit, officer, planning):
         app.include_router(module.router)
 
     @app.get("/", include_in_schema=False)
