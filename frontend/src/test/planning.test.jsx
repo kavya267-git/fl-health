@@ -71,10 +71,10 @@ beforeEach(() => {
 describe('plain sentences', () => {
   it('says which weeks may need more beds than the hospital has, with the range', () => {
     expect(groupSentence(groups[1], 'Dengue', 40)).toBe(
-      'Weeks 2–4: with today’s patients and the expected dengue patients, you may need 36–43 of your 40 beds. That could be more than you have.',
+      'Weeks 2–4: if the rest of the hospital stays as busy as today, with the expected dengue patients, you may need 36–43 of your 40 beds. That could be more than you have.',
     )
     expect(groupSentence(groups[0], 'Dengue', 40)).toBe(
-      'Week 1: with today’s patients and the expected dengue patients, you may need 34–37 of your 40 beds.',
+      'Week 1: if the rest of the hospital stays as busy as today, with the expected dengue patients, you may need 34–37 of your 40 beds.',
     )
   })
 })
@@ -83,7 +83,7 @@ describe('resource planning page', () => {
   it('highlights the weeks that may exceed the beds and labels everything as an estimate', async () => {
     api.planning.mockResolvedValue(plan())
     render(<ResourcePlanning />)
-    expect(await screen.findByText(/Weeks 2–4: with today/)).toBeInTheDocument()
+    expect(await screen.findByText(/Weeks 2–4: if the rest of the hospital/)).toBeInTheDocument()
     expect(screen.getAllByText('Planning estimate').length).toBeGreaterThan(0)
     expect(screen.getByText(WATERMARK)).toBeInTheDocument()
     expect(screen.getByTestId('assumed-label')).toHaveTextContent('Assumed values, replace with local figures')

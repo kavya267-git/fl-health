@@ -8,7 +8,6 @@ import { useAuth } from '../context/AuthContext'
 import { useApi } from '../hooks/useApi'
 import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { LIKELY_RANGE_NOTE } from '../utils/constants'
 import { formatDate, formatDateTime, formatNumber } from '../utils/format'
 
 const beds = (value) => formatNumber(Math.round(value))
@@ -21,8 +20,8 @@ export function groupSentence(group, diseaseLabel, totalBeds) {
   const disease = diseaseLabel.toLowerCase()
   const need = `${range(group.total_low, group.total_high)} of your ${beds(totalBeds)} beds`
   return group.over_capacity
-    ? `${weeksLabel(group)}: with today’s patients and the expected ${disease} patients, you may need ${need}. That could be more than you have.`
-    : `${weeksLabel(group)}: with today’s patients and the expected ${disease} patients, you may need ${need}.`
+    ? `${weeksLabel(group)}: if the rest of the hospital stays as busy as today, with the expected ${disease} patients, you may need ${need}. That could be more than you have.`
+    : `${weeksLabel(group)}: if the rest of the hospital stays as busy as today, with the expected ${disease} patients, you may need ${need}.`
 }
 
 function CapacityForm({ capacity, onSaved }) {
@@ -284,8 +283,10 @@ function Projection({ plan, onCapacitySaved, isManager }) {
         </p>
       ) : null}
       <Note title="A planning estimate, not a prediction of who will be admitted">
-        Built from the regional forecast, your hospital&rsquo;s recent share of cases and the assumptions shown here. It assumes the beds in use
-        today stay in use, which errs on the side of caution. {LIKELY_RANGE_NOTE}: the ranges come from the forecast&rsquo;s likely range.
+        Built from the regional forecast, your hospital&rsquo;s recent share of cases and the assumptions shown here. It assumes the rest of the
+        hospital stays as busy as today. Today&rsquo;s occupancy already includes some patients with these diseases, so the projection
+        leans high. The low&ndash;high values are a range from the forecast&rsquo;s likely ranges, added up over regions: wider than an 80%
+        interval, but each likely range is itself often too narrow.
       </Note>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="min-w-0 space-y-6">
@@ -299,7 +300,7 @@ function Projection({ plan, onCapacitySaved, isManager }) {
             <>
               {plan.all_diseases ? (
                 <Card>
-                  <CardHeader title="All diseases together" description="Today's patients plus the expected patients of every disease below." />
+                  <CardHeader title="All diseases together" description="The rest of the hospital as busy as today, plus the expected patients of every disease below." />
                   <CardBody className="flex flex-wrap gap-3">
                     {plan.all_diseases.map((week) => (
                       <div key={week.horizon} className="min-w-[8rem] rounded-md border border-line px-3 py-2">

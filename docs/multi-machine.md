@@ -110,18 +110,50 @@ in the brief) has:
   `officer_north`'s jurisdiction (R01–R06), and influenza-like illness in Larchmont (R11), in
   `officer_south`'s (R07–R12). They also appear as open alerts;
 - **a bed shortfall for hospital A** (Northfield General Hospital) once `manager_a@fl-healthcare.demo` enters
-  the demo capacity on the Resource planning page: **184 beds, 14 ICU beds, 75% in use**. With the default
+  the demo capacity on the Resource planning page: **140 beds, 24 ICU beds, 75% in use**. With the default
   (assumed) disease figures and the stored forecast:
-  - dengue, weeks 1–3: "you may need 176–189 of your 184 beds", highlighted as a possible shortfall
-    (the high end is above 184 by 5.3, 4.5 and 2.4 beds);
-  - dengue, week 4: 170–181 beds, not highlighted;
-  - all diseases together: above 184 beds in all four weeks;
-  - no ICU shortfall (at most 13.1 of 14 ICU beds).
+  - dengue, weeks 1–4: "you may need 137–156 of your 140 beds", highlighted as a possible shortfall
+    (the high end is above 140 by 16.3, 15.5, 13.4 and 8.4 beds);
+  - influenza-like illness and acute gastroenteritis: not highlighted (at least 17 beds below 140 at the
+    high end);
+  - all diseases together: above 140 beds in all four weeks (by 28.7 to 33.8);
+  - no ICU shortfall (at most 20.6 of 24 ICU beds).
 
-These capacity figures are demo inputs, chosen so that the page has a shortfall to show. They are not
-Northfield's (fictional) real capacity. The bed numbers come from the precompute run on 10 November 2026. A
-recompute on another machine can differ slightly in the last decimal of the forecast (floating point), so
-the week-3 margin of 2.4 beds is the one to check at rehearsal.
+These capacity figures are demo inputs, chosen so that the page has a clear shortfall to show. They are not
+Northfield's (fictional) real capacity. The numbers come from the precompute run on 10 November 2026. The
+smallest margin either way is 3.4 beds (ICU, below capacity); every bed margin is at least 8 beds, so a
+small difference in a recompute on another machine does not change what the page highlights. To show exactly
+the same numbers anyway, use the snapshot below.
+
+### Demo snapshot: same numbers on review day
+
+At rehearsal, after the precompute on the server laptop, save the database as the demo snapshot. On review
+day, restore it instead of recomputing, so every number (forecasts, hotspots, alerts, bed projections)
+matches the rehearsal.
+
+1. At rehearsal: run `python scripts\precompute_forecasts.py`, then start the API and check the pages. If you
+   enter the demo capacity or record alert outcomes during the rehearsal, they are saved too; take the
+   snapshot before or after that, depending on what review day should start with.
+2. Stop the API (Ctrl+C), so that SQLite has written everything into the main file, then copy it:
+
+   ```powershell
+   Copy-Item backend\var\fl_healthcare.db backend\var\demo-snapshot.db
+   ```
+
+   Keep a second copy off the laptop (a USB stick) as well.
+3. On review day, with the API stopped, restore it and remove any leftover SQLite side files:
+
+   ```powershell
+   Remove-Item backend\var\fl_healthcare.db-wal, backend\var\fl_healthcare.db-shm -ErrorAction SilentlyContinue
+   Copy-Item backend\var\demo-snapshot.db backend\var\fl_healthcare.db -Force
+   ```
+
+   Then start the API with the same `backend\.env` (same `SIMULATION_END_WEEK`, `NODE_TOKEN_SECRET` and
+   `DEMO_JWT_SECRET`). The precompute is not needed: the stored run matches the data, so the API uses it at
+   once. Run `python scripts\precompute_forecasts.py` anyway as a check; it should print "Already stored".
+
+If you set `DATABASE_URL` to another SQLite file, copy that file instead. `backend\var\` is git-ignored, so the
+snapshot is never committed.
 
 `print_demo_setup.py` suggests a random value when `NODE_TOKEN_SECRET` is missing. Keep it fixed: the hospital
 tokens are derived from it, so changing it invalidates every laptop's saved token. `DEMO_JWT_SECRET` keeps
