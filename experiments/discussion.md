@@ -91,7 +91,7 @@ the differences are not clearly significant, but there is no sign of a gain. *In
 how far each hospital moves from the global model, which addresses drift between hospitals but not a class
 that only one small hospital holds.
 
-### Privacy (3b, 3)
+### Privacy (3b, 3c, 3)
 
 Client-level DP as implemented here (each hospital clips its update to C = 1.0 and adds Gaussian noise of
 standard deviation sigma × C to every coordinate) destroys the MIT-BIH model at every noise level tried: from
@@ -113,9 +113,22 @@ would not change this conclusion. Client-level DP becomes workable when the nois
 of clients per round, as in cross-device federated learning; with four hospitals it cannot give a useful
 epsilon at a usable accuracy. Clip norm and sigma were fixed in advance and not tuned from these results.
 
+**Adaptive clipping (3c).** The hypothesis fixed before the run was that an adaptive clip norm (Andrew et al.,
+2021) may remove the small-sigma collapse but cannot change the noise-to-signal conclusion. Both parts held.
+With eta = 0.5 the clip norm reached the hospitals' update norms (final clip norm 7.6-14.8 against median
+update norms of about 10-16 for sigma ≤ 0.1; on average 73% of updates clipped) and the small-sigma rows
+learned: macro-F1 0.800 ± 0.035 at sigma = 0.001 and 0.787 ± 0.046 at sigma = 0.003, against 0.048 and
+0.064 in 3b and 0.848 ± 0.020 without DP. With the paper's default eta = 0.2 the clip norm grew as the update
+rule allows and no further (final 6.1-7.2 for sigma ≤ 0.1; 99% of updates still clipped) and recovered part of
+the loss: 0.648 ± 0.063 and 0.576 ± 0.070. From sigma = 0.03 the noise dominates whatever the clip norm does:
+0.215-0.267 at sigma = 0.03, 0.141-0.162 at sigma = 0.1 and 0.041-0.071 at sigma = 1.0 (epsilon 11,826,
+1,214.6 and 31.46, the same as 3b). Adaptive clipping therefore fixes the clipping confound of 3b, but the only
+settings within 0.07 of the non-private model have an epsilon above 10^6, which is no privacy guarantee at
+all. eta = 0.5 was a
+sensitivity setting chosen from the update rule before the run, not tuned on these results.
+
 Future work: record-level DP (DP-SGD, for example with Opacus) inside each hospital, which protects individual
-patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and, for client-level DP on this model, a clip
-norm near the typical update norm (about 11 here), which was fixed at 1.0 for these runs (known issue 4).
+patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats.
 
 ### Communication
 

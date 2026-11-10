@@ -532,6 +532,128 @@ Class F beats per hospital, training / held-out, for each seed (the rarest class
 
 ![Final macro-F1](results/mitbih_ecg_dp_diagnostic/final_f1.png)
 
+### 3c. Privacy cost with adaptive clipping: ECG, MIT-BIH
+
+Fixed before any run (10 November 2026), including the hypothesis below; nothing here is changed after a result. Same data, split, seeds, rounds and noise grid as 3b; the only change is the clip norm, which adapts (Andrew et al., NeurIPS 2021) instead of staying at 1.0. Each hospital clips with the round's clip norm C, sends its clipping bit with Gaussian noise sigma_b and its update with noise z_update x C, where z_update = (z^-2 - (2 sigma_b)^-2)^(-1/2); together they cost the same as a 3b round with noise multiplier z, so the epsilon column is comparable with 3b. After aggregation the coordinator sets C <- C x exp(-eta (mean noised bit + 1/2 - 0.5)), moving C towards the median update norm (target quantile 0.5). sigma_b takes 10% of each round's budget: sigma_b = z / (2 sqrt(0.1)). Starting clip norm 1.0 (3b's value). Two learning rates. eta = 0.2 is the primary setting (the paper's default). eta = 0.5 is a sensitivity setting, justified by the update rule alone: with eta = 0.2 and target 0.5 the clip norm can grow at most by exp(0.2 x 0.5) per round when every update is clipped (noise aside), so by at most exp(0.2 x 0.5 x 20) = 7.4x in 20 rounds from an uninformed start; eta = 0.5 allows exp(0.5 x 0.5 x 20) = 148x. HYPOTHESIS, recorded before running: adaptive clipping may remove the small-sigma collapse that 3b showed (known issue 4: clipping at C = 1.0 alone collapses the model), but it cannot change the noise-to-signal conclusion, because the noise added per coordinate is z_update x C and the clipped update's norm is at most C, so the noise-to-signal ratio is about sigma x sqrt(d), independent of C (d = number of trainable parameters). The sigma = 0 row is the no-DP reference, rerun here with the same thread count. With DP on, hospitals do not report their raw update norm or whether they were clipped; the harness logs the nodes' local, never-sent norm for the median-norm and clipped-share columns, plus the clip norm per round and the estimated share of unclipped updates. One process, run overnight.
+
+*Config:* `experiments/configs/mitbih_ecg_adaptive_clip.yaml`. Data: mit-bih ECG, stratified subsample of 25000 records. Partition: dirichlet (alpha = 1.0). 20 rounds × 2 local epochs, batch 32, learning rate 0.003. Seeds: 0, 1, 2. Values are mean ± std over seeds, final round, held-out splits pooled over hospitals.
+
+Records available in mitbih_train.csv + mitbih_test.csv (class Q dropped): 101,407 (N 90,589, S 2,779, V 7,236, F 803). Used: 25,000 (N 22,333, S 685, V 1,784, F 198), a stratified by class, without replacement subsample drawn once with seed 0 and shared by every MIT-BIH experiment and seed.
+
+| Variant | Method | Seeds | Macro-F1 | Accuracy | Recall N | Recall S | Recall V | Recall F |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| sigma=0 (no DP) | FedAvg | 3 | 0.848 ± 0.020 | 0.976 ± 0.004 | 0.993 ± 0.002 | 0.635 ± 0.044 | 0.943 ± 0.014 | 0.660 ± 0.080 |
+| sigma=0.001, adaptive, eta=0.2 | FedAvg | 3 | 0.648 ± 0.063 | 0.957 ± 0.003 | 0.989 ± 0.003 | 0.286 ± 0.180 | 0.914 ± 0.040 | 0.220 ± 0.098 |
+| sigma=0.003, adaptive, eta=0.2 | FedAvg | 3 | 0.576 ± 0.070 | 0.940 ± 0.010 | 0.967 ± 0.015 | 0.290 ± 0.182 | 0.955 ± 0.027 | 0.117 ± 0.187 |
+| sigma=0.01, adaptive, eta=0.2 | FedAvg | 3 | 0.469 ± 0.144 | 0.900 ± 0.073 | 0.939 ± 0.091 | 0.068 ± 0.098 | 0.843 ± 0.149 | 0.093 ± 0.160 |
+| sigma=0.03, adaptive, eta=0.2 | FedAvg | 3 | 0.215 ± 0.037 | 0.718 ± 0.295 | 0.782 ± 0.378 | 0.000 ± 0.000 | 0.325 ± 0.561 | 0.000 ± 0.000 |
+| sigma=0.1, adaptive, eta=0.2 | FedAvg | 3 | 0.162 ± 0.096 | 0.481 ± 0.372 | 0.518 ± 0.452 | 0.198 ± 0.268 | 0.203 ± 0.338 | 0.103 ± 0.178 |
+| sigma=1.0, adaptive, eta=0.2 | FedAvg | 3 | 0.041 ± 0.014 | 0.040 ± 0.014 | 0.001 ± 0.001 | 0.599 ± 0.302 | 0.279 ± 0.330 | 0.273 ± 0.457 |
+| sigma=0.001, adaptive, eta=0.5 | FedAvg | 3 | 0.800 ± 0.035 | 0.967 ± 0.002 | 0.987 ± 0.003 | 0.539 ± 0.086 | 0.924 ± 0.005 | 0.616 ± 0.054 |
+| sigma=0.003, adaptive, eta=0.5 | FedAvg | 3 | 0.787 ± 0.046 | 0.966 ± 0.003 | 0.987 ± 0.003 | 0.542 ± 0.133 | 0.921 ± 0.036 | 0.565 ± 0.062 |
+| sigma=0.01, adaptive, eta=0.5 | FedAvg | 3 | 0.545 ± 0.079 | 0.933 ± 0.014 | 0.983 ± 0.026 | 0.153 ± 0.060 | 0.716 ± 0.275 | 0.165 ± 0.149 |
+| sigma=0.03, adaptive, eta=0.5 | FedAvg | 3 | 0.267 ± 0.053 | 0.882 ± 0.023 | 0.983 ± 0.018 | 0.009 ± 0.015 | 0.089 ± 0.154 | 0.000 ± 0.000 |
+| sigma=0.1, adaptive, eta=0.5 | FedAvg | 3 | 0.141 ± 0.025 | 0.261 ± 0.079 | 0.269 ± 0.100 | 0.384 ± 0.324 | 0.114 ± 0.129 | 0.341 ± 0.539 |
+| sigma=1.0, adaptive, eta=0.5 | FedAvg | 3 | 0.071 ± 0.061 | 0.101 ± 0.102 | 0.062 ± 0.093 | 0.478 ± 0.399 | 0.452 ± 0.436 | 0.000 ± 0.000 |
+
+Predicted-class distribution (share of held-out beats assigned to each class, final round):
+
+| Variant | Method | Predicted N | Predicted S | Predicted V | Predicted F |
+| --- | --- | --- | --- | --- | --- |
+| sigma=0 (no DP) | FedAvg | 0.900 ± 0.004 | 0.022 ± 0.001 | 0.072 ± 0.005 | 0.006 ± 0.001 |
+| sigma=0.001, adaptive, eta=0.2 | FedAvg | 0.911 ± 0.004 | 0.011 ± 0.007 | 0.076 ± 0.006 | 0.002 ± 0.002 |
+| sigma=0.003, adaptive, eta=0.2 | FedAvg | 0.886 ± 0.016 | 0.013 ± 0.011 | 0.099 ± 0.013 | 0.002 ± 0.003 |
+| sigma=0.01, adaptive, eta=0.2 | FedAvg | 0.877 ± 0.091 | 0.003 ± 0.004 | 0.119 ± 0.094 | 0.002 ± 0.003 |
+| sigma=0.03, adaptive, eta=0.2 | FedAvg | 0.773 ± 0.393 | 0.000 ± 0.000 | 0.227 ± 0.393 | 0.000 ± 0.000 |
+| sigma=0.1, adaptive, eta=0.2 | FedAvg | 0.514 ± 0.450 | 0.129 ± 0.120 | 0.243 ± 0.415 | 0.114 ± 0.164 |
+| sigma=1.0, adaptive, eta=0.2 | FedAvg | 0.001 ± 0.001 | 0.566 ± 0.333 | 0.267 ± 0.377 | 0.166 ± 0.218 |
+| sigma=0.001, adaptive, eta=0.5 | FedAvg | 0.899 ± 0.005 | 0.021 ± 0.002 | 0.074 ± 0.004 | 0.007 ± 0.000 |
+| sigma=0.003, adaptive, eta=0.5 | FedAvg | 0.899 ± 0.004 | 0.021 ± 0.007 | 0.073 ± 0.004 | 0.007 ± 0.000 |
+| sigma=0.01, adaptive, eta=0.5 | FedAvg | 0.924 ± 0.039 | 0.005 ± 0.002 | 0.069 ± 0.043 | 0.002 ± 0.002 |
+| sigma=0.03, adaptive, eta=0.5 | FedAvg | 0.977 ± 0.020 | 0.012 ± 0.020 | 0.011 ± 0.019 | 0.001 ± 0.002 |
+| sigma=0.1, adaptive, eta=0.5 | FedAvg | 0.273 ± 0.113 | 0.431 ± 0.371 | 0.093 ± 0.092 | 0.203 ± 0.341 |
+| sigma=1.0, adaptive, eta=0.5 | FedAvg | 0.059 ± 0.088 | 0.520 ± 0.452 | 0.386 ± 0.399 | 0.035 ± 0.034 |
+
+Sensitivity (Se, = recall) and positive predictivity (+P, = precision) for the S and V classes, the measures the inter-patient literature reports:
+
+| Variant | Method | Se S | +P S | Se V | +P V |
+| --- | --- | --- | --- | --- | --- |
+| sigma=0 (no DP) | FedAvg | 0.635 ± 0.044 | 0.838 ± 0.043 | 0.943 ± 0.014 | 0.939 ± 0.024 |
+| sigma=0.001, adaptive, eta=0.2 | FedAvg | 0.286 ± 0.180 | 0.768 ± 0.043 | 0.914 ± 0.040 | 0.868 ± 0.059 |
+| sigma=0.003, adaptive, eta=0.2 | FedAvg | 0.290 ± 0.182 | 0.699 ± 0.118 | 0.955 ± 0.027 | 0.703 ± 0.109 |
+| sigma=0.01, adaptive, eta=0.2 | FedAvg | 0.068 ± 0.098 | 0.730 ± 0.305 | 0.843 ± 0.149 | 0.684 ± 0.336 |
+| sigma=0.03, adaptive, eta=0.2 | FedAvg | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.325 ± 0.561 | 0.366 ± 0.551 |
+| sigma=0.1, adaptive, eta=0.2 | FedAvg | 0.198 ± 0.268 | 0.025 ± 0.029 | 0.203 ± 0.338 | 0.074 ± 0.085 |
+| sigma=1.0, adaptive, eta=0.2 | FedAvg | 0.599 ± 0.302 | 0.031 ± 0.006 | 0.279 ± 0.330 | 0.066 ± 0.064 |
+| sigma=0.001, adaptive, eta=0.5 | FedAvg | 0.539 ± 0.086 | 0.722 ± 0.100 | 0.924 ± 0.005 | 0.902 ± 0.027 |
+| sigma=0.003, adaptive, eta=0.5 | FedAvg | 0.542 ± 0.133 | 0.747 ± 0.038 | 0.921 ± 0.036 | 0.908 ± 0.043 |
+| sigma=0.01, adaptive, eta=0.5 | FedAvg | 0.153 ± 0.060 | 0.856 ± 0.086 | 0.716 ± 0.275 | 0.823 ± 0.219 |
+| sigma=0.03, adaptive, eta=0.5 | FedAvg | 0.009 ± 0.015 | 0.008 ± 0.013 | 0.089 ± 0.154 | 0.187 ± 0.324 |
+| sigma=0.1, adaptive, eta=0.5 | FedAvg | 0.384 ± 0.324 | 0.046 ± 0.036 | 0.114 ± 0.129 | 0.074 ± 0.098 |
+| sigma=1.0, adaptive, eta=0.5 | FedAvg | 0.478 ± 0.399 | 0.072 ± 0.085 | 0.452 ± 0.436 | 0.065 ± 0.055 |
+
+Privacy accounting (platform's zCDP bound, per hospital, over all rounds):
+
+| Variant | ε | Macro-F1 | Accuracy | Median update norm before clipping | Share of updates clipped |
+| --- | --- | --- | --- | --- | --- |
+| sigma=0 (no DP) | ∞ | 0.848 ± 0.020 | 0.976 ± 0.004 | 11.04 ± 1.10 | 0.00 ± 0.00 |
+| sigma=0.001, adaptive, eta=0.2 | 10021459.66 ± 0.00 | 0.648 ± 0.063 | 0.957 ± 0.003 | 10.41 ± 0.94 | 0.92 ± 0.14 |
+| sigma=0.003, adaptive, eta=0.2 | 1118264.33 ± 0.00 | 0.576 ± 0.070 | 0.940 ± 0.010 | 10.72 ± 1.22 | 0.92 ± 0.14 |
+| sigma=0.01, adaptive, eta=0.2 | 102145.97 ± 0.00 | 0.469 ± 0.144 | 0.900 ± 0.073 | 11.06 ± 1.28 | 0.92 ± 0.14 |
+| sigma=0.03, adaptive, eta=0.2 | 11826.43 ± 0.00 | 0.215 ± 0.037 | 0.718 ± 0.295 | 11.78 ± 1.50 | 0.83 ± 0.29 |
+| sigma=0.1, adaptive, eta=0.2 | 1214.60 ± 0.00 | 0.162 ± 0.096 | 0.481 ± 0.372 | 13.09 ± 2.62 | 0.83 ± 0.29 |
+| sigma=1.0, adaptive, eta=0.2 | 31.46 ± 0.00 | 0.041 ± 0.014 | 0.040 ± 0.014 | 17.80 ± 2.75 | 0.83 ± 0.29 |
+| sigma=0.001, adaptive, eta=0.5 | 10021459.66 ± 0.00 | 0.800 ± 0.035 | 0.967 ± 0.002 | 10.64 ± 1.04 | 0.50 ± 0.00 |
+| sigma=0.003, adaptive, eta=0.5 | 1118264.33 ± 0.00 | 0.787 ± 0.046 | 0.966 ± 0.003 | 10.90 ± 0.98 | 0.58 ± 0.14 |
+| sigma=0.01, adaptive, eta=0.5 | 102145.97 ± 0.00 | 0.545 ± 0.079 | 0.933 ± 0.014 | 11.05 ± 1.48 | 0.50 ± 0.00 |
+| sigma=0.03, adaptive, eta=0.5 | 11826.43 ± 0.00 | 0.267 ± 0.053 | 0.882 ± 0.023 | 12.84 ± 2.45 | 0.50 ± 0.00 |
+| sigma=0.1, adaptive, eta=0.5 | 1214.60 ± 0.00 | 0.141 ± 0.025 | 0.261 ± 0.079 | 13.10 ± 2.68 | 0.58 ± 0.14 |
+| sigma=1.0, adaptive, eta=0.5 | 31.46 ± 0.00 | 0.071 ± 0.061 | 0.101 ± 0.102 | 17.90 ± 6.53 | 0.58 ± 0.14 |
+
+![F1 against epsilon](results/mitbih_ecg_adaptive_clip/privacy.png)
+
+Communication (FedAvg):
+
+| Variant | Upload per hospital per round (MB) | Download per hospital per round (MB) | Total upload, all hospitals and rounds (MB) | Rounds to macro-F1 ≥ 0.8 | Rounds to 95% of centralised macro-F1 |
+| --- | --- | --- | --- | --- | --- |
+| sigma=0 (no DP) | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | 10.0 ± 2.6 | - |
+| sigma=0.001, adaptive, eta=0.2 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.003, adaptive, eta=0.2 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.01, adaptive, eta=0.2 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.03, adaptive, eta=0.2 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.1, adaptive, eta=0.2 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=1.0, adaptive, eta=0.2 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.001, adaptive, eta=0.5 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | 18.0 ± 2.8 (2/3 seeds) | - |
+| sigma=0.003, adaptive, eta=0.5 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | 19.0 ± 0.0 (1/3 seeds) | - |
+| sigma=0.01, adaptive, eta=0.5 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.03, adaptive, eta=0.5 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=0.1, adaptive, eta=0.5 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+| sigma=1.0, adaptive, eta=0.5 | 0.37 ± 0.00 | 0.74 ± 0.00 | 29.7 ± 0.0 | not reached (0/3) | - |
+
+Download counts the round's base model and the aggregated model each hospital fetches to evaluate.
+
+Partition, seed 0 (training records per class at each hospital):
+
+| Variant | Hospital | Train | Held-out | train N | train S | train V | train F |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| all variants | hospital_a | 601 | 200 | 27 | 304 | 253 | 17 |
+| all variants | hospital_b | 4669 | 1556 | 4528 | 34 | 21 | 86 |
+| all variants | hospital_c | 728 | 243 | 388 | 37 | 302 | 1 |
+| all variants | hospital_d | 12752 | 4251 | 11785 | 141 | 778 | 48 |
+
+Class F beats per hospital, training / held-out, for each seed (the rarest class; its recall rests on these few beats):
+
+| Variant | Hospital | seed 0 | seed 1 | seed 2 |
+| --- | --- | --- | --- | --- |
+| all variants | hospital_a | 17 / 6 | 16 / 4 | 51 / 17 |
+| all variants | hospital_b | 86 / 21 | 10 / 5 | 15 / 7 |
+| all variants | hospital_c | 1 / 1 | 75 / 32 | 62 / 26 |
+| all variants | hospital_d | 48 / 18 | 42 / 14 | 16 / 4 |
+
+![Learning curves](results/mitbih_ecg_adaptive_clip/curves.png)
+
+![Final macro-F1](results/mitbih_ecg_adaptive_clip/final_f1.png)
+
 ### 5b. FedProx vs FedAvg under strong label skew: ECG, MIT-BIH
 
 Dirichlet alpha = 0.1; mu = 0 (FedAvg), 0.01, 0.1.
@@ -1090,6 +1212,14 @@ for the project owner to decide.
    not depend on the round chosen; their size does. This check uses DS2 scores only to describe the curves,
    not to choose what is reported.
 
+8. **3c's no-DP reference does not reproduce 3b's no-DP row exactly.** The sigma = 0 row of 3c was rerun with
+   the same data, split, seeds, rounds and thread count (5) as 3b, and gives macro-F1 0.848 ± 0.020 against
+   3b's 0.839 ± 0.016. The difference is within one seed-to-seed standard deviation, and both are reported as
+   run; neither was rerun or changed. The code between the two runs differs only in paths that are not used
+   without DP or on ECG (DP reporting, EHR imputation), so the likely cause is floating-point
+   non-determinism in multi-threaded PyTorch CPU training (as in item 3). 3c's DP rows are compared with
+   3c's own reference.
+
 ## Discussion
 
 Every number below is quoted from the tables above (mean ± std over three seeds, final round). Statements
@@ -1183,7 +1313,7 @@ the differences are not clearly significant, but there is no sign of a gain. *In
 how far each hospital moves from the global model, which addresses drift between hospitals but not a class
 that only one small hospital holds.
 
-### Privacy (3b, 3)
+### Privacy (3b, 3c, 3)
 
 Client-level DP as implemented here (each hospital clips its update to C = 1.0 and adds Gaussian noise of
 standard deviation sigma × C to every coordinate) destroys the MIT-BIH model at every noise level tried: from
@@ -1205,9 +1335,22 @@ would not change this conclusion. Client-level DP becomes workable when the nois
 of clients per round, as in cross-device federated learning; with four hospitals it cannot give a useful
 epsilon at a usable accuracy. Clip norm and sigma were fixed in advance and not tuned from these results.
 
+**Adaptive clipping (3c).** The hypothesis fixed before the run was that an adaptive clip norm (Andrew et al.,
+2021) may remove the small-sigma collapse but cannot change the noise-to-signal conclusion. Both parts held.
+With eta = 0.5 the clip norm reached the hospitals' update norms (final clip norm 7.6-14.8 against median
+update norms of about 10-16 for sigma ≤ 0.1; on average 73% of updates clipped) and the small-sigma rows
+learned: macro-F1 0.800 ± 0.035 at sigma = 0.001 and 0.787 ± 0.046 at sigma = 0.003, against 0.048 and
+0.064 in 3b and 0.848 ± 0.020 without DP. With the paper's default eta = 0.2 the clip norm grew as the update
+rule allows and no further (final 6.1-7.2 for sigma ≤ 0.1; 99% of updates still clipped) and recovered part of
+the loss: 0.648 ± 0.063 and 0.576 ± 0.070. From sigma = 0.03 the noise dominates whatever the clip norm does:
+0.215-0.267 at sigma = 0.03, 0.141-0.162 at sigma = 0.1 and 0.041-0.071 at sigma = 1.0 (epsilon 11,826,
+1,214.6 and 31.46, the same as 3b). Adaptive clipping therefore fixes the clipping confound of 3b, but the only
+settings within 0.07 of the non-private model have an epsilon above 10^6, which is no privacy guarantee at
+all. eta = 0.5 was a
+sensitivity setting chosen from the update rule before the run, not tuned on these results.
+
 Future work: record-level DP (DP-SGD, for example with Opacus) inside each hospital, which protects individual
-patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats, and, for client-level DP on this model, a clip
-norm near the typical update norm (about 11 here), which was fixed at 1.0 for these runs (known issue 4).
+patients rather than whole hospitals and spreads the noise over each hospital's thousands of beats.
 
 ### Communication
 

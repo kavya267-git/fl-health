@@ -65,3 +65,11 @@ for the project owner to decide.
    FedAvg Se S never exceeds 0.092 in those rounds). The direction of the paired differences therefore does
    not depend on the round chosen; their size does. This check uses DS2 scores only to describe the curves,
    not to choose what is reported.
+
+8. **3c's no-DP reference does not reproduce 3b's no-DP row exactly.** The sigma = 0 row of 3c was rerun with
+   the same data, split, seeds, rounds and thread count (5) as 3b, and gives macro-F1 0.848 ± 0.020 against
+   3b's 0.839 ± 0.016. The difference is within one seed-to-seed standard deviation, and both are reported as
+   run; neither was rerun or changed. The code between the two runs differs only in paths that are not used
+   without DP or on ECG (DP reporting, EHR imputation), so the likely cause is floating-point
+   non-determinism in multi-threaded PyTorch CPU training (as in item 3). 3c's DP rows are compared with
+   3c's own reference.
