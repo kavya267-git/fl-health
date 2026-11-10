@@ -4,6 +4,7 @@ import {
   Building2,
   CircleHelp,
   ClipboardList,
+  BedDouble,
   Hospital,
   Layers,
   LayoutDashboard,
@@ -31,6 +32,7 @@ export const NAV_ITEMS = [
 ]
 
 const MY_HOSPITAL = { to: '/my-hospital', label: 'My hospital', icon: Hospital }
+const PLANNING = { to: '/planning', label: 'Resource planning', icon: BedDouble }
 
 /** What a health officer may open (their jurisdiction only; see docs/permissions.md). */
 const HEALTH_OFFICER_PAGES = ['/situation', '/surveillance', '/alerts', '/forecasting', '/how-it-works', '/settings']
@@ -46,5 +48,7 @@ export function navItemsFor(user) {
   const items = NAV_ITEMS.filter(
     (item) => (item.to !== '/audit' || canSeeAudit(user)) && (!OFFICER_VIEWS.includes(item.to) || canSeeOfficerViews(user)),
   )
+  if (user?.role === 'hospital_manager') return [PLANNING, MY_HOSPITAL, ...items]
+  if (user?.role === 'admin') return [...items.slice(0, -1), PLANNING, items[items.length - 1]]
   return isHospitalOperator(user) ? [MY_HOSPITAL, ...items] : items
 }

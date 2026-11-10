@@ -175,6 +175,26 @@ CREATE TABLE IF NOT EXISTS ensemble_runs (
     is_simulated BOOLEAN NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS hospital_capacity (
+    id BIGSERIAL PRIMARY KEY,
+    hospital_id TEXT NOT NULL,
+    total_beds BIGINT NOT NULL,
+    icu_beds BIGINT NOT NULL,
+    occupancy_percent DOUBLE PRECISION NOT NULL,
+    entered_by TEXT NOT NULL,
+    entered_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS disease_assumptions (
+    disease TEXT PRIMARY KEY,
+    admission_rate DOUBLE PRECISION NOT NULL,
+    icu_share DOUBLE PRECISION NOT NULL,
+    length_of_stay_days DOUBLE PRECISION NOT NULL,
+    is_default BOOLEAN NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id BIGSERIAL PRIMARY KEY,
     region_id TEXT NOT NULL,
@@ -270,6 +290,8 @@ ALTER TABLE forecasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE regions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ensemble_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hospital_capacity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disease_assumptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE surveillance_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE node_heartbeats ENABLE ROW LEVEL SECURITY;

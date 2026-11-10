@@ -44,6 +44,9 @@ summary are cut to those regions, and a forecast for any other region gets 403.
 | `situation_report` | GET /api/officer/situation, /situation.csv, /situation.pdf, /forecast-status | yes | yes | - | - | - | jurisdiction | - |
 | `alerts_read` | GET /api/alerts | yes | yes | - | - | - | jurisdiction | - |
 | `alerts_manage` | POST /api/alerts/{id}/acknowledge, /{id}/outcome | yes | - | - | - | - | jurisdiction | - |
+| `planning_read` | GET /api/planning, /api/planning/capacity/history, /api/planning/assumptions | yes | - | - | - | own | - | - |
+| `capacity_write` | POST /api/planning/capacity | - | - | - | - | own | - | - |
+| `assumptions_write` | POST /api/planning/assumptions/{disease} | yes | - | - | - | - | - | - |
 | `users_manage` | GET /api/users, POST /api/users/{id}/role | yes | - | - | - | - | - | - |
 
 These need no role:

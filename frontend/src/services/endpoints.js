@@ -54,6 +54,13 @@ export const api = {
   recordAlertOutcome: (id, outcome, note) =>
     post(`/api/alerts/${encodeURIComponent(id)}/outcome`, { outcome, note }, { keys: ['id', 'state'] }, 'alert'),
 
+  // Resource planning
+  planning: (hospitalId) => get('/api/planning', hospitalId ? { hospital_id: hospitalId } : undefined, { keys: ['available', 'hospital'] }, 'resource plan'),
+  setCapacity: (body) => post('/api/planning/capacity', body, { keys: ['total_beds'] }, 'capacity'),
+  planningAssumptions: () => get('/api/planning/assumptions', undefined, { array: true }, 'assumptions'),
+  setPlanningAssumptions: (disease, body) =>
+    post(`/api/planning/assumptions/${encodeURIComponent(disease)}`, body, { keys: ['disease'] }, 'assumptions'),
+
   // Hospitals
   hospitals: () => get('/api/hospitals', undefined, { array: true }, 'hospital list'),
   hospital: (id) => get(`/api/hospitals/${encodeURIComponent(id)}`, undefined, { keys: ['id', 'name', 'online'] }, 'hospital'),

@@ -7,6 +7,12 @@
     "precision": 0.3333333333333333,
     "precision_excluding_artefacts": 0.5
   },
+  "demo_by_others": {
+    "outcomes": 0,
+    "confirmed": 0,
+    "not_confirmed": 0,
+    "reporting_artefact": 0
+  },
   "real": {
     "outcomes": 0,
     "confirmed": 0,
@@ -15,9 +21,15 @@
     "precision": null,
     "precision_excluding_artefacts": null
   },
-  "alerts": 27,
+  "real_by_others": {
+    "outcomes": 0,
+    "confirmed": 0,
+    "not_confirmed": 0,
+    "reporting_artefact": 0
+  },
+  "alerts": 22,
   "raised": {
-    "demo": 27,
+    "demo": 22,
     "real": 0
   }
 }

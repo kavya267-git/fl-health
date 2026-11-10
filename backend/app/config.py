@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from datetime import date
 from pathlib import Path
 from typing import List, Optional
 
@@ -35,6 +36,17 @@ def _path(name: str, default: Path) -> Path:
 def _optional_path(name: str) -> Optional[Path]:
     value = os.getenv(name, "").strip()
     return Path(value).expanduser().resolve() if value else None
+
+
+def _optional_monday(name: str) -> Optional[date]:
+    """A week start (YYYY-MM-DD, a Monday), or None when unset."""
+    value = os.getenv(name, "").strip()
+    if not value:
+        return None
+    day = date.fromisoformat(value)
+    if day.weekday() != 0:
+        raise ValueError(f"{name} must be a Monday (the start of a week), got {value} ({day:%A})")
+    return day
 
 
 def _list(name: str, default: str = "") -> List[str]:
@@ -88,6 +100,9 @@ class Settings(BaseModel):
     surveillance_reports_csv: Optional[Path] = None
     suppression_threshold: int = 5
     surveillance_weeks: int = 104
+    # Demo mode only: the last week of the simulated reports. None = the last complete week (rolling, so the
+    # data moves on every Monday). Set it for a demo so every rehearsal shows the same hotspots and forecasts.
+    simulation_end_week: Optional[date] = None
 
     # HTTP ------------------------------------------------------------------
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173"])
@@ -164,6 +179,7 @@ def load_settings() -> Settings:
         surveillance_reports_csv=_optional_path("SURVEILLANCE_REPORTS_CSV"),
         suppression_threshold=int(os.getenv("SUPPRESSION_THRESHOLD", "5")),
         surveillance_weeks=int(os.getenv("SURVEILLANCE_WEEKS", "104")),
+        simulation_end_week=_optional_monday("SIMULATION_END_WEEK"),
         cors_origins=_list("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
         api_base_url=os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/"),
     )

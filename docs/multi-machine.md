@@ -79,6 +79,7 @@ API_PORT=8000
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://SERVER_IP:5173
 NODE_TOKEN_SECRET=<long random value, fixed>
 DEMO_JWT_SECRET=<another long random value, fixed>
+SIMULATION_END_WEEK=2026-11-02
 ```
 
 and `frontend\.env`:
@@ -86,6 +87,41 @@ and `frontend\.env`:
 ```ini
 VITE_API_BASE_URL=http://SERVER_IP:8000
 ```
+
+### Fixed demo week
+
+`SIMULATION_END_WEEK=2026-11-02` pins the simulated surveillance data to the 104 weeks ending with the week
+starting Monday 2 November 2026. Without it the data moves on every Monday, and so do the hotspots, alerts,
+forecasts and bed projections. With it, the rehearsal and the review day show the same thing. Use a fresh
+database for the demo, or one that has only ever used this setting.
+
+Before the demo, compute the forecasts once on the server laptop (about 7 minutes) so that nothing waits on
+training:
+
+```powershell
+python scripts\precompute_forecasts.py
+```
+
+**Why this week.** It was chosen on 10 November 2026 because it shows both things the review needs. A scan of
+every week from 1 June to 2 November 2026 found potential hotspots in every week. This one (the example week
+in the brief) has:
+
+- **potential hotspots in the latest week:** dengue in Ashgrove (R01) and Eastholm (R05), both in
+  `officer_north`'s jurisdiction (R01–R06), and influenza-like illness in Larchmont (R11), in
+  `officer_south`'s (R07–R12). They also appear as open alerts;
+- **a bed shortfall for hospital A** (Northfield General Hospital) once `manager_a@fl-healthcare.demo` enters
+  the demo capacity on the Resource planning page: **184 beds, 14 ICU beds, 75% in use**. With the default
+  (assumed) disease figures and the stored forecast:
+  - dengue, weeks 1–3: "you may need 176–189 of your 184 beds", highlighted as a possible shortfall
+    (the high end is above 184 by 5.3, 4.5 and 2.4 beds);
+  - dengue, week 4: 170–181 beds, not highlighted;
+  - all diseases together: above 184 beds in all four weeks;
+  - no ICU shortfall (at most 13.1 of 14 ICU beds).
+
+These capacity figures are demo inputs, chosen so that the page has a shortfall to show. They are not
+Northfield's (fictional) real capacity. The bed numbers come from the precompute run on 10 November 2026. A
+recompute on another machine can differ slightly in the last decimal of the forecast (floating point), so
+the week-3 margin of 2.4 beds is the one to check at rehearsal.
 
 `print_demo_setup.py` suggests a random value when `NODE_TOKEN_SECRET` is missing. Keep it fixed: the hospital
 tokens are derived from it, so changing it invalidates every laptop's saved token. `DEMO_JWT_SECRET` keeps

@@ -172,6 +172,26 @@ TABLES: Dict[str, List[Column]] = {
         ("error", "text", ""),
         ("is_simulated", "boolean", "NOT NULL"),
     ],
+    # Beds and occupancy a hospital manager entered; every entry is kept, the newest is used.
+    "hospital_capacity": [
+        ("id", "serial", "PRIMARY KEY"),
+        ("hospital_id", "text", "NOT NULL"),
+        ("total_beds", "integer", "NOT NULL"),
+        ("icu_beds", "integer", "NOT NULL"),
+        ("occupancy_percent", "real", "NOT NULL"),
+        ("entered_by", "text", "NOT NULL"),
+        ("entered_at", "timestamp", "NOT NULL"),
+    ],
+    # Per disease: share of cases admitted, ICU share of admissions, average stay. Set by an administrator.
+    "disease_assumptions": [
+        ("disease", "text", "PRIMARY KEY"),
+        ("admission_rate", "real", "NOT NULL"),
+        ("icu_share", "real", "NOT NULL"),
+        ("length_of_stay_days", "real", "NOT NULL"),
+        ("is_default", "boolean", "NOT NULL"),
+        ("updated_by", "text", "NOT NULL"),
+        ("updated_at", "timestamp", "NOT NULL"),
+    ],
     # A region becoming a potential hotspot, and what the health officer found (see app/analytics/alert_service.py).
     "alerts": [
         ("id", "serial", "PRIMARY KEY"),

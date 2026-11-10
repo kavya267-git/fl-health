@@ -31,6 +31,8 @@ from dotenv import dotenv_values  # noqa: E402
 
 from app.utils.hashing import hmac_token  # noqa: E402
 
+#: The fixed demo week; chosen and explained in docs/multi-machine.md ("Fixed demo week").
+DEMO_END_WEEK = "2026-11-02"
 
 def lan_addresses() -> list:
     """IPv4 addresses of this machine other than loopback; the one with the default route first."""
@@ -101,10 +103,15 @@ def main() -> None:
     print(check("HOSPITAL_NODES", backend_env.get("HOSPITAL_NODES"), "external"))
     print(check("API_HOST", backend_env.get("API_HOST"), "0.0.0.0"))
     print(check("CORS_ORIGINS", backend_env.get("CORS_ORIGINS"), origins))
+    # The same simulated weeks on rehearsal and review day (see "Fixed demo week" in docs/multi-machine.md).
+    print(check("SIMULATION_END_WEEK", backend_env.get("SIMULATION_END_WEEK"), DEMO_END_WEEK))
     print(f"  {'OK    ' if secret else 'CHANGE'}  NODE_TOKEN_SECRET=" + ("(set; keep it fixed)" if secret else "<a long random value>"))
     print(f"  {'OK    ' if (backend_env.get('DEMO_JWT_SECRET') or '').strip() else 'CHANGE'}  DEMO_JWT_SECRET="
           + ("(set)" if (backend_env.get("DEMO_JWT_SECRET") or "").strip() else "<another long random value>"))
     print(f"  INFO    ML_BACKEND={backend_name}   (every hospital laptop uses the same; passed in the commands below)")
+    print()
+    print("   Then, before the demo, compute the forecasts once so nothing waits on training:")
+    print("     python scripts/precompute_forecasts.py")
     print()
     print("2. frontend/.env on this laptop (then restart: cd frontend && npm run dev -- --host)")
     print(check("VITE_API_BASE_URL", frontend_env.get("VITE_API_BASE_URL"), api))
