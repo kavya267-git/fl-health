@@ -1,0 +1,23 @@
+{
+  "demo": {
+    "outcomes": 3,
+    "confirmed": 1,
+    "not_confirmed": 1,
+    "reporting_artefact": 1,
+    "precision": 0.3333333333333333,
+    "precision_excluding_artefacts": 0.5
+  },
+  "real": {
+    "outcomes": 0,
+    "confirmed": 0,
+    "not_confirmed": 0,
+    "reporting_artefact": 0,
+    "precision": null,
+    "precision_excluding_artefacts": null
+  },
+  "alerts": 27,
+  "raised": {
+    "demo": 27,
+    "real": 0
+  }
+}

@@ -64,6 +64,10 @@ export const AUDIT_ACTION_LABELS = {
   HOSPITAL_DROPPED: 'Hospital dropped from round',
   HOSPITAL_PARTICIPATION_CHANGED: 'Hospital participation changed',
   HOSPITAL_DECLINED_ROUND: 'Hospital declined a round',
+  ALERT_CREATED: 'Alert created',
+  ALERT_ACKNOWLEDGED: 'Alert acknowledged',
+  ALERT_OUTCOME_RECORDED: 'Alert outcome recorded',
+  SITUATION_REPORT_EXPORTED: 'Situation report exported',
 }
 
 export const ROLE_LABELS = {
@@ -111,7 +115,9 @@ export const canChangeParticipation = (user) => Boolean(user) && user.role === '
 /** Hospital detail pages: not for health officers or researchers; the server enforces the same rule. */
 export const canOpenHospitalDetails = (user) => Boolean(user) && !['health_officer', 'researcher'].includes(user.role)
 /** Where a user lands after signing in. */
-export const homePathFor = (user) => (isHospitalOperator(user) ? '/my-hospital' : isHealthOfficer(user) ? '/surveillance' : '/')
+export const homePathFor = (user) => (isHospitalOperator(user) ? '/my-hospital' : isHealthOfficer(user) ? '/situation' : '/')
+/** Situation report and alerts: administrators, coordinators and health officers (the server enforces it). */
+export const canSeeOfficerViews = (user) => Boolean(user) && ['admin', 'coordinator', 'health_officer'].includes(user.role)
 /** The audit log is for coordinators and administrators; the server enforces the same rule. */
 export const canSeeAudit = (user) => Boolean(user) && ['admin', 'coordinator'].includes(user.role)
 

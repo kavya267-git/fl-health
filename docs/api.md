@@ -149,6 +149,29 @@ model has not been trained yet) and `explanation` is `null`.
 
 Responses built from simulated data carry `data_status: {"simulated": true, "label": "SIMULATED / DEMONSTRATION DATA"}`.
 
+## Health officer
+
+Scoped to a health officer's jurisdiction; administrators and coordinators see every region (see
+[permissions.md](permissions.md)).
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/officer/situation` | Per disease and region: this week's count (and rate per 100,000 when populations are loaded), the usual level, the ratio, the status, hospitals reported out of hospitals that report there, and the ensemble forecast for 2-4 weeks with its likely range; plus `about_forecast` |
+| GET | `/api/officer/forecast-status` | About this forecast: data date, validation window, members and weights per week ahead, or `available: false` while it is computed |
+| GET | `/api/officer/situation.csv` | The report as CSV. While the data is simulated the first line is `# SIMULATED DATA – NOT REAL CASES` and every row's `data_flag` column carries the same text |
+| GET | `/api/officer/situation.pdf` | The report as PDF; the same watermark is printed across and at the top of every page |
+| GET | `/api/alerts?state=OPEN\|ACKNOWLEDGED\|CLOSED` | Alerts: a region that became a potential hotspot in a week |
+| POST | `/api/alerts/{id}/acknowledge` | Acknowledge an open alert (✎) |
+| POST | `/api/alerts/{id}/outcome` | Body `{"outcome": "CONFIRMED"\|"NOT_CONFIRMED"\|"REPORTING_ARTEFACT", "note": "..."}`; only after acknowledging (✎) |
+
+An alert id outside the officer's jurisdiction answers `404 No such alert.`, exactly like an unknown id, so
+the response does not reveal that the alert exists or which region it concerns. Hotspot precision
+(`scripts/hotspot_precision.py`) counts only outcomes recorded by health officers; outcomes an administrator
+records are listed separately.
+
+Exports, acknowledgements and outcomes are written to the audit log (`SITUATION_REPORT_EXPORTED`,
+`ALERT_ACKNOWLEDGED`, `ALERT_OUTCOME_RECORDED`; alerts themselves are logged as `ALERT_CREATED`).
+
 ## Audit (✎)
 
 | Method | Path | Description |

@@ -161,6 +161,37 @@ TABLES: Dict[str, List[Column]] = {
         ("neighbours", "json", ""),
         ("is_simulated", "boolean", "NOT NULL"),
     ],
+    # Ensemble forecasts for every region and disease, one row per run (see app/analytics/ensemble_service.py).
+    "ensemble_runs": [
+        ("id", "serial", "PRIMARY KEY"),
+        ("data_version", "text", "NOT NULL"),
+        ("status", "text", "NOT NULL"),
+        ("started_at", "timestamp", "NOT NULL"),
+        ("finished_at", "timestamp", ""),
+        ("payload", "json", ""),
+        ("error", "text", ""),
+        ("is_simulated", "boolean", "NOT NULL"),
+    ],
+    # A region becoming a potential hotspot, and what the health officer found (see app/analytics/alert_service.py).
+    "alerts": [
+        ("id", "serial", "PRIMARY KEY"),
+        ("region_id", "text", "NOT NULL"),
+        ("disease", "text", "NOT NULL"),
+        ("week_start", "text", "NOT NULL"),
+        ("state", "text", "NOT NULL"),
+        ("case_count", "integer", ""),
+        ("usual_level", "real", ""),
+        ("created_at", "timestamp", "NOT NULL"),
+        ("acknowledged_by", "text", ""),
+        ("acknowledged_at", "timestamp", ""),
+        ("outcome", "text", ""),
+        ("outcome_note", "text", ""),
+        ("outcome_by", "text", ""),
+        # The recorder's role: hotspot precision counts only outcomes recorded by health officers.
+        ("outcome_by_role", "text", ""),
+        ("outcome_at", "timestamp", ""),
+        ("is_simulated", "boolean", "NOT NULL"),
+    ],
     "surveillance_reports": [
         ("id", "serial", "PRIMARY KEY"),
         ("hospital_id", "text", "NOT NULL"),
@@ -200,6 +231,7 @@ UNIQUE_INDEXES = {
     "analytics_results": [("kind", "result_key")],
     "forecasts": [("region_id", "disease", "horizon")],
     "surveillance_reports": [("hospital_id", "region_id", "disease", "week_start")],
+    "alerts": [("region_id", "disease", "week_start")],
 }
 
 INDEXES = {

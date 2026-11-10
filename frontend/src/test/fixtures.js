@@ -229,7 +229,7 @@ export const hotspots = {
     })),
   },
   summary: { CANDIDATE_HOTSPOT: 1, ELEVATED: 0, NORMAL: 1, INSUFFICIENT_DATA: 1 },
-  disclaimer: 'A potential hotspot is a statistical signal. It is a candidate for further investigation, not a confirmed outbreak.',
+  disclaimer: 'A potential hotspot is a statistical signal. It is a candidate for further investigation, not a confirmed rise in illness.',
   data_status: analyticsOptions.data_status,
 }
 
