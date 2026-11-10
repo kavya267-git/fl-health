@@ -41,7 +41,7 @@ def test_fixed_clipping_is_unchanged():
     assert config.update_noise_multiplier == 0.5
     _, report = privatize_update(_weights(0.0), _weights(1.0, 1), config, np.random.default_rng(0))
     assert "noisy_clip_bit" not in report and report["noise_std"] == pytest.approx(0.5)
-    assert report["update_norm_before"] is not None
+    assert report["update_norm_before"] is None and report["clipped"] is None
 
 
 def test_report_carries_only_the_noised_bit():

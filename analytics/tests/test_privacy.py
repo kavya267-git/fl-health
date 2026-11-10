@@ -38,8 +38,11 @@ def test_update_is_clipped_to_the_norm_bound():
     base, local = _weights(0.0), _weights(1.0)
     config = DPConfig(enabled=True, clip_norm=1.0, noise_multiplier=1e-9)
     sent, report = privatize_update(base, local, config, np.random.default_rng(0))
-    assert report["update_norm_before"] > 1.0 and report["clipped"] is True
+    assert update_norm(base, local) > 1.0
     assert update_norm(base, sent) == pytest.approx(1.0, rel=1e-4)
+    # Neither the raw norm nor the clipped flag leaves the hospital: they are outside the accounting.
+    assert report["update_norm_before"] is None and report["clipped"] is None
+    assert report["withheld"] == ["update_norm_before", "clipped"]
     # Direction is preserved: the sent update is the original scaled down.
     ratio = sent["layer.weight"] / local["layer.weight"]
     assert np.allclose(ratio, ratio.flat[0], rtol=1e-3)
@@ -48,8 +51,14 @@ def test_update_is_clipped_to_the_norm_bound():
 def test_small_updates_are_not_scaled_up():
     base, local = _weights(0.0), _weights(1e-4)
     sent, report = privatize_update(base, local, DPConfig(True, 1.0, 1e-9), np.random.default_rng(0))
-    assert report["clipped"] is False
+    assert report["clipped"] is None
     assert np.allclose(sent["layer.weight"], local["layer.weight"], atol=1e-6)
+
+
+def test_without_dp_the_norm_is_reported():
+    base, local = _weights(0.0), _weights(1.0)
+    _, report = privatize_update(base, local, DPConfig(), np.random.default_rng(0))
+    assert report["update_norm_before"] == pytest.approx(update_norm(base, local)) and report["clipped"] is False
 
 
 def test_noise_has_the_configured_scale():

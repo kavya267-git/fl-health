@@ -44,6 +44,8 @@ ACCOUNTING_ASSUMPTIONS = [
     "Epsilon is derived with epsilon = rho + 2 * sqrt(rho * ln(1 / delta)).",
     "No amplification by subsampling is assumed.",
     "Batch-normalisation running statistics are transmitted without clipping or noise and fall outside this bound.",
+    "When DP is enabled, the hospital does not report its update norm before clipping or whether it was clipped: "
+    "neither is noised, so they would fall outside this bound. The coordinator only sees the noised update.",
     "A round run without DP has no formal bound, so the cumulative figure only holds if every round used DP.",
     "With adaptive clipping, each hospital also releases its clipping bit (b - 1/2, sensitivity 1/2) with Gaussian "
     "noise sigma_b, and noises its update with z_update = (z^-2 - (2 sigma_b)^-2)^(-1/2) (Andrew et al., 2021). The "
@@ -163,6 +165,9 @@ def privatize_update(
         return {key: np.asarray(value).copy() for key, value in local_weights.items()}, report
 
     config.validate()
+    # Neither is noised, so neither may leave the hospital (outside the accounting); see ACCOUNTING_ASSUMPTIONS.
+    report["update_norm_before"] = None
+    report["withheld"] = ["update_norm_before", "clipped"]
     scale = min(1.0, config.clip_norm / norm_before) if norm_before > 0 else 1.0
     noise_std = config.update_noise_multiplier * config.clip_norm
     trainable = set(_trainable_keys(global_weights))
@@ -181,7 +186,7 @@ def privatize_update(
         {
             "mechanism": "gaussian",
             "clip_norm": float(config.clip_norm),
-            "clipped": bool(scale < 1.0),
+            "clipped": None,
             "noise_multiplier": float(config.noise_multiplier),
             "noise_std": float(noise_std),
             "delta": float(config.delta),
@@ -195,9 +200,6 @@ def privatize_update(
         bit = 1.0 if norm_before <= config.clip_norm else 0.0
         report.update(
             {
-                # The raw norm and the clipped flag would give the bit away, so they are not sent.
-                "update_norm_before": None,
-                "clipped": None,
                 "adaptive_clipping": True,
                 "target_quantile": float(config.target_quantile),
                 "update_noise_multiplier": float(config.update_noise_multiplier),

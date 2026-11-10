@@ -93,7 +93,8 @@ def test_differential_privacy_clips_the_transmitted_update(hospital_dir):
     _, payload, _, _, report, _ = next(c for c in transport.calls if c[0] == "update")
     sent = weights_from_bytes(payload)
     norm = np.sqrt(sum(np.sum((sent[k].astype(np.float64) - transport.global_weights[k]) ** 2) for k in sent))
-    assert report["clipped"] is True and report["update_norm_before"] > 0.05
+    assert report["clipped"] is None and report["update_norm_before"] is None  # withheld under DP
+    assert node.last_update_norm > 0.05  # clipping did happen (local diagnostic, never sent)
     assert norm == pytest.approx(0.05, rel=0.02)
 
 

@@ -528,10 +528,14 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
                 node.evaluate_and_report(round_id, transport.round_info)
 
         uploads = [len(u["payload"]) for u in transport.updates.values()]
-        # Withheld (None) under adaptive clipping, where they would reveal the noised clipping bit.
-        norms = [u["dp_report"]["update_norm_before"] for u in transport.updates.values()
-                 if u["dp_report"].get("update_norm_before") is not None]
-        clipped = [u["dp_report"]["clipped"] for u in transport.updates.values() if u["dp_report"].get("clipped") is not None]
+        # With DP the reports withhold the raw norm and the clipped flag; the harness reads the nodes' local
+        # diagnostic instead (never sent), so the experiment logs keep the same columns.
+        norms = [nodes[h].last_update_norm for h in transport.updates]
+        clipped = [
+            u["dp_report"]["clipped"] if u["dp_report"].get("clipped") is not None
+            else bool(u["dp_report"].get("clip_norm") and nodes[h].last_update_norm > u["dp_report"]["clip_norm"])
+            for h, u in transport.updates.items()
+        ]
         accounting = account_rounds(dp_reports[accepted[0].hospital_id], dp.delta)
         epsilon = accounting["epsilon_over_dp_rounds"]
         row = pooled_row(list(transport.evaluations.values()), modality)
