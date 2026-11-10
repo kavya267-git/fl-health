@@ -46,6 +46,9 @@ def test_outlier_is_flagged_and_typical_updates_are_not():
     }
     out = screening.screen(current, _typical(40))
     assert out["a"]["flagged"] and out["a"]["scored"] and "Still used" in out["a"]["reason"]
+    assert out["a"]["threshold"] == screening.SCORE_THRESHOLD == 0.6
+    # Flagged exactly when the raw score is above the threshold; the score is kept either way.
+    assert all(r["flagged"] == (r["score"] > 0.6) for r in out.values())
     assert not out["b"]["flagged"] and not out["c"]["flagged"]
     assert out["a"]["score"] > out["b"]["score"]
     assert screening.screen(current, _typical(40)) == out  # deterministic

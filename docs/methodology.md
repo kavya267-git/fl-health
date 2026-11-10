@@ -125,7 +125,8 @@ week are grouped with K-Means (`analytics/hotspot/clusters.py`) on their locatio
 kilometres, equirectangular around the flagged regions' mean latitude) and their rates (case rate per
 100,000 when populations are loaded, and the anomaly score), each standardised across the flagged regions.
 k runs from 2 to min(5, n − 1) and the k with the highest silhouette is kept; the layer is shown only if
-that silhouette is at least 0.25 (Kaufman & Rousseeuw's threshold for any substantial structure), and only
+that silhouette is at least 0.25, the floor below which Kaufman & Rousseeuw (*Finding Groups in Data: An
+Introduction to Cluster Analysis*, Wiley, 1990, ch. 2) find no substantial structure; and only
 for groups of two or more regions. With fewer than three flagged regions there is nothing to cluster, and
 the map says so. On the map, clustered regions get a purple halo labelled "cluster of potential hotspots",
 which can be switched off. A cluster says that some flagged regions are close together and have similar
@@ -207,6 +208,9 @@ Accounting (`analytics/privacy/dp.py`), with its assumptions stated in the UI:
 - each round is ρ-zCDP with ρ = 1 / (2 · noise_multiplier²); rounds add; ε = ρ + 2·√(ρ · ln(1/δ)), δ = 10⁻⁵;
 - no subsampling amplification;
 - batch-norm running statistics are sent unclipped and un-noised and fall outside the bound;
+- with DP on (fixed or adaptive clip), the hospital does not report its update norm before clipping or
+  whether it was clipped: neither is noised, so both would fall outside the bound. Without DP they are
+  reported, for monitoring;
 - a round run without DP has no bound, so a cumulative ε only holds if every round used DP.
 
 **Adaptive clipping (option).** Instead of a fixed `clip_norm`, the clip norm can track a target quantile
@@ -214,8 +218,8 @@ Accounting (`analytics/privacy/dp.py`), with its assumptions stated in the UI:
 NeurIPS 2021):
 
 1. each hospital clips with the round's clip norm C and computes its bit b = 1 if ‖Δ‖₂ ≤ C, else 0;
-2. it sends the centred bit (b − ½) plus Gaussian noise N(0, σ_b²), and does not send its raw norm or whether
-   it was clipped (either would reveal the bit);
+2. it sends the centred bit (b − ½) plus Gaussian noise N(0, σ_b²); as with any DP round, it does not send its
+   raw norm or whether it was clipped (here either would also reveal the bit);
 3. its update is noised with z_Δ · C, where z_Δ = (z⁻² − (2σ_b)⁻²)^(−½) as in the paper, so that the update
    (sensitivity C) and the bit (sensitivity ½) together cost ρ = 1 / (2z²) per round: the same as a
    fixed-clip round with noise multiplier z, and the accounting above is unchanged;
@@ -243,7 +247,9 @@ two numbers: its size relative to the round's median update, and its cosine dist
 of the *other* hospitals' updates (each scaled to unit length, so one very large update cannot drag the
 reference towards itself). An Isolation Forest (scikit-learn, 200 trees, fixed seed) is fitted on those
 numbers for the most recent 100 earlier updates of the same model plus the current round, and an update is
-flagged as unusual when its anomaly score is above 0.5 (scikit-learn's "auto" threshold). Nothing is scored
+flagged as unusual when its anomaly score is above 0.6. Liu, Ting & Zhou ("Isolation Forest", ICDM 2008):
+scores close to 1 indicate anomalies, while scores around 0.5 or below mean there is no distinct anomaly.
+Nothing is scored
 until 20 earlier updates exist (`backend/app/federated/screening.py`). A flag appears on the round page and
 as `UPDATE_FLAGGED_UNUSUAL` in the audit log. **It never rejects an update**: the flagged update is averaged
 like any other. Honest updates can be flagged too: hospitals with different patients move the model in
@@ -251,8 +257,10 @@ different directions, update directions drift as training converges, DP noise ch
 history is small. In the tests, an update reversed and scaled ×5 stands out clearly, while an honest
 hospital can sit near the threshold. In a demo run of six honest EHR rounds (simulated hospitals, TabNet,
 10 November 2026), the first round that was scored (round 6) flagged 2 of its 4 honest updates, with
-scores of 0.51 and 0.50, just above the threshold: in this setting, expect flags on honest updates. It is a prompt for a person to look, not a defence against poisoning
-(there is still no robust aggregation).
+scores of 0.51 and 0.50, just above the threshold then in use (scikit-learn's "auto" 0.5). **The threshold was
+raised to 0.6 after observing these borderline flags on honest updates**, so it was chosen after seeing data,
+not fixed in advance. The page still shows each update's raw score. Honest updates can still be flagged. It is a
+prompt for a person to look, not a defence against poisoning (there is still no robust aggregation).
 
 **Validation checks** (Settings page) inspect the running system: no patient-identifier-like columns in
 the central schema; coordinator storage separate from hospital data and free of raw-data file types; every

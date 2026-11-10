@@ -11,8 +11,9 @@ For every valid update of a round, at aggregation, the coordinator measures:
 
 An Isolation Forest (Liu et al., 2008) is fitted on these two features, log relative norm and cosine distance,
 of the most recent earlier updates of the same model (up to ``HISTORY_WINDOW``) plus this round's, and each of this round's updates gets an anomaly
-score. An update is flagged as unusual when the forest isolates it faster than expected (scikit-learn's
-"auto" threshold, score above 0.5). With fewer than ``MIN_HISTORY`` earlier updates there is too little to compare
+score. An update is flagged as unusual when its score is above 0.6. Liu et al. (2008): scores close to 1
+indicate anomalies, while scores around 0.5 or below mean the sample has no distinct anomaly. The threshold was
+first scikit-learn's "auto" 0.5 and was raised to 0.6 after honest updates were flagged at 0.50-0.51. With fewer than ``MIN_HISTORY`` earlier updates there is too little to compare
 against, and nothing is scored.
 
 A flag is information, not a verdict: a hospital whose patients differ from the others' (non-IID data), a small
@@ -33,8 +34,9 @@ from analytics.privacy.dp import is_statistic
 MIN_HISTORY = 20
 #: Only the most recent earlier updates are compared with: update directions drift as training converges.
 HISTORY_WINDOW = 100
-#: scikit-learn's "auto" threshold on the anomaly score (score_samples is its negative).
-SCORE_THRESHOLD = 0.5
+#: Anomaly score (the negative of scikit-learn's score_samples) above which an update is flagged. Liu et al. (2008):
+#: scores around 0.5 mean no distinct anomaly. Raised from 0.5 after borderline flags on honest updates.
+SCORE_THRESHOLD = 0.6
 N_ESTIMATORS = 200
 
 Weights = Dict[str, np.ndarray]
@@ -80,7 +82,8 @@ def _matrix(rows: Iterable[dict]) -> np.ndarray:
 def screen(current: Dict[str, dict], history: List[dict], seed: int = 0) -> Dict[str, dict]:
     """Score this round's updates against the earlier ones. ``history``: feature dicts of earlier updates."""
     history = history[-HISTORY_WINDOW:]
-    base = {"method": "isolation_forest", "history_size": len(history), "flag_is_advisory": True}
+    base = {"method": "isolation_forest", "history_size": len(history), "flag_is_advisory": True,
+            "threshold": SCORE_THRESHOLD}
     if len(history) < MIN_HISTORY:
         return {
             h: {**f, **base, "scored": False, "score": None, "flagged": False,
