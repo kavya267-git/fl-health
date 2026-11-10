@@ -56,6 +56,11 @@ def main() -> None:
         "--group-column", default=None, help="Patient identifier column, to keep a patient in one hospital"
     )
     ehr.add_argument("--source", default="mimic-iv")
+    ehr.add_argument(
+        "--keep-missing",
+        action="store_true",
+        help="Keep rows with missing feature values; each hospital node fills them in by KNN imputation",
+    )
 
     ecg = sub.add_parser("ecg")
     ecg.add_argument("--csv", type=Path, nargs="+", required=True)
@@ -82,6 +87,7 @@ def main() -> None:
             label_column=args.label_column,
             group_column=args.group_column,
             source=args.source,
+            keep_missing=args.keep_missing,
             **common,
         )
     elif args.modality == "ecg":

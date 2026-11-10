@@ -219,6 +219,7 @@ class Coordinator:
         dp: Optional[DPConfig] = None,
         is_simulated: bool = True,
         deadline_seconds: int = DEFAULT_DEADLINE_SECONDS,
+        simulated_missing_rate: float = 0.0,
     ) -> Dict[str, Any]:
         """Create a round, select the participating hospitals and open it for clients.
 
@@ -246,6 +247,10 @@ class Coordinator:
             raise ValidationFailed(str(exc)) from exc
         if min_participants < 1:
             raise ValidationFailed("min_participants must be at least 1")
+        if not 0.0 <= simulated_missing_rate <= 0.5:
+            raise ValidationFailed("simulated_missing_rate must be between 0 and 0.5")
+        if simulated_missing_rate > 0 and modality != "ehr":
+            raise ValidationFailed("Simulated missing values apply to EHR rounds only")
 
         selected = [
             h
@@ -278,6 +283,11 @@ class Coordinator:
                     "batch_size": batch_size,
                     "learning_rate": learning_rate,
                     "seed": self.default_seed + round_number,
+                    **(
+                        {"missingness": {"mcar_rate": simulated_missing_rate, "seed": self.default_seed}}
+                        if simulated_missing_rate > 0
+                        else {}
+                    ),
                 },
                 "differential_privacy": dp.to_dict(),
                 "min_participants": min_participants,

@@ -41,6 +41,8 @@ Check the current terms yourself before use. Once you have the files, split them
 # EHR: a tabular extract with the 14 features in ml/ehr/features.py plus a binary label
 python scripts/prepare_real_data.py ehr --csv admissions.csv --group-column subject_id \
     --mapping '{"anchor_age": "age", "hospital_expire_flag": "label"}'
+# add --keep-missing to keep rows with missing feature values; each hospital node then fills them in by
+# KNN imputation fitted on its own training split (docs/methodology.md, "Missing values")
 
 # ECG: the MIT-BIH "heartbeat" CSV export (187 samples + class per row)
 python scripts/prepare_real_data.py ecg --csv mitbih_train.csv mitbih_test.csv

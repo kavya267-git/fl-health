@@ -82,6 +82,23 @@ describe('StartRoundDialog', () => {
     expect(screen.getByLabelText('Noise multiplier')).toBeInTheDocument()
     expect(screen.getByLabelText('Clip norm')).toBeInTheDocument()
   })
+
+  it('offers simulated missing values for EHR only, off by default, and sends them as a share', async () => {
+    api.startRound.mockResolvedValue(startedRound)
+    renderDialog()
+    const field = screen.getByLabelText('Simulated missing values (%)')
+    expect(field).toHaveValue(0)
+    await userEvent.clear(field)
+    await userEvent.type(field, '10')
+    await userEvent.click(screen.getByRole('button', { name: 'Start round' }))
+    await waitFor(() => expect(api.startRound).toHaveBeenCalled())
+    expect(api.startRound.mock.calls[0][0].simulated_missing_rate).toBeCloseTo(0.1)
+  })
+
+  it('does not offer simulated missing values for ECG', () => {
+    renderDialog({ modality: 'ecg' })
+    expect(screen.queryByLabelText('Simulated missing values (%)')).not.toBeInTheDocument()
+  })
 })
 
 describe('PipelineDiagram', () => {

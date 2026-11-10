@@ -51,6 +51,28 @@ clinical performance.
 Each round also records, per hospital, the local training loss and the locally trained model's validation
 metrics before averaging, so local and global models can be compared.
 
+## Missing values (EHR)
+
+Each hospital node fills gaps in its EHR features before training, with k-nearest-neighbour imputation
+(k = 5, scikit-learn's `KNNImputer`): a missing value becomes the mean of that feature over the five most
+similar training records that have it (`ml/ehr/imputation.py`).
+
+- **Fitted on the hospital's own training split only.** Held-out records are filled from training
+  neighbours; they never become neighbours, so held-out data cannot shape the training data or its own
+  imputation. Tests check this directly (`ml/tests/test_imputation.py`, `ml/tests/test_hospital_node.py`).
+- **Nothing leaves the hospital** except, when gaps were filled, counts: missing values per split and the
+  number of training rows the imputer was fitted on.
+- **Real gaps.** `prepare_real_data.py ehr --keep-missing` keeps rows with missing feature values for the node
+  to impute (rows without a label are always dropped). Without the flag, such rows are dropped as before.
+- **Simulated gaps.** The simulated hospitals have no gaps, so a round (or an experiment config) can blank a
+  share of values completely at random (MCAR), for example 10%, to exercise the pipeline. The pattern is
+  fixed per hospital and differs between hospitals. It is a test setting, not a property of the data.
+- **Limits.** KNN imputation assumes values are missing at random given the other features; values that are
+  missing *because* of the patient's state (a test not ordered for a well patient) are not modelled.
+  Distances are measured on features scaled by the fixed clinical reference values in `ml/ehr/features.py`
+  (the same ones the model uses), so a feature in large units does not dominate; nothing is fitted for the
+  scaling.
+
 ## Simulated data
 
 Used only in demo mode and labelled as simulated everywhere.

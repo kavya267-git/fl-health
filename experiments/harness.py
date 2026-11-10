@@ -65,10 +65,12 @@ from ml.common.real_data import DEFAULT_HOSPITALS, partition_groups, split_train
 from ml.common.types import ArrayDataset, EvalResult, TrainConfig  # noqa: E402
 from ml.common.weights import weights_from_bytes, weights_to_bytes  # noqa: E402
 from ml.ecg.preprocess import ECG_BEAT_LENGTH  # noqa: E402
+from ml.ehr.imputation import MissingnessConfig  # noqa: E402
 from ml.evaluation.metrics import per_class_metrics, pool_evaluations  # noqa: E402
 from ml.registry import adapter_override, get_adapter  # noqa: E402
 from ml.simulation.hospitals import SIMULATED_HOSPITALS, generate_hospital_data  # noqa: E402
 from ml.training.hospital_node import HospitalNode  # noqa: E402
+from ml.training.local_trainer import load_training_splits  # noqa: E402
 
 RESULTS_DIR = ROOT / "experiments" / "results"
 WORK_DIR = ROOT / "experiments" / ".work"
@@ -90,6 +92,9 @@ DEFAULTS = {
         "learning_rate": 0.003,
         "class_weighting": "none",
         "proximal_mu": 0.0,
+        # EHR only: {"mcar_rate": r, "seed": s} blanks a share of feature values at random; each hospital
+        # fills them by KNN imputation fitted on its own training split (ml.ehr.imputation).
+        "missingness": None,
     },
     "dp": {"enabled": False, "clip_norm": 1.0, "noise_multiplier": 0.0, "delta": 1e-5},
     "methods": ["local", "fedavg", "centralised"],
@@ -163,9 +168,16 @@ class Partition:
     excluded: Dict[str, str] = field(default_factory=dict)
     sizes: Dict[str, dict] = field(default_factory=dict)
     records: Dict[str, dict] = field(default_factory=dict)  # patient-wise setting: records per hospital
+    missingness: Optional[dict] = None
 
     def load(self, hospital_id: str, split: str) -> ArrayDataset:
-        return load_local_dataset(self.root / hospital_id, self.modality, split)
+        """What the hospital node trains / evaluates on: for EHR, gaps filled from its own training split."""
+        if self.modality != "ehr":
+            return load_local_dataset(self.root / hospital_id, self.modality, split)
+        train, val, _ = load_training_splits(
+            self.root / hospital_id, self.modality, MissingnessConfig.from_dict(self.missingness)
+        )
+        return train if split == "train" else val
 
 
 def load_mitbih(csv_paths: Iterable[str]) -> tuple:
@@ -249,7 +261,7 @@ def build_partition(config: dict, seed: int, run_dir: Path) -> Partition:
     if run_dir.exists():
         shutil.rmtree(run_dir)
     hospitals = list(DEFAULT_HOSPITALS)
-    partition = Partition(run_dir, modality, source, [])
+    partition = Partition(run_dir, modality, source, [], missingness=config["training"].get("missingness"))
 
     if scheme["scheme"] == "natural":
         if source != "simulated":
@@ -457,6 +469,7 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
                 "seed": seed * 100_000 + round_number,
                 "class_weighting": training["class_weighting"],
                 "proximal_mu": training["proximal_mu"],
+                **({"missingness": training["missingness"]} if training.get("missingness") else {}),
             },
             "differential_privacy": dp.to_dict(),
             "model": {"architecture": adapter.architecture, "backend": adapter.backend},

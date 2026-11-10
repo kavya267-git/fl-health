@@ -20,6 +20,7 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
   const [dpEnabled, setDpEnabled] = useState(false)
   const [clipNorm, setClipNorm] = useState(1.0)
   const [noiseMultiplier, setNoiseMultiplier] = useState(0.1)
+  const [missingPercent, setMissingPercent] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -43,6 +44,7 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
         min_participants: Number(minParticipants),
         auto_aggregate: true,
         deadline_seconds: Number(deadlineSeconds),
+        simulated_missing_rate: modality === 'ehr' ? Number(missingPercent) / 100 : 0,
         differential_privacy: {
           enabled: dpEnabled,
           clip_norm: Number(clipNorm),
@@ -181,6 +183,25 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
             />
           </Field>
         </div>
+
+        {modality === 'ehr' ? (
+          <Field
+            label="Simulated missing values (%)"
+            htmlFor="round-missing"
+            hint="Test setting. Each hospital blanks this share of its EHR values at random and fills them in by nearest-neighbour imputation, fitted on its own training records only. 0 = off."
+          >
+            <input
+              id="round-missing"
+              type="number"
+              min={0}
+              max={50}
+              step="any"
+              value={missingPercent}
+              onChange={(e) => setMissingPercent(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        ) : null}
 
         <fieldset className="rounded-md border border-line p-4">
           <legend className="px-1 text-sm font-medium text-ink">Differential privacy (prototype)</legend>

@@ -81,9 +81,15 @@ coordinator or admin.
   "min_participants": 2,
   "auto_aggregate": true,
   "differential_privacy": { "enabled": false, "clip_norm": 1.0, "noise_multiplier": 0.0, "delta": 1e-5 },
+  "simulated_missing_rate": 0.0,
   "deadline_seconds": 600
 }
 ```
+
+`simulated_missing_rate` (EHR only, 0 to 0.5, default 0 = off) is a test setting: each hospital blanks that
+share of its feature values completely at random and fills them in by KNN imputation fitted on its own
+training split (docs/methodology.md, "Missing values"). It is stored in the round's
+`config.training.missingness`; a non-zero value for another modality is refused with 422.
 
 Only `modality` is required. `hospital_ids` defaults to every online hospital that holds the modality (with
 `HOSPITAL_NODES=external`: every hospital whose node sent a heartbeat in the last 30 s).

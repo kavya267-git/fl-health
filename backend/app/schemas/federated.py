@@ -27,6 +27,15 @@ class StartRoundRequest(BaseModel):
     min_participants: int = Field(default=2, ge=1, le=16)
     auto_aggregate: bool = True
     differential_privacy: DifferentialPrivacyConfig = Field(default_factory=DifferentialPrivacyConfig)
+    simulated_missing_rate: float = Field(
+        default=0.0,
+        ge=0,
+        le=0.5,
+        description=(
+            "EHR only. Share of feature values each hospital blanks completely at random before training, to "
+            "exercise KNN imputation (fitted on its own training split). 0 = off."
+        ),
+    )
     deadline_seconds: int = Field(
         default=600,
         ge=10,
