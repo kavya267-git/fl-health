@@ -196,6 +196,27 @@ Accounting (`analytics/privacy/dp.py`), with its assumptions stated in the UI:
 - batch-norm running statistics are sent unclipped and un-noised and fall outside the bound;
 - a round run without DP has no bound, so a cumulative ε only holds if every round used DP.
 
+**Adaptive clipping (option).** Instead of a fixed `clip_norm`, the clip norm can track a target quantile
+γ of the hospitals' update norms (Andrew et al., "Differentially Private Learning with Adaptive Clipping",
+NeurIPS 2021):
+
+1. each hospital clips with the round's clip norm C and computes its bit b = 1 if ‖Δ‖₂ ≤ C, else 0;
+2. it sends the centred bit (b − ½) plus Gaussian noise N(0, σ_b²), and does not send its raw norm or whether
+   it was clipped (either would reveal the bit);
+3. its update is noised with z_Δ · C, where z_Δ = (z⁻² − (2σ_b)⁻²)^(−½) as in the paper, so that the update
+   (sensitivity C) and the bit (sensitivity ½) together cost ρ = 1 / (2z²) per round: the same as a
+   fixed-clip round with noise multiplier z, and the accounting above is unchanged;
+4. after aggregation the coordinator computes b̄ = mean of the noised bits + ½ and sets the next round's
+   clip norm to C · exp(−η (b̄ − γ)), η = 0.2 by default (the paper's geometric update). This uses noised
+   bits only, so it is post-processing. The next adaptive round of the same model starts from that value.
+
+σ_b is set from the share of each round's budget given to the bit (`quantile_budget_share`, default 0.1):
+σ_b = z / (2√share), which keeps the split valid at every noise level. One difference from the paper: the
+paper's server adds noise once to the sum of the bits and of the updates (central DP over many clients),
+while here, as for the fixed clip, each hospital noises its own bit and update before they leave. With four
+hospitals the bit average is therefore noisy, and the clip norm moves slowly: when every update is clipped
+it grows on average by a factor exp(η γ) per round (about 1.105 for η = 0.2, γ = 0.5).
+
 This is an unaudited prototype. With four hospitals, noise large enough to give a small ε destroys model
 quality, and noise small enough to preserve quality gives an ε in the hundreds or thousands - the UI shows
 whichever it is. It is not patient-level DP (that would need DP-SGD inside local training).

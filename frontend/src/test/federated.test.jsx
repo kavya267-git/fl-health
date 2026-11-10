@@ -95,6 +95,19 @@ describe('StartRoundDialog', () => {
     expect(api.startRound.mock.calls[0][0].simulated_missing_rate).toBeCloseTo(0.1)
   })
 
+  it('sends adaptive clipping with its target quantile only when chosen', async () => {
+    api.startRound.mockResolvedValue(startedRound)
+    renderDialog()
+    await userEvent.click(screen.getByLabelText(/Clip each update/))
+    expect(screen.queryByLabelText('Target quantile')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText(/Adapt the clip norm/))
+    expect(screen.getByLabelText('Starting clip norm')).toBeInTheDocument()
+    expect(screen.getByLabelText('Target quantile')).toHaveValue(0.5)
+    await userEvent.click(screen.getByRole('button', { name: 'Start round' }))
+    await waitFor(() => expect(api.startRound).toHaveBeenCalled())
+    expect(api.startRound.mock.calls[0][0].differential_privacy).toMatchObject({ enabled: true, adaptive_clipping: true, target_quantile: 0.5 })
+  })
+
   it('does not offer simulated missing values for ECG', () => {
     renderDialog({ modality: 'ecg' })
     expect(screen.queryByLabelText('Simulated missing values (%)')).not.toBeInTheDocument()

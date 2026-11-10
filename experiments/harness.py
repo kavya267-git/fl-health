@@ -37,7 +37,7 @@ import shutil
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -56,7 +56,7 @@ if os.getenv("FL_EXPERIMENT_THREADS"):
 
     torch.set_num_threads(int(os.environ["FL_EXPERIMENT_THREADS"]))
 
-from analytics.privacy.dp import DPConfig, account_rounds, is_statistic, update_norm  # noqa: E402
+from analytics.privacy.dp import DPConfig, account_rounds, is_statistic, next_clip_norm, update_norm  # noqa: E402
 from app.federated.fedavg import ClientUpdate, federated_average  # noqa: E402
 from app.federated.validation import UpdateRejected, validate_update  # noqa: E402
 from ml import __version__  # noqa: E402
@@ -96,6 +96,7 @@ DEFAULTS = {
         # fills them by KNN imputation fitted on its own training split (ml.ehr.imputation).
         "missingness": None,
     },
+    # adaptive_clipping / target_quantile / clip_learning_rate / quantile_budget_share: see analytics.privacy.dp.
     "dp": {"enabled": False, "clip_norm": 1.0, "noise_multiplier": 0.0, "delta": 1e-5},
     "methods": ["local", "fedavg", "centralised"],
     "seeds": [0, 1, 2],
@@ -454,6 +455,7 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
     rows = []
     for round_number in range(1, int(training["rounds"]) + 1):
         started = time.perf_counter()
+        clip_this_round = dp.clip_norm
         round_id = f"{config.get('round_id_name') or config['name']}-seed{seed}-r{round_number:03d}"
         transport.base = weights_to_bytes(weights)
         transport.updates, transport.evaluations, transport.failures = {}, {}, {}
@@ -511,12 +513,25 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
             raise RuntimeError(f"Round {round_id}: only {len(accepted)} valid update(s); rejected {rejected}")
         weights = federated_average(accepted)
         transport.result = weights_to_bytes(weights)
+        clip_step = None
+        if dp.enabled and dp.adaptive_clipping:
+            # As the coordinator does after aggregation: the next clip norm from the accepted updates' noised bits.
+            clip_step = next_clip_norm(
+                dp.clip_norm,
+                [transport.updates[u.hospital_id]["dp_report"]["noisy_clip_bit"] for u in accepted],
+                dp.target_quantile,
+                dp.clip_learning_rate,
+            )
+            dp = replace(dp, clip_norm=clip_step["clip_norm"])
         for hospital_id, node in nodes.items():
             if hospital_id in {u.hospital_id for u in accepted}:
                 node.evaluate_and_report(round_id, transport.round_info)
 
         uploads = [len(u["payload"]) for u in transport.updates.values()]
-        norms = [u["dp_report"]["update_norm_before"] for u in transport.updates.values()]
+        # Withheld (None) under adaptive clipping, where they would reveal the noised clipping bit.
+        norms = [u["dp_report"]["update_norm_before"] for u in transport.updates.values()
+                 if u["dp_report"].get("update_norm_before") is not None]
+        clipped = [u["dp_report"]["clipped"] for u in transport.updates.values() if u["dp_report"].get("clipped") is not None]
         accounting = account_rounds(dp_reports[accepted[0].hospital_id], dp.delta)
         epsilon = accounting["epsilon_over_dp_rounds"]
         row = pooled_row(list(transport.evaluations.values()), modality)
@@ -525,9 +540,11 @@ def run_fedavg(config: dict, partition: Partition, seed: int) -> List[dict]:
             n_hospitals=len(accepted),
             upload_bytes_per_hospital=float(np.mean(uploads)),
             download_bytes_per_hospital=float(np.mean(list(transport.downloaded.values()))),
-            median_update_norm=float(np.median(norms)),
-            clipped_share=float(np.mean([u["dp_report"]["clipped"] for u in transport.updates.values()])),
+            median_update_norm=float(np.median(norms)) if norms else None,
+            clipped_share=float(np.mean(clipped)) if clipped else None,
             epsilon=math.inf if epsilon is None else float(epsilon),
+            clip_norm=float(clip_this_round) if dp.enabled else None,
+            estimated_share_unclipped=clip_step["estimated_share_unclipped"] if clip_step else None,
             rejected=len(rejected),
             seconds=time.perf_counter() - started,
         )

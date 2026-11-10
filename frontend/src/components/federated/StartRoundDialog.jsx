@@ -21,6 +21,8 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
   const [clipNorm, setClipNorm] = useState(1.0)
   const [noiseMultiplier, setNoiseMultiplier] = useState(0.1)
   const [missingPercent, setMissingPercent] = useState(0)
+  const [adaptiveClip, setAdaptiveClip] = useState(false)
+  const [targetQuantile, setTargetQuantile] = useState(0.5)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -49,6 +51,8 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
           enabled: dpEnabled,
           clip_norm: Number(clipNorm),
           noise_multiplier: dpEnabled ? Number(noiseMultiplier) : 0,
+          adaptive_clipping: dpEnabled && adaptiveClip,
+          target_quantile: Number(targetQuantile),
         },
       })
       onStarted(round)
@@ -221,7 +225,11 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
           </label>
           {dpEnabled ? (
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <Field label="Clip norm" htmlFor="round-clip" hint="Maximum L2 size of an update.">
+              <Field
+                label={adaptiveClip ? 'Starting clip norm' : 'Clip norm'}
+                htmlFor="round-clip"
+                hint={adaptiveClip ? 'Used only if no earlier adaptive round of this model has finished.' : 'Maximum L2 size of an update.'}
+              >
                 <input
                   id="round-clip"
                   type="number"
@@ -243,6 +251,36 @@ export function StartRoundDialog({ modality: initialModality, hospitals, onClose
                   className={inputClass}
                 />
               </Field>
+              <label className="col-span-2 flex items-start gap-2.5 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-[#24489a]"
+                  checked={adaptiveClip}
+                  onChange={(e) => setAdaptiveClip(e.target.checked)}
+                />
+                <span>
+                  Adapt the clip norm to the hospitals&rsquo; updates
+                  <span className="mt-0.5 block text-xs leading-snug text-muted">
+                    Adaptive clipping (Andrew et al., 2021). Each hospital also sends one noised bit, whether its update was within the clip norm; the
+                    next round&rsquo;s clip norm moves towards the chosen quantile of update sizes. Part of the privacy budget goes to that bit, so
+                    the total per round stays the same.
+                  </span>
+                </span>
+              </label>
+              {adaptiveClip ? (
+                <Field label="Target quantile" htmlFor="round-quantile" hint="Share of updates that should fit within the clip norm, e.g. 0.5 for the median.">
+                  <input
+                    id="round-quantile"
+                    type="number"
+                    min={0.05}
+                    max={0.95}
+                    step="any"
+                    value={targetQuantile}
+                    onChange={(e) => setTargetQuantile(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              ) : null}
             </div>
           ) : null}
         </fieldset>

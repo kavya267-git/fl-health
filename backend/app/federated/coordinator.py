@@ -13,16 +13,18 @@ on its own held-out split and returns a confusion matrix, which is pooled here.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import threading
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from analytics.explainability.service import pool_global_importance
-from analytics.privacy.dp import DPConfig
+from analytics.privacy.dp import DPConfig, next_clip_norm
 from app.database import Database
 from app.federated.fedavg import ClientUpdate, aggregation_weights, federated_average
 from app.federated.validation import UpdateRejected, validate_update
@@ -247,6 +249,8 @@ class Coordinator:
             raise ValidationFailed(str(exc)) from exc
         if min_participants < 1:
             raise ValidationFailed("min_participants must be at least 1")
+        if dp.enabled and dp.adaptive_clipping:
+            dp = self._adaptive_start(modality, dp)
         if not 0.0 <= simulated_missing_rate <= 0.5:
             raise ValidationFailed("simulated_missing_rate must be between 0 and 0.5")
         if simulated_missing_rate > 0 and modality != "ehr":
@@ -348,6 +352,20 @@ class Coordinator:
         return self.get_round(round_id)
 
     # ================================================================ 2. join
+    def _adaptive_start(self, modality: str, dp: DPConfig) -> DPConfig:
+        """An adaptive round starts from the clip norm the last finished adaptive round of this modality computed."""
+        rows = self.db.fetch_all(
+            "SELECT id, config FROM fl_rounds WHERE modality = :modality AND status = :status "
+            "ORDER BY round_number DESC",
+            {"modality": modality, "status": COMPLETED},
+        )
+        for row in rows:
+            config = row["config"] if isinstance(row["config"], dict) else json.loads(row["config"] or "{}")
+            previous = (config or {}).get("differential_privacy") or {}
+            if previous.get("adaptive_clipping") and previous.get("next_clip_norm"):
+                return replace(dp, clip_norm=float(previous["next_clip_norm"]))
+        return dp
+
     def node_round_info(self, round_id: str) -> Dict[str, Any]:
         round_row = self.get_round(round_id)
         config = round_row["config"]
@@ -638,6 +656,20 @@ class Coordinator:
                 {"round_id": round_id},
             )
             config = dict(round_row["config"])
+            dp_settings = DPConfig.from_dict(config.get("differential_privacy"))
+            if dp_settings.enabled and dp_settings.adaptive_clipping:
+                # Andrew et al. (2021): the next clip norm, from the noised clipping bits of the updates aggregated.
+                step = next_clip_norm(
+                    dp_settings.clip_norm,
+                    [(u["dp_report"] or {}).get("noisy_clip_bit") for u in valid if (u["dp_report"] or {}).get("noisy_clip_bit") is not None],
+                    dp_settings.target_quantile,
+                    dp_settings.clip_learning_rate,
+                )
+                config["differential_privacy"] = {
+                    **config["differential_privacy"],
+                    "next_clip_norm": step["clip_norm"],
+                    "estimated_share_unclipped": step["estimated_share_unclipped"],
+                }
             config["aggregation"] = {
                 "algorithm": "FedAvg",
                 "coefficients": coefficients,

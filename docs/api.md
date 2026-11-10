@@ -86,6 +86,12 @@ coordinator or admin.
 }
 ```
 
+`differential_privacy` may also set `adaptive_clipping` (default false), `target_quantile` (0 to 1, default
+0.5), `clip_learning_rate` (default 0.2) and `quantile_budget_share` (0 to 1, default 0.1): the clip norm then
+tracks that quantile of update norms (docs/methodology.md, "Adaptive clipping"). `clip_norm` is the starting
+value; once an adaptive round of the same modality has finished, the next one starts from its
+`config.differential_privacy.next_clip_norm` instead.
+
 `simulated_missing_rate` (EHR only, 0 to 0.5, default 0 = off) is a test setting: each hospital blanks that
 share of its feature values completely at random and fills them in by KNN imputation fitted on its own
 training split (docs/methodology.md, "Missing values"). It is stored in the round's
