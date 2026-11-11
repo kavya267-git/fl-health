@@ -1,4 +1,4 @@
-"""PrivaFuse machine-learning package.
+"""MediFed machine-learning package.
 
 Modality-specific models (EHR / ECG / X-ray), dataset loaders, the simulated
 data generators and the local training + evaluation code that runs *inside a

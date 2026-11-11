@@ -1,6 +1,6 @@
 # Roles and permissions
 
-PrivaFuse serves several kinds of user. The backend enforces every rule below. The dashboard only hides what
+MediFed serves several kinds of user. The backend enforces every rule below. The dashboard only hides what
 the server would refuse anyway. The rules live in one table, `backend/app/services/permissions.py`, and
 `backend/tests/test_permissions.py` checks that this page matches it.
 

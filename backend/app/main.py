@@ -1,4 +1,4 @@
-"""PrivaFuse coordinator API (FastAPI application)."""
+"""MediFed coordinator API (FastAPI application)."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from app.utils.errors import ServiceError
 logger = logging.getLogger("fl.api")
 
 DESCRIPTION = """
-Coordinator API for **PrivaFuse** - a multimodal federated-learning prototype.
+Coordinator API for **MediFed** - a multimodal federated-learning prototype.
 
 Hospitals train EHR, ECG and X-ray models locally and send only model updates.
 This API orchestrates rounds, aggregates compatible updates with FedAvg, keeps
@@ -55,7 +55,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             ctx.ensemble.start_background()
         app.state.ctx = ctx
         logger.info(
-            "PrivaFuse ready (demo_mode=%s, auth=%s, nodes=%s)",
+            "MediFed ready (demo_mode=%s, auth=%s, nodes=%s)",
             settings.demo_mode,
             settings.auth_provider,
             settings.hospital_nodes,
@@ -65,7 +65,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         finally:
             ctx.close()
 
-    app = FastAPI(title="PrivaFuse API", version=settings.app_version, description=DESCRIPTION, lifespan=lifespan)
+    app = FastAPI(title="MediFed API", version=settings.app_version, description=DESCRIPTION, lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

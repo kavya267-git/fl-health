@@ -1,6 +1,6 @@
 # Design changes from the approved plan
 
-The approved PrivaFuse plan named two technologies that the built system does not use. This page records each
+The approved MediFed plan named two technologies that the built system does not use. This page records each
 change and its reason, so that the report can quote it. Everything else in the plan was built as planned or is
 listed as a remaining gap in the project's review notes.
 

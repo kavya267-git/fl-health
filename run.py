@@ -1,4 +1,4 @@
-"""Start the PrivaFuse API.
+"""Start the MediFed API.
 
     python run.py
 
@@ -22,5 +22,5 @@ if __name__ == "__main__":
     load_dotenv(ROOT / "backend" / ".env")
     host = os.getenv("API_HOST", "127.0.0.1")
     port = int(os.getenv("PORT", os.getenv("API_PORT", "8000")))
-    print(f"PrivaFuse API on http://{host}:{port}  (interactive docs: /docs)")
+    print(f"MediFed API on http://{host}:{port}  (interactive docs: /docs)")
     uvicorn.run("app.main:app", host=host, port=port, reload=False, timeout_graceful_shutdown=5)

@@ -29,7 +29,7 @@ function SystemGate({ children }) {
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <LoadingState label="Connecting to PrivaFuse" />
+        <LoadingState label="Connecting to MediFed" />
       </div>
     )
   }

@@ -1,8 +1,8 @@
-# PrivaFuse
+# MediFed
 
 **Privacy-preserving collaborative healthcare intelligence.**
 
-PrivaFuse is a working prototype of multimodal federated learning between hospitals. Four hospitals train
+MediFed is a working prototype of multimodal federated learning between hospitals. Four hospitals train
 shared models on their own EHR, ECG and chest X-ray data; only model updates travel to a coordinator, which
 averages them into a global model and sends it back. Aggregated surveillance, forecasting, explainability,
 privacy checks and an audit trail sit on top, and a React dashboard shows the whole system.

@@ -1,4 +1,4 @@
-"""PrivaFuse coordinator API.
+"""MediFed coordinator API.
 
 The repository root is added to ``sys.path`` so the top-level ``ml`` and
 ``analytics`` packages import whether the server is started from the

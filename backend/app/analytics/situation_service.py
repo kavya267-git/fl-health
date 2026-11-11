@@ -162,7 +162,7 @@ class SituationService:
         lines = []
         if status.get("watermark"):
             lines.append(status["watermark"])
-        lines.append(f"PrivaFuse situation report, version {self.app_version}, generated {report['generated_at']}")
+        lines.append(f"MediFed situation report, version {self.app_version}, generated {report['generated_at']}")
         if report["diseases"]:
             lines.append(f"Data through the week starting {report['diseases'][0]['week']['week_start']}")
         if report["jurisdiction"] is not None:

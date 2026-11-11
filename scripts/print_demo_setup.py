@@ -92,7 +92,7 @@ def main() -> None:
     secret = (backend_env.get("NODE_TOKEN_SECRET") or "").strip()
     origins = f"http://localhost:{args.web_port},http://127.0.0.1:{args.web_port},{web}"
 
-    print(f"PrivaFuse demo · server laptop {socket.gethostname()}")
+    print(f"MediFed demo · server laptop {socket.gethostname()}")
     print(f"Address for the other laptops: {ip}" + ("  (Tailscale)" if is_tailscale(ip) else ""))
     others = [a for a in addresses if a != ip]
     if others:
@@ -120,8 +120,8 @@ def main() -> None:
     print(check("VITE_API_BASE_URL", frontend_env.get("VITE_API_BASE_URL"), api))
     print()
     print("3. Windows firewall on this laptop: allow the prompts for Python and Node, or in an Administrator terminal:")
-    print(f'  netsh advfirewall firewall add rule name="PrivaFuse API" dir=in action=allow protocol=TCP localport={port} profile=any')
-    print(f'  netsh advfirewall firewall add rule name="PrivaFuse dashboard" dir=in action=allow protocol=TCP localport={args.web_port} profile=any')
+    print(f'  netsh advfirewall firewall add rule name="MediFed API" dir=in action=allow protocol=TCP localport={port} profile=any')
+    print(f'  netsh advfirewall firewall add rule name="MediFed dashboard" dir=in action=allow protocol=TCP localport={args.web_port} profile=any')
     print()
 
     if not secret:

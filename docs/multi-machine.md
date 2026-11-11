@@ -162,9 +162,12 @@ everyone signed in across a server restart.
 **Firewall.** In an *Administrator* terminal, once:
 
 ```powershell
-netsh advfirewall firewall add rule name="PrivaFuse API" dir=in action=allow protocol=TCP localport=8000 profile=any
-netsh advfirewall firewall add rule name="PrivaFuse dashboard" dir=in action=allow protocol=TCP localport=5173 profile=any
+netsh advfirewall firewall add rule name="MediFed API" dir=in action=allow protocol=TCP localport=8000 profile=any
+netsh advfirewall firewall add rule name="MediFed dashboard" dir=in action=allow protocol=TCP localport=5173 profile=any
 ```
+
+If a laptop already has these rules under the project's earlier name ("PrivaFuse API", "PrivaFuse dashboard"), keep
+them: a rule matches by port, not by name, so there is nothing to re-add.
 
 The first time Python and Node listen on the network, Windows also shows **"Windows Defender Firewall has
 blocked some features"**. Tick **both** Private and Public networks and click *Allow access*, once for
