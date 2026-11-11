@@ -35,6 +35,7 @@ from ml.training.hospital_node import HospitalNode
 from ml.training.http_transport import CoordinatorError, HttpTransport
 
 HEARTBEAT_SECONDS = 10.0
+MODALITY_NAMES = {"ehr": "EHR", "ecg": "ECG", "xray": "X-ray"}
 DECLINE_REASON = "participation is switched off on this hospital's dashboard"
 
 
@@ -140,6 +141,7 @@ class NodeRunner:
         poll_seconds: float = 3.0,
         log: Callable[[str], None] = print,
         name: Optional[str] = None,
+        models_dir: Optional[Path] = None,
     ):
         self.hospital_id = hospital_id
         self.server = server.rstrip("/")
@@ -150,6 +152,12 @@ class NodeRunner:
         # A second session for the heartbeat thread: requests sessions are not thread-safe.
         self._heartbeat_transport = HttpTransport(self.server, token)
         self.node = HospitalNode(hospital_id, self.data_dir, self.transport)
+        #: Where the latest global model of each modality is kept on this machine (None = not kept).
+        self.models_dir = Path(models_dir) if models_dir else None
+        self.node.keep_result_model = self.models_dir is not None
+        #: A fresh session for the thread that waits to save the model (requests sessions are not thread-safe).
+        self.make_transport: Callable[[], HttpTransport] = lambda: HttpTransport(self.server, token)
+        self.last_save_thread: Optional[threading.Thread] = None
         self.beat: dict = {}
         self._stop = threading.Event()
         self.name = name or display_name(hospital_id)
@@ -328,6 +336,59 @@ class NodeRunner:
         except Exception as exc:
             self.transport.report_failure(round_id, self.hospital_id, "evaluation", str(exc))
             self.log(f"{label} · evaluation failed: {exc}")
+            return
+        payload, self.node.last_result_model = self.node.last_result_model, None
+        if self.models_dir is not None and payload is not None:
+            details = self._model_details(round_id, info, datetime.now().astimezone().isoformat(timespec="seconds"))
+            self.last_save_thread = threading.Thread(
+                target=self._save_when_completed, args=(round_id, info["modality"], payload, details), daemon=True
+            )
+            self.last_save_thread.start()
+
+    def _model_details(self, round_id: str, info: dict, downloaded_at: str) -> dict:
+        from ml.evaluation.metrics import metrics_from_evaluation
+
+        modality = info["modality"]
+        evaluation = self.node.last_evaluation
+        metrics = metrics_from_evaluation(evaluation, get_adapter(modality).task) if evaluation is not None else {}
+        summary = local_data_summary(self.data_dir).get(modality) or {}
+        return {
+            "round_id": round_id,
+            "architecture": info.get("model", {}).get("architecture"),
+            "backend": info.get("model", {}).get("backend"),
+            "architecture_signature": info.get("model", {}).get("architecture_signature"),
+            "server": self.server,
+            "hospital_id": self.hospital_id,
+            "downloaded_at": downloaded_at,
+            "local_f1": metrics.get("f1"),
+            "local_f1_averaging": metrics.get("averaging"),
+            "local_held_out_records": getattr(evaluation, "num_samples", None),
+            "local_data_simulated": summary.get("simulated"),
+        }
+
+    def _save_when_completed(self, round_id: str, modality: str, payload: bytes, details: dict) -> None:
+        """Keep the downloaded model once the coordinator has registered it as the new global version."""
+        from ml.training.model_store import save_global_model
+
+        label = round_label(round_id)
+        try:
+            status = self.make_transport().wait_for_status(
+                round_id, self.hospital_id, ("COMPLETED",), max_wait=1800.0
+            )
+        except Exception as exc:  # noqa: BLE001 - a lost connection only means the copy is not kept this time
+            self.log(f"{label} · latest model not saved: {exc}")
+            return
+        if status["status"] != "COMPLETED":
+            self.log(f"{label} · latest model not saved: the round ended as {status['status'].lower()}")
+            return
+        version = status.get("result_model_version")
+        try:
+            path = save_global_model(self.models_dir, modality, payload, {**details, "model_version": version})
+        except OSError as exc:
+            self.log(f"{label} · latest model not saved: {exc}")
+            return
+        shown = f"v{version}" if version is not None else "version not reported"
+        self.log(f"Latest {MODALITY_NAMES.get(modality, modality)} model ({shown}) saved to {path}")
 
     def _f1_text(self, modality: str) -> str:
         """F1 of the new global model on this hospital's held-out split (as the dashboard defines F1)."""

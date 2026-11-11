@@ -423,6 +423,8 @@ class Coordinator:
             "differential_privacy": config["differential_privacy"],
             "model": config["model"],
             "explainability": config.get("explainability", {}),
+            # Set when the round completes: the version the aggregated model was registered as.
+            "result_model_version": round_row.get("result_model_version"),
         }
 
     def join(self, round_id: str, hospital_id: str, data_summary: Optional[dict] = None) -> Dict[str, Any]:

@@ -139,10 +139,10 @@ export const canManageRounds = (user) => Boolean(user) && ['admin', 'coordinator
  */
 export const LIKELY_RANGE_NOTE = 'Likely range (based on past errors; often too narrow)'
 
-/** Where hospitals download the agent: the agent-v1.0.0 GitHub Release asset (override with VITE_AGENT_DOWNLOAD_URL). */
+/** Where hospitals download the agent: the agent-v1.0.1 GitHub Release asset (override with VITE_AGENT_DOWNLOAD_URL). */
 export const AGENT_DOWNLOAD_URL =
   import.meta.env.VITE_AGENT_DOWNLOAD_URL ||
-  'https://github.com/kavya267-git/medi-fed/releases/download/agent-v1.0.0/MediFed-Hospital-Agent-Windows.zip'
+  'https://github.com/kavya267-git/medi-fed/releases/download/agent-v1.0.1/MediFed-Hospital-Agent-Windows.zip'
 
 /** Which F1 a modality reports (as the server computes it: ml/evaluation/metrics.py). */
 export const F1_KIND = {

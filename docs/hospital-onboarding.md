@@ -70,6 +70,13 @@ Windows Credential Manager, or, where no credential store is available, in a fil
 the current user can read. It is never written to the settings file or to the log. HTTPS certificates are always
 verified.
 
+**The latest global model stays on the computer.** After each completed round the agent keeps the aggregated
+model it downloaded to evaluate (the same bytes the coordinator registered) in
+`%APPDATA%\MediFed Agent\models\<ehr|ecg|xray>\global_latest.npz`, with `global_latest.json` beside it: round,
+model version, architecture, SHA-256, download time and the F1 measured on this hospital's own held-out records.
+The copy it replaces becomes `global_previous.*`. Hospitals A-D (`setup_hospital.py`) keep theirs in
+`data/nodes/<hospital>/models/`. Nothing extra is sent: the file is the evaluation download, written to disk.
+
 **What leaves the computer:** model weights, record counts and summary metrics (as for every node), and for the
 data check only pass or fail, counts per label and short problem notes. When the agent connects it reports the
 check; the hospital is invited only to the kinds of data it declared **and** whose check passed. The

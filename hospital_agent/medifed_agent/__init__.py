@@ -5,4 +5,4 @@ metrics. It contains the node client, the model definitions, the local data chec
 evaluation code, and nothing of the server, the dashboard or the database.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"

@@ -131,6 +131,8 @@ class NodeRoundInfo(OpenModel):
     training: Dict[str, Any]
     differential_privacy: Dict[str, Any]
     model: Dict[str, Any]
+    #: The registered version of the round's aggregated model, once the round has completed.
+    result_model_version: Optional[int] = None
 
 
 class NodePendingRounds(BaseModel):

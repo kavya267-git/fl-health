@@ -117,6 +117,7 @@ class AgentSession:
             Path(folder),
             log=self.log,
             name=self.profile.get("name"),
+            models_dir=config_dir() / "models",
         )
         runner.local_participation = self.take_part
         self.runner = runner

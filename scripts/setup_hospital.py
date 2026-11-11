@@ -154,7 +154,10 @@ def main(argv=None) -> None:
     if args.no_start:
         return
 
-    runner = NodeRunner(args.hospital_id, config["server"], config["token"], data_dir)
+    # The latest global model of each kind of data is kept next to this hospital's settings.
+    runner = NodeRunner(
+        args.hospital_id, config["server"], config["token"], data_dir, models_dir=args.config_dir / args.hospital_id / "models"
+    )
     try:
         runner.run()
     except NodeStartupError as exc:

@@ -54,7 +54,7 @@ Environment Variables** (Production), then **Redeploy** (Vite reads them at buil
 | Name | Value |
 | --- | --- |
 | `VITE_API_BASE_URL` | the Funnel address |
-| `VITE_AGENT_DOWNLOAD_URL` | optional; defaults to the `agent-v1.0.0` release's `MediFed-Hospital-Agent-Windows.zip` |
+| `VITE_AGENT_DOWNLOAD_URL` | optional; defaults to the `agent-v1.0.1` release's `MediFed-Hospital-Agent-Windows.zip` |
 
 Share the production address (`https://<project>.vercel.app`). Preview deployments sit behind Vercel's sign-in
 by default. `frontend/vercel.json` sends every client route (`/register`, `/situation`, ...) to the app, so a
@@ -67,8 +67,8 @@ refresh works. The sign-in page names the demo password only while the server us
 change it). Set it to the Funnel address, commit, then push a tag:
 
 ```powershell
-git tag agent-v1.0.0
-git push origin agent-v1.0.0
+git tag agent-v1.0.1
+git push origin agent-v1.0.1
 ```
 
 The workflow builds on `windows-latest` and attaches `MediFed-Hospital-Agent-Windows.zip` to the release. A

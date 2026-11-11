@@ -180,3 +180,54 @@ def test_prepared_real_data_is_used_instead_of_simulated(setup_script, tmp_path)
     empty.mkdir()
     with pytest.raises(SystemExit, match="No prepared data"):
         setup_script.main(_args(tmp_path, "hospital_c", "--server", "http://s:8000", "--token", "t", "--data", str(empty)))
+
+
+def test_node_keeps_the_latest_global_model_and_the_previous_one(server, tmp_path):
+    import hashlib
+
+    lines = []
+    runner = _runner(server, "hospital_b", tmp_path, lines=lines)
+    token = server.app.state.ctx.hospitals.node_token("hospital_b")
+    runner.models_dir = tmp_path / "nodes" / "hospital_b" / "models"
+    runner.node.keep_result_model = True
+    runner.make_transport = lambda: HttpTransport(SERVER, token, session=server)
+    runner.preflight()
+    admin = login(server, "admin@fl-healthcare.demo")
+    folder = runner.models_dir / "ehr"
+
+    versions = []
+    for _ in range(2):
+        started = server.post(
+            "/api/federated/rounds/start", json={"modality": "ehr", "min_participants": 1}, headers=admin
+        ).json()
+        runner.poll_once()
+        runner.last_save_thread.join(timeout=30)
+        detail = server.get(f"/api/federated/rounds/{started['id']}", headers=admin).json()
+        assert detail["status"] == "COMPLETED"
+        versions.append(detail["result_model_version"])
+
+        meta = json.loads((folder / "global_latest.json").read_text(encoding="utf-8"))
+        payload = (folder / "global_latest.npz").read_bytes()
+        assert meta["round_id"] == started["id"] and meta["model_version"] == versions[-1]
+        assert meta["sha256"] == hashlib.sha256(payload).hexdigest() and meta["size_bytes"] == len(payload)
+        # The saved file is exactly the model the coordinator registered as that version.
+        registered = server.app.state.ctx.registry.load_bytes("ehr", versions[-1])
+        assert payload == registered
+        assert meta["architecture"] and meta["downloaded_at"] and meta["hospital_id"] == "hospital_b"
+        assert 0.0 <= meta["local_f1"] <= 1.0 and meta["local_data_simulated"] is True
+        assert f"Latest EHR model (v{versions[-1]}) saved to {folder / 'global_latest.npz'}" in "\n".join(lines)
+
+    previous = json.loads((folder / "global_previous.json").read_text(encoding="utf-8"))
+    assert previous["model_version"] == versions[0] and versions[1] > versions[0]
+    assert server.app.state.ctx.registry.load_bytes("ehr", versions[0]) == (folder / "global_previous.npz").read_bytes()
+    assert not list(folder.glob(".*.tmp"))  # every write finished with a rename
+
+
+def test_without_a_models_folder_nothing_is_saved(server, tmp_path):
+    runner = _runner(server, "hospital_c", tmp_path)
+    runner.preflight()
+    admin = login(server, "admin@fl-healthcare.demo")
+    server.post("/api/federated/rounds/start", json={"modality": "ehr", "min_participants": 1}, headers=admin)
+    runner.poll_once()
+    assert runner.last_save_thread is None and runner.node.last_result_model is None
+    assert not list(tmp_path.rglob("global_latest.npz"))

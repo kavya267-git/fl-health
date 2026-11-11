@@ -36,7 +36,10 @@ def main() -> None:
     parser.add_argument("--poll-seconds", type=float, default=3.0)
     args = parser.parse_args()
 
-    runner = NodeRunner(args.hospital, args.server, args.token, args.data_root / args.hospital, args.poll_seconds)
+    runner = NodeRunner(
+        args.hospital, args.server, args.token, args.data_root / args.hospital, args.poll_seconds,
+        models_dir=ROOT / "data" / "nodes" / args.hospital / "models",
+    )
     try:
         runner.run(only_round=args.round)
     except NodeStartupError as exc:

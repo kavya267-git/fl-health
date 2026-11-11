@@ -72,6 +72,9 @@ class HospitalNode:
         #: enabled it is never sent to the coordinator.
         self.last_update_norm: Optional[float] = None
         self.last_evaluation = None
+        #: When set, the aggregated model downloaded for evaluation is kept here (bytes) so the node can save it.
+        self.keep_result_model = False
+        self.last_result_model: Optional[bytes] = None
 
     # ------------------------------------------------------------- metadata
     def data_summary(self) -> dict:
@@ -131,7 +134,9 @@ class HospitalNode:
     def evaluate_and_report(self, round_id: str, round_info: dict) -> dict:
         modality = round_info["modality"]
         adapter = get_adapter(modality, self.backend)
-        weights = weights_from_bytes(self.transport.fetch_global_model(round_id, self.hospital_id, "result"))
+        payload = self.transport.fetch_global_model(round_id, self.hospital_id, "result")
+        self.last_result_model = payload if self.keep_result_model else None
+        weights = weights_from_bytes(payload)
         missingness = MissingnessConfig.from_dict(round_info.get("training", {}).get("missingness"))
         evaluation = evaluate_on_local_data(self.data_dir, modality, weights, self.backend, missingness=missingness)
         self.last_evaluation = evaluation
