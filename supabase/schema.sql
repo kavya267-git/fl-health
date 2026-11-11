@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     hospital_id TEXT,
     created_at TIMESTAMPTZ NOT NULL,
     last_login_at TIMESTAMPTZ,
-    jurisdiction JSONB
+    jurisdiction JSONB,
+    disabled BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS local_credentials (
@@ -33,7 +34,35 @@ CREATE TABLE IF NOT EXISTS hospitals (
     data_summary JSONB,
     is_simulated BOOLEAN NOT NULL,
     last_activity_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    region_id TEXT,
+    declared_modalities JSONB,
+    data_check JSONB
+);
+
+CREATE TABLE IF NOT EXISTS hospital_registrations (
+    id TEXT PRIMARY KEY,
+    hospital_name TEXT NOT NULL,
+    region_id TEXT NOT NULL,
+    contact_name TEXT NOT NULL,
+    contact_email TEXT NOT NULL,
+    modalities JSONB NOT NULL,
+    approx_record_counts JSONB NOT NULL,
+    status TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    hospital_id TEXT,
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    reason TEXT,
     created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS node_tokens (
+    hospital_id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS fl_rounds (
@@ -269,6 +298,8 @@ CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs (timestamp);
 
 CREATE INDEX IF NOT EXISTS ix_audit_logs_action ON audit_logs (action);
 
+CREATE INDEX IF NOT EXISTS ix_hospital_registrations_status ON hospital_registrations (status);
+
 CREATE INDEX IF NOT EXISTS ix_surveillance_reports_disease_week_start ON surveillance_reports (disease, week_start);
 
 
@@ -281,6 +312,8 @@ CREATE INDEX IF NOT EXISTS ix_surveillance_reports_disease_week_start ON surveil
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE local_credentials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hospitals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hospital_registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE node_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fl_rounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fl_participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE model_registry ENABLE ROW LEVEL SECURITY;
