@@ -6,6 +6,7 @@ import {
   ClipboardList,
   BedDouble,
   Hospital,
+  Inbox,
   Layers,
   LayoutDashboard,
   Lightbulb,
@@ -33,6 +34,8 @@ export const NAV_ITEMS = [
 
 const MY_HOSPITAL = { to: '/my-hospital', label: 'My hospital', icon: Hospital }
 const PLANNING = { to: '/planning', label: 'Resource planning', icon: BedDouble }
+/** Administrators: the public hospital registrations to review. The badge shows how many are pending. */
+export const HOSPITAL_REQUESTS = { to: '/hospital-requests', label: 'Hospital requests', icon: Inbox, badge: 'pendingRegistrations' }
 
 /** What a health officer may open (their jurisdiction only; see docs/permissions.md). */
 const HEALTH_OFFICER_PAGES = ['/situation', '/surveillance', '/alerts', '/forecasting', '/how-it-works', '/settings']
@@ -49,6 +52,6 @@ export function navItemsFor(user) {
     (item) => (item.to !== '/audit' || canSeeAudit(user)) && (!OFFICER_VIEWS.includes(item.to) || canSeeOfficerViews(user)),
   )
   if (user?.role === 'hospital_manager') return [PLANNING, MY_HOSPITAL, ...items]
-  if (user?.role === 'admin') return [...items.slice(0, -1), PLANNING, items[items.length - 1]]
+  if (user?.role === 'admin') return [...items.slice(0, -1), PLANNING, HOSPITAL_REQUESTS, items[items.length - 1]]
   return isHospitalOperator(user) ? [MY_HOSPITAL, ...items] : items
 }

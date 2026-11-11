@@ -17,6 +17,8 @@ import Models from './pages/Models'
 import MyHospital from './pages/MyHospital'
 import NotFound from './pages/NotFound'
 import SettingsPage from './pages/Settings'
+import HospitalRequests from './pages/HospitalRequests'
+import RegisterHospital from './pages/RegisterHospital'
 import Surveillance from './pages/Surveillance'
 import SituationReport from './pages/SituationReport'
 import Alerts from './pages/Alerts'
@@ -69,6 +71,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<RegisterHospital />} />
       <Route
         element={
           <RequireAuth>
@@ -92,6 +95,7 @@ export function AppRoutes() {
         <Route path="audit" element={<AuditLogs />} />
         <Route path="how-it-works" element={<HowItWorks />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="hospital-requests" element={<HospitalRequests />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

@@ -11,6 +11,7 @@ import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
 import { MODALITIES, availabilityLabel, canChangeParticipation } from '../utils/constants'
 import { DASH, classNames, formatBytes, formatDateTime, formatNumber, formatPercent, secondsAgo } from '../utils/format'
+import { ConnectHospital } from '../components/hospital/ConnectHospital'
 import { DataSummary, LocalMetrics } from './HospitalDetail'
 
 const FAILED = ['FAILED', 'DROPPED', 'UPDATE_REJECTED', 'EVALUATION_FAILED']
@@ -232,7 +233,7 @@ export default function MyHospital() {
 
   return (
     <AsyncView state={state} what="your hospital">
-      {({ hospital, metrics, latest_round: round }) => (
+      {({ hospital, metrics, latest_round: round, connection }) => (
         <>
           <PageHeader
             title={hospital.name}
@@ -245,6 +246,7 @@ export default function MyHospital() {
             }
           />
           <div className="space-y-6">
+            {connection?.registered ? <ConnectHospital connection={connection} onChanged={() => state.reload({ silent: true })} /> : null}
             <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
               <Card>
                 <CardHeader title="Hospital node" description="From the heartbeat the node sends every 10 seconds." />

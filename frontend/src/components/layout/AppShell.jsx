@@ -1,5 +1,5 @@
 import { LogOut, Menu, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useSystem } from '../../context/SystemContext'
@@ -7,13 +7,39 @@ import { ROLE_LABELS } from '../../utils/constants'
 import { classNames } from '../../utils/format'
 import { SimulatedTag } from '../ui/Badge'
 import { Logo } from './Logo'
+import { api } from '../../services/endpoints'
 import { navItemsFor } from './navigation'
+
+/** Pending hospital registrations, for the administrator's nav badge. Refreshed every 30 s and after a review. */
+function usePendingRegistrations(user) {
+  const [count, setCount] = useState(0)
+  const load = useCallback(() => {
+    if (user?.role !== 'admin') return
+    // A missing count must never break the page: the badge is a hint, the page itself has the list.
+    Promise.resolve()
+      .then(() => api.pendingRegistrations())
+      .then((result) => setCount(Number(result?.pending) || 0))
+      .catch(() => {})
+  }, [user?.role])
+  useEffect(() => {
+    load()
+    if (user?.role !== 'admin') return undefined
+    const timer = setInterval(load, 30000)
+    window.addEventListener('medifed:registrations-changed', load)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('medifed:registrations-changed', load)
+    }
+  }, [load, user?.role])
+  return count
+}
 
 function Navigation({ onNavigate }) {
   const { user } = useAuth()
+  const pending = usePendingRegistrations(user)
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5 px-3">
-      {navItemsFor(user).map(({ to, label, icon: Icon, end }) => (
+      {navItemsFor(user).map(({ to, label, icon: Icon, end, badge }) => (
         <NavLink
           key={to}
           to={to}
@@ -28,6 +54,14 @@ function Navigation({ onNavigate }) {
         >
           <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
           {label}
+          {badge === 'pendingRegistrations' && pending > 0 ? (
+            <span
+              className="ml-auto rounded-full bg-warn px-2 py-0.5 text-xs font-semibold text-white"
+              aria-label={`${pending} pending`}
+            >
+              {pending}
+            </span>
+          ) : null}
         </NavLink>
       ))}
     </nav>

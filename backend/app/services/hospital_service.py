@@ -319,6 +319,15 @@ class HospitalService:
         )
         return {"hospital_id": hospital_id, "token": token, "created_at": now, "replaced_previous_token": bool(replaced)}
 
+    def hospital_for_token(self, token: str) -> Optional[str]:
+        """The registered hospital whose current token this is (lets the agent work from the token alone)."""
+        if not token:
+            return None
+        row = self.db.fetch_one(
+            "SELECT hospital_id FROM node_tokens WHERE token_hash = :h AND revoked_at IS NULL", {"h": _token_hash(token)}
+        )
+        return row["hospital_id"] if row else None
+
     def revoke_node_token(self, hospital_id: Optional[str]) -> None:
         if hospital_id:
             self.db.execute(

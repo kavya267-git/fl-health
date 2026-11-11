@@ -112,6 +112,31 @@ class HttpTransport:
         self._check(response)
         return response.json()
 
+    def whoami(self) -> dict:
+        """The registered hospital this transport's token belongs to (id, name, declared modalities)."""
+        response = self.session.get(self._url("/node/whoami"), headers=self.headers, timeout=min(self.timeout, 30.0))
+        self._check(response)
+        return response.json()
+
+    def profile(self, hospital_id: str) -> dict:
+        """The hospital's name and the modalities it declared when it registered."""
+        response = self.session.get(
+            self._url("/node/profile"), params={"hospital_id": hospital_id}, headers=self.headers, timeout=min(self.timeout, 30.0)
+        )
+        self._check(response)
+        return response.json()
+
+    def report_data_check(self, hospital_id: str, modalities: dict) -> dict:
+        """The local data check: pass / fail and counts per modality. No records."""
+        response = self.session.post(
+            self._url("/node/data-check"),
+            json={"hospital_id": hospital_id, "modalities": modalities},
+            headers=self.headers,
+            timeout=min(self.timeout, 30.0),
+        )
+        self._check(response)
+        return response.json()
+
     def heartbeat(self, beat: dict) -> dict:
         """Tell the coordinator this node is up. ``beat`` holds machine facts and record counts only."""
         response = self.session.post(

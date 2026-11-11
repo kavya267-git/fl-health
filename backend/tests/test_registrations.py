@@ -300,3 +300,24 @@ def test_privacy_schema_check_still_passes(client):
     admin = login(client, "admin@fl-healthcare.demo")
     checks = {c["id"]: c for c in client.get("/api/analytics/privacy", headers=admin).json()["checks"]}
     assert checks["central_schema"]["status"] == "PASS"
+
+
+def test_whoami_finds_the_hospital_from_its_token_only(external_client):
+    client = external_client
+    _, hospital_id, _ = _register_and_approve(client)
+    operator = {"Authorization": f"Bearer {_sign_in(client).json()['access_token']}"}
+    token = client.post("/api/my-hospital/node-token", headers=operator).json()["token"]
+    me = client.get("/api/federated/node/whoami", headers={"X-Hospital-Token": token}).json()
+    assert me["hospital_id"] == hospital_id and me["name"] == "Test City Hospital"
+    assert client.get("/api/federated/node/whoami", headers={"X-Hospital-Token": "wrong"}).status_code == 403
+    assert client.get("/api/federated/node/whoami").status_code == 403
+
+
+def test_node_code_never_disables_tls_verification():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    for folder in ("ml", "hospital_agent", "scripts"):
+        for path in (root / folder).rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            assert "verify=False" not in text and "verify = False" not in text, path

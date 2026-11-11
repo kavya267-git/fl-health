@@ -71,6 +71,12 @@ export const AUDIT_ACTION_LABELS = {
   HOSPITAL_CAPACITY_CHANGED: 'Hospital capacity changed',
   PLANNING_ASSUMPTIONS_CHANGED: 'Planning assumptions changed',
   UPDATE_FLAGGED_UNUSUAL: 'Unusual model update flagged',
+  HOSPITAL_REGISTRATION_SUBMITTED: 'Hospital registration submitted',
+  HOSPITAL_REGISTRATION_APPROVED: 'Hospital registration approved',
+  HOSPITAL_REGISTRATION_REJECTED: 'Hospital registration rejected',
+  HOSPITAL_REGISTRATION_REVOKED: 'Hospital access revoked',
+  NODE_TOKEN_ISSUED: 'Node token issued',
+  NODE_DATA_CHECK_REPORTED: 'Node data check reported',
 }
 
 export const ROLE_LABELS = {
@@ -132,3 +138,8 @@ export const canManageRounds = (user) => Boolean(user) && ['admin', 'coordinator
  * covered fewer weeks than their nominal level (RESULTS.md Part C), so the label says so.
  */
 export const LIKELY_RANGE_NOTE = 'Likely range (based on past errors; often too narrow)'
+
+/** Where hospitals download the agent: the latest GitHub Release asset (override with VITE_AGENT_DOWNLOAD_URL). */
+export const AGENT_DOWNLOAD_URL =
+  import.meta.env.VITE_AGENT_DOWNLOAD_URL ||
+  'https://github.com/kavya267-git/fl-health/releases/latest/download/MediFed-Hospital-Agent-Windows.zip'

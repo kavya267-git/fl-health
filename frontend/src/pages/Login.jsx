@@ -1,6 +1,6 @@
 import { ChevronDown, CircleAlert, CircleCheck } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { NETWORK_IMAGE } from '../assets/illustrations'
 import { Logo } from '../components/layout/Logo'
 import { Button } from '../components/ui/Button'
@@ -291,6 +291,18 @@ export default function Login() {
                 )}
               </div>
 
+              {mode === 'signin' && config?.hospital_registration_enabled ? (
+                <div className="mt-6 rounded-md border border-line bg-surface p-4 text-sm">
+                  <p className="font-medium text-ink">A hospital that wants to join?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted">
+                    Register it here. After an administrator approves, it trains on its own computer; patient records never leave it.
+                  </p>
+                  <Link to="/register" className="mt-2 inline-block font-medium text-brand-700 hover:underline">
+                    Register your hospital
+                  </Link>
+                </div>
+              ) : null}
+
               {mode === 'signup' ? (
                 <p className="mt-6 rounded-md border border-line bg-surface p-4 text-xs leading-relaxed text-muted">
                   <span className="font-semibold text-ink">Administrator accounts cannot be created here.</span> Every new account starts as
@@ -302,8 +314,15 @@ export default function Login() {
                 <div className="mt-8 rounded-md border border-line bg-surface p-4">
                   <p className="text-sm font-semibold text-ink">Demo accounts</p>
                   <p className="mt-1 text-xs leading-relaxed text-muted">
-                    All use the password set by <code className="font-mono">DEMO_PASSWORD</code> on the server (default{' '}
-                    <code className="font-mono">demo-password</code>).
+                    All use the password set by <code className="font-mono">DEMO_PASSWORD</code> on the server
+                    {config?.demo_login_is_default ? (
+                      <>
+                        {' '}
+                        (default <code className="font-mono">demo-password</code>).
+                      </>
+                    ) : (
+                      '. Ask the platform’s administrator for it.'
+                    )}
                   </p>
                   <DemoAccountList accounts={roleAccounts} onUse={setEmail} />
                   {operatorAccounts.length ? (

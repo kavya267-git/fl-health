@@ -37,7 +37,7 @@ from app.schemas.federated import (
 )
 from app.services.context import AppContext
 from app.services.views import round_detail, sanitize_data_summary
-from app.utils.errors import NotFoundError, ValidationFailed
+from app.utils.errors import NotFoundError, PermissionDenied, ValidationFailed
 
 router = APIRouter(prefix="/api/federated", tags=["federated learning"])
 
@@ -140,6 +140,15 @@ def node_heartbeat(body: HeartbeatRequest, request: Request, ctx: AppContext = D
     beat = body.model_dump()
     beat["data_summary"] = sanitize_data_summary(body.data_summary)
     return ctx.hospitals.record_heartbeat(body.hospital_id, beat)
+
+
+@router.get("/node/whoami")
+def node_whoami(request: Request, ctx: AppContext = Depends(get_ctx)):
+    """Which registered hospital a node token belongs to. 403 for an unknown or revoked token."""
+    hospital_id = ctx.hospitals.hospital_for_token(request.headers.get("x-hospital-token", ""))
+    if hospital_id is None:
+        raise PermissionDenied("This node token is not valid. Generate a new one on the 'My hospital' page.")
+    return ctx.hospitals.node_profile(hospital_id)
 
 
 @router.get("/node/profile")

@@ -50,3 +50,7 @@ experiments/.work/
 experiments/results/*/rounds.csv
 experiments/results/*/forecasts.csv
 experiments/results/*/predictions.csv
+
+# Hospital agent build output
+hospital_agent/dist/
+hospital_agent/build/

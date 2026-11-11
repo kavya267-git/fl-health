@@ -10,7 +10,7 @@ from __future__ import annotations
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 import numpy as np
 
@@ -78,6 +78,13 @@ _DESCRIPTIONS = {
     "ecg": "Simulated single-beat ECG windows (187 samples, 4 AAMI-style classes). Not real recordings.",
     "xray": "Simulated 64x64 chest phantoms (finding / no finding). Not real radiographs.",
 }
+
+
+def sample_hospital(hospital_id: str, name: str, sizes: Optional[Dict[str, int]] = None) -> SimulatedHospital:
+    """A SIMULATED profile for any hospital id (the agent's "Use sample data"): fictional records, default mix."""
+    default = {"ehr": 600, "ecg": 400, "xray": 200}
+    chosen = {m: max(40, min(int((sizes or {}).get(m, default[m])), default[m] * 2)) for m in default}
+    return SimulatedHospital(hospital_id, name, "Sample data (SIMULATED)", chosen)
 
 
 def get_simulated_hospital(hospital_id: str) -> SimulatedHospital:

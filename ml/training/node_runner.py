@@ -39,9 +39,9 @@ DECLINE_REASON = "participation is switched off on this hospital's dashboard"
 
 
 def display_name(hospital_id: str) -> str:
-    """'hospital_b' -> 'Hospital B'; any other id is shown as it is."""
+    """'hospital_b' -> 'Hospital B'; any other id is shown as it is (registered hospitals use their own name)."""
     prefix, _, suffix = hospital_id.partition("_")
-    return f"Hospital {suffix.upper()}" if prefix == "hospital" and suffix else hospital_id
+    return f"Hospital {suffix.upper()}" if prefix == "hospital" and len(suffix) == 1 else hospital_id
 
 
 def format_bytes(size: int) -> str:
@@ -139,6 +139,7 @@ class NodeRunner:
         data_dir: Path,
         poll_seconds: float = 3.0,
         log: Callable[[str], None] = print,
+        name: Optional[str] = None,
     ):
         self.hospital_id = hospital_id
         self.server = server.rstrip("/")
@@ -151,8 +152,12 @@ class NodeRunner:
         self.node = HospitalNode(hospital_id, self.data_dir, self.transport)
         self.beat: dict = {}
         self._stop = threading.Event()
-        self.name = display_name(hospital_id)
+        self.name = name or display_name(hospital_id)
         self.participating = True
+        #: The operator's local switch (the agent's "Take part in rounds"). Rounds are declined while it is off.
+        self.local_participation = True
+        #: Per modality: passed / counts / problems, from the local data check (registered hospitals).
+        self.data_check: Dict[str, dict] = {}
 
     def log(self, message: str) -> None:
         """One line per step, always naming the hospital: two nodes may share a laptop."""
@@ -181,6 +186,7 @@ class NodeRunner:
         except CoordinatorError as exc:
             raise NodeStartupError(f"{self.server} answered, but not as a MediFed coordinator: {exc}") from exc
 
+        self._check_and_report(summary)
         local = local_architectures(sorted(summary))
         problems = compatibility_problems(server, local)
         if problems:
@@ -225,6 +231,57 @@ class NodeRunner:
         except requests.RequestException as exc:
             raise NodeStartupError(f"The coordinator stopped answering during start-up: {exc}") from exc
         return server
+
+    def _check_and_report(self, summary: dict) -> None:
+        """Registered hospitals: run the LOCAL data check on the declared modalities and report pass/fail and counts.
+
+        Built-in hospitals (hospital_a-d) have no profile to check against and skip this.
+        """
+        from ml.common.data_check import check_folder
+
+        try:
+            profile = self.transport.profile(self.hospital_id)
+        except CoordinatorError as exc:
+            if exc.status_code == 403:
+                raise NodeStartupError(
+                    f"The coordinator rejected the token for {self.hospital_id}. Generate a new token on the "
+                    "hospital's 'My hospital' page and paste it here."
+                ) from exc
+            if exc.status_code == 404:
+                return  # an older coordinator without registration
+            raise NodeStartupError(str(exc)) from exc
+        if not profile.get("registered"):
+            return
+        if profile.get("name"):
+            self.name = profile["name"]
+        declared = profile.get("declared_modalities") or []
+        self.data_check = check_folder(self.data_dir, declared)
+        for modality, result in self.data_check.items():
+            verdict = "passed" if result["passed"] else "FAILED"
+            self.log(
+                f"data check {modality.upper()}: {verdict} · {result['train_records']} train / "
+                f"{result['val_records']} held-out (checked on this machine)"
+            )
+            for problem in result["problems"]:
+                self.log(f"  - {problem}")
+        missing = [m for m in declared if m not in summary]
+        if missing:
+            self.log(f"no local data for declared {', '.join(m.upper() for m in missing)}")
+        reply = self.transport.report_data_check(self.hospital_id, self.data_check)
+        invited = reply.get("invited_modalities") or []
+        if not any(r["passed"] for r in self.data_check.values()):
+            raise NodeStartupError(
+                "No declared kind of data passed the local check, so this hospital cannot take part yet. "
+                "Fix the problems above and check again."
+            )
+        self.log(
+            "the server will invite this hospital to rounds for: "
+            + (", ".join(m.upper() for m in invited) if invited else "(after the first heartbeat)")
+        )
+
+    def stop(self) -> None:
+        """Stop the heartbeat and the round loop (the agent's Disconnect)."""
+        self._stop.set()
 
     # ----------------------------------------------------------- heartbeat
     def _heartbeat_loop(self) -> None:
@@ -288,7 +345,7 @@ class NodeRunner:
 
     def poll_once(self) -> None:
         pending = self.transport.pending(self.hospital_id)
-        participating = bool(pending.get("participating", True))
+        participating = bool(pending.get("participating", True)) and self.local_participation
         if participating != self.participating:
             self.participating = participating
             self.log(
@@ -323,7 +380,7 @@ class NodeRunner:
                 return
             self.log("waiting for rounds (Ctrl+C to stop)")
             reachable = True
-            while True:
+            while not self._stop.is_set():
                 try:
                     self.poll_once()
                     if not reachable:
@@ -333,6 +390,6 @@ class NodeRunner:
                     if reachable:
                         self.log(f"cannot reach the coordinator, will keep trying: {exc}")
                         reachable = False
-                time.sleep(self.poll_seconds)
+                self._stop.wait(self.poll_seconds)
         finally:
             self._stop.set()

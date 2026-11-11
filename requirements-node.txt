@@ -1,0 +1,9 @@
+# A hospital node's machine only (scripts/setup_hospital.py, used for our own hospitals A-D):
+# no FastAPI, database or analytics server packages. Registered hospitals use the MediFed Hospital Agent instead.
+#   pip install -r requirements-node.txt --extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0
+torchvision==0.29.2
+numpy==2.5.4
+pandas==3.1.0
+scikit-learn==1.9.1
+requests==2.34.2

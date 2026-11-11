@@ -65,6 +65,19 @@ export const api = {
   hospitals: () => get('/api/hospitals', undefined, { array: true }, 'hospital list'),
   hospital: (id) => get(`/api/hospitals/${encodeURIComponent(id)}`, undefined, { keys: ['id', 'name', 'online'] }, 'hospital'),
   myHospital: () => get('/api/my-hospital', undefined, { keys: ['hospital', 'metrics'] }, 'your hospital'),
+  generateNodeToken: () => post('/api/my-hospital/node-token', {}, { keys: ['token', 'hospital_id'] }, 'node token'),
+  downloadDataTemplate: () => download('/api/my-hospital/data-template.zip', 'medifed-data-template.zip'),
+
+  // Hospital registration: the public form (no sign-in) and the administrators' review
+  registrationRegions: () => get('/api/registrations/regions', undefined, { array: true }, 'region list'),
+  submitRegistration: (body) => post('/api/registrations', body, { keys: ['id', 'status'] }, 'registration receipt'),
+  registrations: (status) => get('/api/registrations', status ? { status } : undefined, { array: true }, 'hospital requests'),
+  pendingRegistrations: () => get('/api/registrations/pending-count', undefined, { keys: ['pending'] }, 'pending count'),
+  approveRegistration: (id) => post(`/api/registrations/${encodeURIComponent(id)}/approve`, {}, { keys: ['id', 'status'] }, 'request'),
+  rejectRegistration: (id, reason) =>
+    post(`/api/registrations/${encodeURIComponent(id)}/reject`, { reason }, { keys: ['id', 'status'] }, 'request'),
+  revokeRegistration: (id, reason) =>
+    post(`/api/registrations/${encodeURIComponent(id)}/revoke`, { reason }, { keys: ['id', 'status'] }, 'request'),
   setHospitalParticipation: (id, participating) =>
     post(`/api/hospitals/${encodeURIComponent(id)}/participation`, { participating }, { keys: ['id', 'participating'] }, 'hospital'),
   hospitalMetrics: (id) =>
