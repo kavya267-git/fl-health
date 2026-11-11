@@ -84,6 +84,13 @@ MAX_DEADLINE_SECONDS = 24 * 3600
 logger = logging.getLogger("fl.coordinator")
 
 
+def default_class_weighting(modality: str, backend: str) -> str:
+    """EHR is imbalanced (about 18% adverse outcomes in the simulated data), so EHR rounds weight each class by
+    n / (2 n_class), computed by each hospital from its own training labels (experiment 1b). Unweighted, early
+    rounds predict only the majority class and the positive-class F1 is 0. Only the PyTorch models support it."""
+    return "balanced" if modality == "ehr" and backend == "pytorch" else "none"
+
+
 def _iso_after(seconds: float) -> str:
     return (utc_now() + timedelta(seconds=seconds)).isoformat(timespec="milliseconds")
 
@@ -223,6 +230,7 @@ class Coordinator:
         is_simulated: bool = True,
         deadline_seconds: int = DEFAULT_DEADLINE_SECONDS,
         simulated_missing_rate: float = 0.0,
+        class_weighting: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a round, select the participating hospitals and open it for clients.
 
@@ -288,6 +296,7 @@ class Coordinator:
                     "batch_size": batch_size,
                     "learning_rate": learning_rate,
                     "seed": self.default_seed + round_number,
+                    "class_weighting": class_weighting or default_class_weighting(modality, adapter.backend),
                     **(
                         {"missingness": {"mcar_rate": simulated_missing_rate, "seed": self.default_seed}}
                         if simulated_missing_rate > 0

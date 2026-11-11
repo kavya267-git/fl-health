@@ -13,7 +13,7 @@ import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
 import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { METRIC_LABELS, MODALITIES, MODALITY_ORDER, PARTICIPANT_LABELS, canManageRounds, isRoundActive } from '../utils/constants'
+import { F1_KIND, METRIC_LABELS, MODALITIES, MODALITY_ORDER, PARTICIPANT_LABELS, canManageRounds, isRoundActive } from '../utils/constants'
 import { DASH, durationBetween, formatDateTime, formatMetric, formatNumber, formatPercent } from '../utils/format'
 
 function GlobalMetrics({ round }) {
@@ -49,7 +49,9 @@ export function ParticipantsTable({ round }) {
             <Th align="right">Training records (n)</Th>
             <Th align="right">FedAvg weight (n / N)</Th>
             <Th align="right">Local training loss</Th>
-            <Th align="right">Local model F1</Th>
+            <Th align="right">
+              <span title={F1_KIND[round.modality]?.full}>Local model F1{F1_KIND[round.modality] ? `, ${F1_KIND[round.modality].short}` : ''}</span>
+            </Th>
             <Th>Update check</Th>
           </tr>
         </thead>
@@ -79,7 +81,8 @@ export function ParticipantsTable({ round }) {
         </tbody>
       </table>
       <p className="px-4 py-3 text-xs leading-relaxed text-muted">
-        Local model F1 is each hospital&rsquo;s own model after local training, before averaging, on that hospital&rsquo;s held-out records.
+        Local model F1 is each hospital&rsquo;s own model after local training, before averaging, on that hospital&rsquo;s held-out records
+        {F1_KIND[round.modality] ? ` (${F1_KIND[round.modality].full})` : ''}.
         Update check: an Isolation Forest compares each update&rsquo;s size (relative to this round&rsquo;s median) and direction (cosine
         distance to the average of the other hospitals&rsquo; updates) with earlier updates of this model. &ldquo;Unusual&rdquo; is a flag for a person to look at, not a
         rejection: the update is still averaged. Different patients, a small hospital or privacy noise can all make an update unusual.

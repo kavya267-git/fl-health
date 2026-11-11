@@ -18,4 +18,4 @@ All data on this deployment is **SIMULATED** (fictional hospitals and records), 
 This is a research prototype, not a medical device. Federated learning reduces the need to centralise patient
 data; it does not, by itself, guarantee privacy.
 
-Source and documentation: https://github.com/kavya267-git/fl-health (docs/deploy.md).
+Source and documentation: https://github.com/kavya267-git/medi-fed (docs/deploy.md).
