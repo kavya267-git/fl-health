@@ -132,3 +132,10 @@ export const canManageRounds = (user) => Boolean(user) && ['admin', 'coordinator
  * covered fewer weeks than their nominal level (RESULTS.md Part C), so the label says so.
  */
 export const LIKELY_RANGE_NOTE = 'Likely range (based on past errors; often too narrow)'
+
+/** Which F1 a modality reports (as the server computes it: ml/evaluation/metrics.py). */
+export const F1_KIND = {
+  ehr: { short: 'adverse outcome', full: 'F1 of the positive class (adverse outcome), at the 0.5 threshold' },
+  xray: { short: 'finding present', full: 'F1 of the positive class (finding present), at the 0.5 threshold' },
+  ecg: { short: 'macro average', full: 'F1 averaged over the four heartbeat classes (macro average)' },
+}

@@ -9,7 +9,7 @@ import { useApi } from '../hooks/useApi'
 import { usePolling } from '../hooks/usePolling'
 import { toApiError } from '../services/api'
 import { api } from '../services/endpoints'
-import { MODALITIES, availabilityLabel, canChangeParticipation } from '../utils/constants'
+import { F1_KIND, MODALITIES, availabilityLabel, canChangeParticipation } from '../utils/constants'
 import { DASH, classNames, formatBytes, formatDateTime, formatNumber, formatPercent, secondsAgo } from '../utils/format'
 import { DataSummary, LocalMetrics } from './HospitalDetail'
 
@@ -119,10 +119,13 @@ function RoundFromHere({ round }) {
           columns={2}
           items={[
             {
-              term: 'Model trained here, before averaging (F1 on local held-out data)',
+              term: `Model trained here, before averaging (F1${F1_KIND[round.modality] ? `, ${F1_KIND[round.modality].short}` : ''}, on local held-out data)`,
               value: round.local_model ? formatPercent(round.local_model.f1) : DASH,
             },
-            { term: 'New global model on local held-out data (F1)', value: global ? formatPercent(global.f1) : DASH },
+            {
+              term: `New global model on local held-out data (F1${F1_KIND[round.modality] ? `, ${F1_KIND[round.modality].short}` : ''})`,
+              value: global ? formatPercent(global.f1) : DASH,
+            },
           ]}
         />
       ) : null}
