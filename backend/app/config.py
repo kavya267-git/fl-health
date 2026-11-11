@@ -85,6 +85,8 @@ class Settings(BaseModel):
     model_storage_path: Path = REPO_ROOT / "ml" / "checkpoints"
     hospital_data_root: Path = REPO_ROOT / "data" / "hospitals"
     model_keep_versions: int = 5
+    #: Keep global model weights in the database (for hosts without a persistent disk, e.g. a free HF Space).
+    model_weights_in_database: bool = False
     max_update_bytes: int = 256 * 1024 * 1024
 
     # Analytics -------------------------------------------------------------
@@ -174,6 +176,7 @@ def load_settings() -> Settings:
         model_storage_path=_path("MODEL_STORAGE_PATH", REPO_ROOT / "ml" / "checkpoints"),
         hospital_data_root=_path("HOSPITAL_DATA_ROOT", REPO_ROOT / "data" / "hospitals"),
         model_keep_versions=int(os.getenv("MODEL_KEEP_VERSIONS", "5")),
+        model_weights_in_database=_flag("MODEL_WEIGHTS_IN_DATABASE", False),
         max_update_bytes=int(os.getenv("MAX_UPDATE_BYTES", str(256 * 1024 * 1024))),
         regions_geojson_path=_optional_path("REGIONS_GEOJSON_PATH"),
         region_id_field=os.getenv("REGION_ID_FIELD", "region_id"),

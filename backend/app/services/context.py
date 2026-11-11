@@ -120,7 +120,9 @@ def build_context(settings: Settings) -> AppContext:
     audit = AuditService(db)
     auth = AuthService(db, audit, settings)
     hospitals = HospitalService(db, audit, settings.node_token_secret, settings.hospital_nodes)
-    registry = ModelRegistry(db, settings.model_storage_path, settings.model_keep_versions, settings.seed)
+    registry = ModelRegistry(
+        db, settings.model_storage_path, settings.model_keep_versions, settings.seed, settings.model_weights_in_database
+    )
     coordinator = Coordinator(
         db, registry, audit, settings.model_storage_path, settings.max_update_bytes, settings.seed
     )

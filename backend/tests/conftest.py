@@ -19,6 +19,22 @@ from app.services.context import bootstrap, build_context  # noqa: E402
 from backend_test_helpers import DEMO_PASSWORD, login  # noqa: E402
 
 
+#: Run the suite against PostgreSQL instead of SQLite: TEST_DATABASE_URL=postgresql://... (a throwaway database:
+#: every test starts by emptying its public schema).
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "").strip()
+
+
+def _fresh_database_url(tmp_path) -> str:
+    if not TEST_DATABASE_URL:
+        return f"sqlite:///{(tmp_path / 'test.db').as_posix()}"
+    import psycopg
+
+    with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as connection:
+        connection.execute("DROP SCHEMA IF EXISTS public CASCADE")
+        connection.execute("CREATE SCHEMA public")
+    return TEST_DATABASE_URL
+
+
 @pytest.fixture()
 def settings(tmp_path) -> Settings:
     return Settings(
@@ -30,7 +46,7 @@ def settings(tmp_path) -> Settings:
         demo_jwt_secret="test-jwt-secret-with-enough-length-0123456789",
         demo_password=DEMO_PASSWORD,
         node_token_secret="test-node-secret",
-        database_url=f"sqlite:///{(tmp_path / 'test.db').as_posix()}",
+        database_url=_fresh_database_url(tmp_path),
         model_storage_path=tmp_path / "models",
         hospital_data_root=tmp_path / "hospitals",
     )

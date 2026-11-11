@@ -20,13 +20,19 @@ from ml.registry import TARGET_ARCHITECTURES, BackendUnavailableError, get_adapt
 STATUS_INITIAL = "INITIAL"
 STATUS_ACTIVE = "ACTIVE"
 STATUS_ARCHIVED = "ARCHIVED"
+#: weights_path of a version whose weights are in the model_weights table.
+DB_PREFIX = "db:"
 
 Weights = Dict[str, Any]
 
 
 class ModelRegistry:
-    def __init__(self, db: Database, storage_path: Path, keep_versions: int = 5, seed: int = 0):
+    def __init__(
+        self, db: Database, storage_path: Path, keep_versions: int = 5, seed: int = 0, in_database: bool = False
+    ):
         self.db = db
+        #: Keep weights in the model_weights table instead of files (hosts without a persistent disk).
+        self.in_database = in_database
         self.storage_path = Path(storage_path)
         self.keep_versions = max(2, keep_versions)
         self.seed = seed
@@ -49,8 +55,14 @@ class ModelRegistry:
     ) -> Dict[str, Any]:
         adapter = get_adapter(modality)
         payload = weights_to_bytes(weights)
-        path = self._weights_file(modality, version)
-        path.write_bytes(payload)
+        if self.in_database:
+            key = f"{modality}:v{version}"
+            self.db.execute("DELETE FROM model_weights WHERE id = :id", {"id": key})
+            self.db.insert("model_weights", {"id": key, "weights_blob": payload, "created_at": utc_now_iso()})
+            path = f"{DB_PREFIX}{key}"
+        else:
+            path = self._weights_file(modality, version)
+            path.write_bytes(payload)
         return self.db.insert(
             "model_registry",
             {
@@ -119,7 +131,10 @@ class ModelRegistry:
             {"modality": modality},
         )
         for row in rows[self.keep_versions :]:
-            Path(row["weights_path"]).unlink(missing_ok=True)
+            if str(row["weights_path"]).startswith(DB_PREFIX):
+                self.db.execute("DELETE FROM model_weights WHERE id = :id", {"id": row["weights_path"][len(DB_PREFIX):]})
+            else:
+                Path(row["weights_path"]).unlink(missing_ok=True)
             self.db.update("model_registry", {"weights_path": None}, {"id": row["id"]})
 
     # --------------------------------------------------------------- lookup
@@ -140,7 +155,12 @@ class ModelRegistry:
 
     def load_bytes(self, modality: str, version: int) -> bytes:
         row = self.get_version(modality, version)
-        if not row["weights_path"] or not Path(row["weights_path"]).exists():
+        stored = row["weights_path"] or ""
+        if stored.startswith(DB_PREFIX):
+            blob = self.db.fetch_one("SELECT weights_blob FROM model_weights WHERE id = :id", {"id": stored[len(DB_PREFIX):]})
+            if blob is not None:
+                return bytes(blob["weights_blob"])
+        if not stored or stored.startswith(DB_PREFIX) or not Path(stored).exists():
             raise UnavailableError(
                 f"Weights for {modality} v{version} are no longer stored (only the newest "
                 f"{self.keep_versions} versions keep their weights)."

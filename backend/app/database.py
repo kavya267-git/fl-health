@@ -9,15 +9,19 @@ so services work with plain Python values.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from app.models.tables import COLUMN_TYPES, TABLE_COLUMNS, add_column_statements, create_statements
+
+logger = logging.getLogger("fl.database")
 
 _NAMED_PARAM = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -44,6 +48,8 @@ def _decode_row(row: Dict[str, Any]) -> Dict[str, Any]:
             decoded[key] = json.loads(value)
         elif kind == "boolean":
             decoded[key] = bool(value)
+        elif isinstance(value, memoryview):
+            decoded[key] = bytes(value)
         elif isinstance(value, datetime):
             decoded[key] = value.isoformat()
         else:
@@ -96,11 +102,29 @@ class Database:
                 raise DatabaseError(
                     "A PostgreSQL DATABASE_URL needs the 'psycopg' package: pip install 'psycopg[binary]'"
                 ) from exc
-            # prepare_threshold=None: no server-side prepared statements, so the
-            # connection also works through Supabase's transaction-mode pooler.
-            connection = psycopg.connect(self.url, autocommit=True, row_factory=dict_row, prepare_threshold=None)
+            connection = self._connect_postgres(psycopg, dict_row)
         self._local.connection = connection
         return connection
+
+    #: Waits between attempts to reach PostgreSQL. A serverless database (e.g. Neon) that has scaled to zero
+    #: takes a few seconds to wake on the first connection.
+    CONNECT_RETRY_SECONDS = (1, 2, 4, 8, 15)
+
+    def _connect_postgres(self, psycopg, dict_row):
+        last = None
+        for wait in (0, *self.CONNECT_RETRY_SECONDS):
+            if wait:
+                logger.warning("PostgreSQL not reachable yet (%s); retrying in %s s", last.__class__.__name__, wait)
+                time.sleep(wait)
+            try:
+                # prepare_threshold=None: no server-side prepared statements, so the connection also works
+                # through a transaction-mode pooler (Neon's pooled URL, Supabase's pooler).
+                return psycopg.connect(
+                    self.url, autocommit=True, row_factory=dict_row, prepare_threshold=None, connect_timeout=15
+                )
+            except psycopg.OperationalError as exc:
+                last = exc
+        raise DatabaseError(f"Cannot connect to PostgreSQL: {last}") from last
 
     def _sql(self, sql: str) -> str:
         if self.dialect == "postgres":
@@ -108,7 +132,7 @@ class Database:
         return sql
 
     # ------------------------------------------------------------ execution
-    def _run(self, sql: str, params: Optional[Dict[str, Any]], fetch: bool):
+    def _run(self, sql: str, params: Optional[Dict[str, Any]], fetch: bool, retried: bool = False):
         encoded = {key: _encode(value) for key, value in (params or {}).items()}
         try:
             with self._write_lock:
@@ -121,6 +145,14 @@ class Database:
         except Exception as exc:  # psycopg errors
             if exc.__class__.__module__.startswith("psycopg"):
                 self._local.connection = None  # drop a possibly stale connection; the next call reconnects
+                # A pooled connection closed while idle (scale-to-zero, pooler restart): reconnect once and retry.
+                # Never inside an explicit transaction: its earlier statements were on the lost connection.
+                if (
+                    not retried
+                    and not getattr(self._local, "in_transaction", False)
+                    and exc.__class__.__name__ in ("OperationalError", "InterfaceError")
+                ):
+                    return self._run(sql, params, fetch, retried=True)
                 raise DatabaseError(str(exc)) from exc
             raise
 
@@ -178,8 +210,12 @@ class Database:
                     connection.execute("ROLLBACK")
                     raise
             else:
-                with connection.transaction():
-                    yield
+                self._local.in_transaction = True
+                try:
+                    with connection.transaction():
+                        yield
+                finally:
+                    self._local.in_transaction = False
 
     def create_schema(self) -> None:
         for statement in create_statements(self.dialect):

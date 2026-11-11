@@ -68,6 +68,13 @@ TABLES: Dict[str, List[Column]] = {
         ("reason", "text", ""),
         ("created_at", "timestamp", "NOT NULL"),
     ],
+    # Global model weights kept in the database (MODEL_WEIGHTS_IN_DATABASE=true), for hosts without a
+    # persistent disk, such as a free Hugging Face Space. Only the newest MODEL_KEEP_VERSIONS per modality.
+    "model_weights": [
+        ("id", "text", "PRIMARY KEY"),
+        ("weights_blob", "bytes", "NOT NULL"),
+        ("created_at", "timestamp", "NOT NULL"),
+    ],
     # Node tokens for registered hospitals: only a SHA-256 of the token is stored; the token itself is shown
     # once. hospital_a-d keep their HMAC tokens derived from NODE_TOKEN_SECRET and have no row here.
     "node_tokens": [
@@ -301,6 +308,7 @@ INDEXES = {
 }
 
 _SQLITE_TYPES = {
+    "bytes": "BLOB",
     "text": "TEXT",
     "integer": "INTEGER",
     "real": "REAL",
@@ -310,6 +318,7 @@ _SQLITE_TYPES = {
     "serial": "INTEGER",
 }
 _POSTGRES_TYPES = {
+    "bytes": "BYTEA",
     "text": "TEXT",
     "integer": "BIGINT",
     "real": "DOUBLE PRECISION",
