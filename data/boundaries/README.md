@@ -83,8 +83,25 @@ The map then shows Karnataka's districts. In demo mode the weekly case reports f
 **simulated**. Real districts with made-up counts could be mistaken for real cases, so the map then carries a
 permanent "SIMULATED DATA – NOT REAL CASES" watermark. Every PDF and CSV export (Phase 2) must carry the same
 text, taken from `data_status.watermark`. Health officers' jurisdictions use these region ids,
-for example `KA-MYSORE`. The built-in demo officers cover the simulated regions R01–R12, so give real accounts
-a jurisdiction under Settings.
+for example `KA-MYSORE`. Give real accounts a jurisdiction under Settings.
+
+By default the built-in demo officers cover the simulated regions R01–R12 and the four simulated hospitals sit
+in evenly spread regions. To place them in districts (the hospitals keep their fictional names and SIMULATED
+data):
+
+```bash
+# backend/.env
+REGION_POPULATIONS_CSV=data/boundaries/karnataka_census2011_population.csv
+DEMO_HOSPITAL_REGIONS=hospital_a:KA-DHARWAD,hospital_b:KA-BELGAUM,hospital_c:KA-BANGALORE,hospital_d:KA-MYSORE
+DEMO_OFFICER_NORTH_LABEL=Belagavi division
+DEMO_OFFICER_NORTH_REGIONS=KA-BELGAUM,KA-BAGALKOT,KA-BIJAPUR,KA-DHARWAD,KA-GADAG,KA-HAVERI,KA-UTTARA-KANNADA
+DEMO_OFFICER_SOUTH_LABEL=Mysuru division
+DEMO_OFFICER_SOUTH_REGIONS=KA-MYSORE,KA-CHAMARAJANAGAR,KA-MANDYA,KA-HASSAN,KA-KODAGU,KA-CHIKMAGALUR,KA-DAKSHINA-KANNADA,KA-UDUPI
+```
+
+Each district's simulated cases are split 70/30 between the two hospitals whose home districts are nearest. Use
+a fresh database when switching from the simulated regions: the stored reports, alerts and forecasts are per
+region.
 
 ## karnataka_census2011_population.csv
 

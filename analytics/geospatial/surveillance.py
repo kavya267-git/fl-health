@@ -61,15 +61,23 @@ def iso_week_label(start: date) -> str:
     return f"{year}-W{week:02d}"
 
 
-def assign_catchments(regions: List[dict], hospital_ids: List[str]) -> Dict[str, Dict[str, float]]:
+def assign_catchments(
+    regions: List[dict], hospital_ids: List[str], home_regions: Optional[Dict[str, str]] = None
+) -> Dict[str, Dict[str, float]]:
     """Share of each region's cases seen by each hospital (simulation only).
 
-    Hospitals are placed in evenly spread regions; every region is served by
-    its two nearest hospitals with a 70/30 split.
+    Each hospital sits in a home region: ``home_regions[hospital_id]`` when given, otherwise evenly spread
+    regions. Every region is served by its two nearest hospitals with a 70/30 split.
     """
     ordered = sorted(regions, key=lambda r: r["region_id"])
     step = len(ordered) / len(hospital_ids)
     sites = {hospital_id: ordered[int(index * step + step / 2)] for index, hospital_id in enumerate(hospital_ids)}
+    if home_regions:
+        by_id = {r["region_id"]: r for r in ordered}
+        unknown = sorted(f"{h}:{r}" for h, r in home_regions.items() if h in sites and r not in by_id)
+        if unknown:
+            raise ValueError(f"Unknown home region(s) for the simulated hospitals: {', '.join(unknown)}")
+        sites.update({h: by_id[r] for h, r in home_regions.items() if h in sites})
     shares: Dict[str, Dict[str, float]] = {}
     for region in ordered:
         distances = sorted(
@@ -91,6 +99,7 @@ def simulate_reports(
     weeks: int = 104,
     seed: int = 2024,
     suppression_threshold: int = DEFAULT_SUPPRESSION_THRESHOLD,
+    home_regions: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
     """SIMULATED hospital-level weekly reports.
 
@@ -100,7 +109,7 @@ def simulate_reports(
     """
     rng = np.random.default_rng([seed, zlib.crc32(end_week.isoformat().encode())])
     ordered = sorted(regions, key=lambda r: r["region_id"])
-    shares = assign_catchments(ordered, hospital_ids)
+    shares = assign_catchments(ordered, hospital_ids, home_regions)
     week_starts = [end_week - timedelta(days=7 * offset) for offset in range(weeks - 1, -1, -1)]
 
     # Injected rises: (disease, region, multiplier at the latest week, weeks of ramp-up).

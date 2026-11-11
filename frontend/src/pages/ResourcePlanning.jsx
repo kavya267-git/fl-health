@@ -203,7 +203,7 @@ function AssumptionsCard({ assumptions, editable, onSaved }) {
   )
 }
 
-function DiseaseProjection({ block, capacity }) {
+function DiseaseProjection({ block, capacity, catchment }) {
   if (!block.available) {
     return (
       <Card>
@@ -222,9 +222,10 @@ function DiseaseProjection({ block, capacity }) {
     )
   }
   const shares = block.regions.map((r) => `${r.region_name} ${percent(r.share)}`).join(', ')
+  const homeDistrict = catchment?.basis === 'home_district'
   return (
     <Card>
-      <CardHeader title={block.disease.label} description={`Your share of cases (last 8 weeks): ${shares}.`} />
+      <CardHeader title={block.disease.label} description={homeDistrict ? `Catchment: your home district, ${block.regions.map((r) => `${r.region_name} (${percent(r.share)} of its cases)`).join(', ')}.` : `Your share of cases (last 8 weeks): ${shares}.`} />
       <CardBody className="space-y-3">
         {block.groups.map((group) => (
           <p
@@ -283,7 +284,10 @@ function Projection({ plan, onCapacitySaved, isManager }) {
         </p>
       ) : null}
       <Note title="A planning estimate, not a prediction of who will be admitted">
-        Built from the regional forecast, your hospital&rsquo;s recent share of cases and the assumptions shown here. It assumes the rest of the
+        Built from the regional forecast, {plan.catchment?.basis === 'home_district'
+          ? `your hospital's catchment (its home district, ${plan.catchment.region_name}${plan.catchment.hospitals_sharing > 1 ? `, shared equally with ${plan.catchment.hospitals_sharing - 1} other hospital(s)` : ''})`
+          : 'your hospital’s recent share of cases'}{' '}
+        and the assumptions shown here. It assumes the rest of the
         hospital stays as busy as today. Today&rsquo;s occupancy already includes some patients with these diseases, so the projection
         leans high. The low&ndash;high values are a range from the forecast&rsquo;s likely ranges, added up over regions: wider than an 80%
         interval, but each likely range is itself often too narrow.
@@ -315,7 +319,7 @@ function Projection({ plan, onCapacitySaved, isManager }) {
                 </Card>
               ) : null}
               {plan.diseases.map((block) => (
-                <DiseaseProjection key={block.disease.id} block={block} capacity={plan.capacity} />
+                <DiseaseProjection key={block.disease.id} block={block} capacity={plan.capacity} catchment={plan.catchment} />
               ))}
               <p className="text-xs text-muted">
                 Forecast data up to the week starting {formatDate(plan.forecast.data_through)}; computed {formatDateTime(plan.forecast.computed_at)}.

@@ -210,15 +210,35 @@ class AuthService:
             self.provider = DemoAuthProvider(settings.demo_jwt_secret, settings.demo_password)
 
     # ---------------------------------------------------------------- seed
-    def seed_demo_users(self) -> None:
+    def built_in_accounts(self) -> List[Dict[str, Any]]:
+        """DEMO_ACCOUNTS, with the officers' jurisdictions from DEMO_OFFICER_*_REGIONS when set (real boundaries)."""
+        overrides = getattr(self.settings, "demo_officer_jurisdictions", None) or {}
+        accounts = []
         for account in DEMO_ACCOUNTS:
+            key = account["id"].removeprefix("demo-officer-") if account["id"].startswith("demo-officer-") else None
+            if key in overrides:
+                account = {
+                    **account,
+                    "display_name": f"Health officer, {overrides[key]['label']}",
+                    "jurisdiction": list(overrides[key]["regions"]),
+                }
+            accounts.append(account)
+        return accounts
+
+    def seed_demo_users(self) -> None:
+        for account in self.built_in_accounts():
             row = {"hospital_id": None, "jurisdiction": None, **account}
             if self.db.fetch_one("SELECT id FROM users WHERE id = :id", {"id": account["id"]}) is None:
                 self.db.insert("users", {**row, "created_at": utc_now_iso()})
             else:  # built-in accounts keep their definition (their role cannot be changed)
                 self.db.update(
                     "users",
-                    {"role": row["role"], "hospital_id": row["hospital_id"], "jurisdiction": row["jurisdiction"]},
+                    {
+                        "role": row["role"],
+                        "display_name": row["display_name"],
+                        "hospital_id": row["hospital_id"],
+                        "jurisdiction": row["jurisdiction"],
+                    },
                     {"id": account["id"]},
                 )
 
@@ -231,7 +251,7 @@ class AuthService:
                 "hospital_id": a.get("hospital_id"),
                 "jurisdiction": a.get("jurisdiction"),
             }
-            for a in DEMO_ACCOUNTS
+            for a in self.built_in_accounts()
         ]
 
     # --------------------------------------------------------------- login

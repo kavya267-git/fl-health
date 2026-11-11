@@ -6,7 +6,7 @@ import os
 import secrets
 from datetime import date
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -51,6 +51,28 @@ def _optional_monday(name: str) -> Optional[date]:
 
 def _list(name: str, default: str = "") -> List[str]:
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
+def _pairs(name: str) -> Dict[str, str]:
+    """``key:value,key:value`` (e.g. ``hospital_a:KA-DHARWAD``)."""
+    pairs: Dict[str, str] = {}
+    for item in _list(name):
+        key, sep, value = item.partition(":")
+        if not sep or not key.strip() or not value.strip():
+            raise ValueError(f"{name} entries must look like key:value, got '{item}'")
+        pairs[key.strip()] = value.strip()
+    return pairs
+
+
+def _officer_jurisdictions() -> Dict[str, Dict[str, Any]]:
+    """DEMO_OFFICER_<NORTH|SOUTH>_REGIONS (comma-separated region ids) and an optional _LABEL for each."""
+    result: Dict[str, Dict[str, Any]] = {}
+    for key in ("north", "south"):
+        regions = _list(f"DEMO_OFFICER_{key.upper()}_REGIONS")
+        if regions:
+            label = os.getenv(f"DEMO_OFFICER_{key.upper()}_LABEL", "").strip() or ", ".join(regions)
+            result[key] = {"label": label, "regions": regions}
+    return result
 
 
 class Settings(BaseModel):
@@ -105,6 +127,13 @@ class Settings(BaseModel):
     # Demo mode only: the last week of the simulated reports. None = the last complete week (rolling, so the
     # data moves on every Monday). Set it for a demo so every rehearsal shows the same hotspots and forecasts.
     simulation_end_week: Optional[date] = None
+    # Demo mode with real boundaries: the home region of each built-in hospital (hospital_a..d -> region id,
+    # DEMO_HOSPITAL_REGIONS). Empty = evenly spread regions. Either way each region's simulated cases are split
+    # 70/30 between the hospitals whose home regions are nearest.
+    demo_hospital_regions: Dict[str, str] = Field(default_factory=dict)
+    # Demo mode with real boundaries: the built-in health officers' jurisdictions,
+    # {"north"|"south": {"label": ..., "regions": [...]}}. Empty = the simulated regions R01-R06 / R07-R12.
+    demo_officer_jurisdictions: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
     # HTTP ------------------------------------------------------------------
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173"])
@@ -189,6 +218,8 @@ def load_settings() -> Settings:
         suppression_threshold=int(os.getenv("SUPPRESSION_THRESHOLD", "5")),
         surveillance_weeks=int(os.getenv("SURVEILLANCE_WEEKS", "104")),
         simulation_end_week=_optional_monday("SIMULATION_END_WEEK"),
+        demo_hospital_regions=_pairs("DEMO_HOSPITAL_REGIONS"),
+        demo_officer_jurisdictions=_officer_jurisdictions(),
         cors_origins=_list("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
         api_base_url=os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/"),
         public_api_url=os.getenv("PUBLIC_API_URL", "").strip().rstrip("/"),

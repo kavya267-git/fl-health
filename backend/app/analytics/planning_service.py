@@ -32,11 +32,20 @@ FALLBACK_ASSUMPTIONS = {"admission_rate": 0.10, "icu_share": 0.05, "length_of_st
 
 
 class PlanningService:
-    def __init__(self, db: Database, audit: AuditService, surveillance: SurveillanceService, ensemble: EnsembleService):
+    def __init__(
+        self,
+        db: Database,
+        audit: AuditService,
+        surveillance: SurveillanceService,
+        ensemble: EnsembleService,
+        home_regions: Optional[Dict[str, str]] = None,
+    ):
         self.db = db
         self.audit = audit
         self.surveillance = surveillance
         self.ensemble = ensemble
+        #: hospital id -> home district (DEMO_HOSPITAL_REGIONS). A hospital listed here plans for that district only.
+        self.home_regions = dict(home_regions or {})
 
     # --------------------------------------------------------------- assumptions
     def seed_assumptions(self) -> None:
@@ -141,6 +150,16 @@ class PlanningService:
                 values[index] = float(row["case_count"])
         return series
 
+    def _home_catchment(self, hospital_id: str, names: Dict[str, str]) -> Optional[Dict[str, Any]]:
+        """With configured home districts (DEMO_HOSPITAL_REGIONS): the hospital's catchment is its home district
+        only, split equally between the hospitals that share it. None = the share comes from the reports."""
+        home = self.home_regions.get(hospital_id)
+        if home is None:
+            return None
+        sharing = sum(1 for region in self.home_regions.values() if region == home)
+        return {"basis": "home_district", "region_id": home, "region_name": names.get(home, home), "share": 1.0 / sharing,
+                "hospitals_sharing": sharing}
+
     def projection(self, hospital_id: str) -> Dict[str, Any]:
         hospital = self.db.fetch_one("SELECT id, name FROM hospitals WHERE id = :h", {"h": hospital_id})
         if hospital is None:
@@ -166,14 +185,23 @@ class PlanningService:
         current_icu = capacity["occupancy_percent"] / 100 * capacity["icu_beds"]
         last = date.fromisoformat(run["data_through"])
         names = {r["region_id"]: r["name"] for r in self.surveillance.regions()}
+        catchment = self._home_catchment(hospital_id, names)
+        base["catchment"] = catchment or {"basis": "reports", "weeks": SHARE_WEEKS}
         diseases, combined_beds = [], None
         for disease in self.surveillance.diseases():
             regional = self.surveillance.regional_series(disease["id"])
-            mine = self._hospital_series(hospital_id, disease["id"], regional["weeks"])
+            if catchment is not None:
+                catchment_shares = {catchment["region_id"]: catchment["share"]}
+            else:
+                mine = self._hospital_series(hospital_id, disease["id"], regional["weeks"])
+                catchment_shares = {
+                    region_id: hospital_share(mine[region_id], regional["counts"].get(region_id, []))
+                    for region_id in mine
+                }
             forecasts, shares, regions, missing = {}, {}, [], []
-            for region_id in sorted(mine):
+            for region_id in sorted(catchment_shares):
                 name = names.get(region_id, region_id)
-                share = hospital_share(mine[region_id], regional["counts"].get(region_id, []))
+                share = catchment_shares[region_id]
                 points = run["forecasts"].get(f"{disease['id']}:{region_id}")
                 if share is None:
                     missing.append({"region_id": region_id, "region_name": name, "reason": "no week in the last 8 with both counts known"})

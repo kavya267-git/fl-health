@@ -152,7 +152,9 @@ def build_context(settings: Settings) -> AppContext:
         ensemble=ensemble,
         alerts=AlertService(db, audit, surveillance),
         situation=SituationService(db, audit, surveillance, ensemble, settings.app_version),
-        planning=PlanningService(db, audit, surveillance, ensemble),
+        planning=PlanningService(
+            db, audit, surveillance, ensemble, settings.demo_hospital_regions if settings.demo_mode else None
+        ),
         registrations=RegistrationService(db, audit, auth, hospitals),
     )
 
@@ -187,6 +189,10 @@ def bootstrap(ctx: AppContext) -> None:
         ctx.hospitals.upsert(
             hospital.hospital_id, name, hospital.kind if settings.demo_mode else "", modalities, summary, simulated
         )
+        if settings.demo_mode and hospital.hospital_id in settings.demo_hospital_regions:
+            ctx.db.update(
+                "hospitals", {"region_id": settings.demo_hospital_regions[hospital.hospital_id]}, {"id": hospital.hospital_id}
+            )
 
     # In-process nodes cannot resume a round that a previous process left unfinished.
     if settings.hospital_nodes == "in-process":

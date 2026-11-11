@@ -191,3 +191,52 @@ def test_simulation_end_week_pins_the_simulated_data(settings, monkeypatch):
         load_settings()
     monkeypatch.delenv("SIMULATION_END_WEEK")
     assert load_settings().simulation_end_week is None  # rolling by default
+
+
+def _home_ctx(settings, homes):
+    from app.services.context import bootstrap, build_context
+
+    context = build_context(settings.model_copy(update={"demo_hospital_regions": homes}))
+    bootstrap(context)
+    return context
+
+
+def test_with_home_districts_a_hospital_plans_for_its_own_district_only(settings):
+    context = _home_ctx(settings, {})
+    try:
+        regions_by_id = sorted(r["region_id"] for r in context.surveillance.regions())
+    finally:
+        context.close()
+    homes = {"hospital_a": regions_by_id[0], "hospital_b": regions_by_id[5]}
+    ctx = _home_ctx(settings, homes)
+    try:
+        ctx.planning.set_capacity("hospital_a", 40, 4, 75, "manager")
+        store_forecast(ctx)
+        result = ctx.planning.projection("hospital_a")
+        assert result["catchment"]["basis"] == "home_district" and result["catchment"]["share"] == 1.0
+        for disease in result["diseases"]:
+            assert [(r["region_id"], r["share"]) for r in disease["regions"]] == [(regions_by_id[0], 1.0)]
+        dengue = next(d for d in result["diseases"] if d["disease"]["id"] == "dengue")
+        rate = dengue["assumptions"]["admission_rate"]
+        assert dengue["weeks"][0]["admissions_mid"] == pytest.approx(100 * 1.0 * rate)
+        # A hospital without a configured home district still uses its share of the reports.
+        ctx.planning.set_capacity("hospital_c", 40, 4, 75, "manager")
+        assert ctx.planning.projection("hospital_c")["catchment"]["basis"] == "reports"
+    finally:
+        ctx.close()
+
+
+def test_hospitals_sharing_a_home_district_split_it(settings):
+    context = _home_ctx(settings, {})
+    try:
+        first = sorted(r["region_id"] for r in context.surveillance.regions())[0]
+    finally:
+        context.close()
+    ctx = _home_ctx(settings, {"hospital_a": first, "hospital_b": first})
+    try:
+        ctx.planning.set_capacity("hospital_a", 40, 4, 75, "manager")
+        store_forecast(ctx)
+        result = ctx.planning.projection("hospital_a")
+        assert result["catchment"]["share"] == 0.5 and result["catchment"]["hospitals_sharing"] == 2
+    finally:
+        ctx.close()

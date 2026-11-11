@@ -92,6 +92,19 @@ describe('resource planning page', () => {
     expect(screen.getByText('Ashgrove 25%', { exact: false })).toBeInTheDocument()
   })
 
+  it('names the home district when the catchment is the home district', async () => {
+    api.planning.mockResolvedValue(
+      plan({
+        catchment: { basis: 'home_district', region_id: 'KA-DHARWAD', region_name: 'Dharwad', share: 1, hospitals_sharing: 1 },
+        diseases: [{ ...plan().diseases[0], regions: [{ region_id: 'KA-DHARWAD', region_name: 'Dharwad', share: 1 }] }],
+      }),
+    )
+    render(<ResourcePlanning />)
+    expect(await screen.findByText('Catchment: your home district, Dharwad (100% of its cases).')).toBeInTheDocument()
+    expect(screen.getByText(/your hospital's catchment \(its home district, Dharwad\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/Your share of cases \(last 8 weeks\)/)).not.toBeInTheDocument()
+  })
+
   it('explains what is missing instead of showing an estimate', async () => {
     api.planning.mockResolvedValue(plan({ available: false, capacity: null, reason: "Enter your hospital's beds and current occupancy to see the projection." }))
     render(<ResourcePlanning />)

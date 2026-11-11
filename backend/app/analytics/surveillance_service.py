@@ -122,6 +122,7 @@ class SurveillanceService:
                         settings.surveillance_weeks,
                         settings.seed,
                         settings.suppression_threshold,
+                        home_regions=settings.demo_hospital_regions or None,
                     )
                     self._replace_reports(frame, is_simulated=True)
             else:
