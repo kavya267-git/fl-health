@@ -23,7 +23,8 @@ export function ConnectionSteps({ connection }) {
   return (
     <ol className="grid gap-2 sm:grid-cols-4" aria-label="Connection status">
       {STEPS.map((step, index) => {
-        const done = index <= reached && connection.step !== 'NOT_CONNECTED'
+        // The first step is where every hospital starts; only the steps after it are achievements to tick.
+        const done = index > 0 && index <= reached
         const current = index === reached
         return (
           <li
@@ -51,7 +52,10 @@ function TokenPanel({ connection, onIssued }) {
   const issued = connection.token && !connection.token.revoked_at
 
   async function generate() {
-    if (issued && !window.confirm('A new token replaces the current one at once: a connected agent stops until you paste the new token. Continue?')) {
+    if (
+      issued &&
+      !window.confirm('A new token replaces the current one at once: a connected agent stops until you paste the new token. Continue?')
+    ) {
       return
     }
     setBusy(true)
@@ -94,7 +98,10 @@ function TokenPanel({ connection, onIssued }) {
         <div className="rounded-md border border-warn/40 bg-warn-soft p-3">
           <p className="text-sm font-medium text-ink">Copy this token now. It is shown only once.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code data-testid="node-token" className="min-w-0 flex-1 break-all rounded bg-surface px-2 py-1.5 font-mono text-[13px] text-ink">
+            <code
+              data-testid="node-token"
+              className="min-w-0 flex-1 break-all rounded bg-surface px-2 py-1.5 font-mono text-[13px] text-ink"
+            >
               {token}
             </code>
             <Button size="sm" icon={copied ? Check : Copy} onClick={copy}>
@@ -114,42 +121,44 @@ function DataCheckTable({ connection }) {
   const modalities = connection.declared_modalities
   if (!modalities.length) return null
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="text-left text-xs text-muted">
-          <th className="py-1.5 font-medium">Data</th>
-          <th className="py-1.5 font-medium">Local check</th>
-          <th className="py-1.5 text-right font-medium">Training / held-out records</th>
-          <th className="py-1.5 font-medium">Invited</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-line">
-        {modalities.map((m) => {
-          const check = connection.data_check?.[m]
-          return (
-            <tr key={m}>
-              <td className="py-2">{MODALITIES[m]?.label || m}</td>
-              <td className="py-2">
-                {!check ? (
-                  <Badge tone="nodata">Not checked yet</Badge>
-                ) : check.passed ? (
-                  <Badge tone="ok">Passed</Badge>
-                ) : (
-                  <span>
-                    <Badge tone="alert">Failed</Badge>
-                    <span className="mt-1 block max-w-md text-xs text-alert">{check.problems.join('; ')}</span>
-                  </span>
-                )}
-              </td>
-              <td className="py-2 text-right tabular-nums">
-                {check ? `${formatNumber(check.train_records)} / ${formatNumber(check.val_records)}` : '—'}
-              </td>
-              <td className="py-2">{connection.invited_modalities.includes(m) ? 'Yes' : 'No'}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="text-left text-xs text-muted">
+            <th className="py-1.5 pr-4 font-medium">Data</th>
+            <th className="py-1.5 pr-4 font-medium">Local check</th>
+            <th className="py-1.5 pr-6 text-right font-medium">Training / held-out records</th>
+            <th className="py-1.5 font-medium">Invited to rounds</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {modalities.map((m) => {
+            const check = connection.data_check?.[m]
+            return (
+              <tr key={m}>
+                <td className="py-2 pr-4">{MODALITIES[m]?.label || m}</td>
+                <td className="py-2 pr-4">
+                  {!check ? (
+                    <Badge tone="nodata">Not checked yet</Badge>
+                  ) : check.passed ? (
+                    <Badge tone="ok">Passed</Badge>
+                  ) : (
+                    <span>
+                      <Badge tone="alert">Failed</Badge>
+                      <span className="mt-1 block max-w-md text-xs text-alert">{check.problems.join('; ')}</span>
+                    </span>
+                  )}
+                </td>
+                <td className="py-2 pr-6 text-right tabular-nums">
+                  {check ? `${formatNumber(check.train_records)} / ${formatNumber(check.val_records)}` : '—'}
+                </td>
+                <td className="py-2">{connection.invited_modalities.includes(m) ? 'Yes' : 'No'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

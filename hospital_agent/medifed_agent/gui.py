@@ -284,5 +284,6 @@ class AgentWindow:
 
 def run_window(default_server: str) -> None:
     root = tk.Tk()
+    root.geometry("900x800")
     AgentWindow(root, default_server)
     root.mainloop()
