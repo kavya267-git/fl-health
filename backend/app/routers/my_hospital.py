@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
-from app.routers.deps import get_ctx, hospital_operator
+from app.routers.deps import get_ctx, hospital_operator, permitted
 from app.schemas.hospitals import MyHospital
 from app.services.context import AppContext
+from app.services.onboarding import connection_status, data_template_zip
+from app.utils.errors import PermissionDenied
 from ml.common.types import EvalResult
 from ml.evaluation.metrics import metrics_from_evaluation
 from ml.registry import get_adapter
@@ -65,4 +67,24 @@ def my_hospital(user: Dict[str, Any] = Depends(hospital_operator), ctx: AppConte
         "hospital": ctx.hospitals.get(hospital_id),
         "metrics": ctx.hospitals.metrics(hospital_id),
         "latest_round": _latest_round(ctx, hospital_id),
+        "connection": connection_status(ctx, hospital_id),
     }
+
+
+@router.post("/node-token")
+def generate_node_token(user: Dict[str, Any] = Depends(permitted("node_token_issue")), ctx: AppContext = Depends(get_ctx)):
+    """A new node token for the operator's own (registered) hospital. Shown once; only its hash is stored.
+    Generating a new one revokes the previous token at once."""
+    if not user.get("hospital_id"):
+        raise PermissionDenied("Your account is not linked to a hospital.")
+    return ctx.hospitals.issue_node_token(user["hospital_id"], user["email"])
+
+
+@router.get("/data-template.zip")
+def data_template(user: Dict[str, Any] = Depends(hospital_operator)):
+    """Column lists, made-up example rows and folder layout. No real data."""
+    return Response(
+        data_template_zip(user["hospital_id"]),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="medifed-data-template.zip"'},
+    )

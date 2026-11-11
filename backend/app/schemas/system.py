@@ -24,7 +24,9 @@ class SystemConfig(BaseModel):
     simulated_label: str
     auth_provider: str
     demo_accounts: List[DemoAccount]
+    demo_login_is_default: bool = False
     signup_enabled: bool
+    hospital_registration_enabled: bool = False
     hospital_nodes: str
     ml_backend: str
     database: str

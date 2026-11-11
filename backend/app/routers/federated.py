@@ -19,6 +19,7 @@ from fastapi.responses import Response
 from analytics.privacy.dp import DPConfig
 from app.routers.deps import coordinator_user, get_ctx, is_hospital_operator, permitted, verify_node
 from app.schemas.federated import (
+    DataCheckReport,
     EvaluationAccepted,
     EvaluationRequest,
     FailureRequest,
@@ -139,6 +140,20 @@ def node_heartbeat(body: HeartbeatRequest, request: Request, ctx: AppContext = D
     beat = body.model_dump()
     beat["data_summary"] = sanitize_data_summary(body.data_summary)
     return ctx.hospitals.record_heartbeat(body.hospital_id, beat)
+
+
+@router.get("/node/profile")
+def node_profile(request: Request, hospital_id: str = Query(...), ctx: AppContext = Depends(get_ctx)):
+    """Name and declared modalities, for setup_hospital.py on the hospital's machine."""
+    verify_node(request, ctx, hospital_id)
+    return ctx.hospitals.node_profile(hospital_id)
+
+
+@router.post("/node/data-check")
+def node_data_check(body: DataCheckReport, request: Request, ctx: AppContext = Depends(get_ctx)):
+    """The node's LOCAL data check: pass / fail, counts and short problem notes per modality. No records."""
+    verify_node(request, ctx, body.hospital_id)
+    return ctx.hospitals.record_data_check(body.hospital_id, body.modalities)
 
 
 @router.get("/node/rounds", response_model=NodePendingRounds)

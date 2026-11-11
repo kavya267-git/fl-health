@@ -245,7 +245,24 @@ class AuthService:
         # An unknown email is checked against a dummy hash so it takes as long to reject as a wrong password.
         if not verify_password(password, row["password_hash"] if row else DUMMY_HASH) or row is None:
             raise AuthenticationFailed("Incorrect email or password.")
+        # Only after the right password, so the message does not reveal which emails have an account.
+        self._ensure_active(row["id"])
         return {"id": row["id"], "email": row["email"]}
+
+    def _ensure_active(self, user_id: str) -> None:
+        user = self.db.fetch_one("SELECT disabled FROM users WHERE id = :id", {"id": user_id})
+        if user is not None and user.get("disabled"):
+            reg = self.db.fetch_one(
+                "SELECT status FROM hospital_registrations WHERE user_id = :id ORDER BY created_at DESC LIMIT 1",
+                {"id": user_id},
+            )
+            status = (reg or {}).get("status")
+            if status == "PENDING":
+                raise AuthenticationFailed(
+                    "Your hospital's registration is waiting for an administrator's approval. You can sign in once it "
+                    "is approved."
+                )
+            raise AuthenticationFailed("This account is not active. Contact the platform's administrator.")
 
     def demo_login(self, email: str, password: str) -> Dict[str, Any]:
         """Sign in with a built-in demo account or an account created through sign-up."""
@@ -310,10 +327,64 @@ class AuthService:
         self.record_login(user)
         return {**tokens, "user": user}
 
+    # ------------------------------------------------- hospital registration
+    def _validate_new_credentials(self, email: str, password: str) -> None:
+        if len(email) > 254 or not _EMAIL.match(email):
+            raise ValidationFailed("Enter a valid email address.")
+        if len(password) < MIN_PASSWORD_LENGTH:
+            raise ValidationFailed(f"Choose a password of at least {MIN_PASSWORD_LENGTH} characters.")
+        if len(password) > MAX_PASSWORD_LENGTH:
+            raise ValidationFailed(f"Choose a password of at most {MAX_PASSWORD_LENGTH} characters.")
+
+    def create_disabled_account(self, email: str, password: str, display_name: str) -> Dict[str, Any]:
+        """The operator account of a hospital that has registered but is not approved yet: it cannot sign in."""
+        if not isinstance(self.provider, DemoAuthProvider):
+            raise PermissionDenied("Hospital registration needs local accounts; this server uses Supabase Auth.")
+        email = email.strip().lower()
+        self._validate_new_credentials(email, password)
+        taken = ConflictError("An account with this email already exists. Use another contact email.")
+        if email in _BUILT_IN_BY_EMAIL or self.db.fetch_one("SELECT id FROM users WHERE email = :e", {"e": email}):
+            raise taken
+        user_id = f"local-{uuid.uuid4().hex}"
+        now = utc_now_iso()
+        try:
+            with self.db.transaction():
+                self.db.insert(
+                    "users",
+                    {
+                        "id": user_id,
+                        "email": email,
+                        "display_name": display_name[:80],
+                        "role": DEFAULT_ROLE,
+                        "hospital_id": None,
+                        "disabled": True,
+                        "created_at": now,
+                    },
+                )
+                self.db.insert(
+                    "local_credentials",
+                    {"user_id": user_id, "password_hash": hash_password(password), "updated_at": now},
+                )
+        except DatabaseError as exc:
+            if "unique" in str(exc).lower():
+                raise taken from exc
+            raise
+        return {"id": user_id, "email": email}
+
+    def enable_operator(self, user_id: str, hospital_id: str) -> None:
+        """Approval: the account becomes this hospital's operator and may sign in."""
+        self.db.update("users", {"role": "hospital", "hospital_id": hospital_id, "disabled": False}, {"id": user_id})
+
+    def disable_account(self, user_id: str) -> None:
+        self.db.update("users", {"disabled": True}, {"id": user_id})
+
     def authenticate(self, token: str) -> Dict[str, Any]:
         """Verify the token and return the user's row, creating it on first sight."""
         identity = self.provider.verify(token)
         user = self.db.fetch_one("SELECT * FROM users WHERE id = :id", {"id": identity.subject})
+        if user is not None and user.get("disabled"):
+            # A session issued before the account was disabled (for example, a revoked hospital) ends now.
+            raise AuthenticationFailed("This account is not active. Contact the platform's administrator.")
         if user is None:
             role = "admin" if identity.email in self.settings.admin_emails else DEFAULT_ROLE
             user = self.db.insert(

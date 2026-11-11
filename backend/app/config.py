@@ -107,6 +107,12 @@ class Settings(BaseModel):
     # HTTP ------------------------------------------------------------------
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     api_base_url: str = "http://localhost:8000"
+    #: The API address hospitals use, shown in the "Connect your hospital" commands (defaults to API_BASE_URL).
+    public_api_url: str = ""
+    #: Behind a reverse proxy (e.g. a hosted Space): rate-limit by the first X-Forwarded-For address.
+    trust_proxy_headers: bool = False
+    #: Whether the public "Register your hospital" form is open.
+    allow_hospital_registration: bool = True
 
     @property
     def is_sqlite(self) -> bool:
@@ -182,4 +188,7 @@ def load_settings() -> Settings:
         simulation_end_week=_optional_monday("SIMULATION_END_WEEK"),
         cors_origins=_list("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"),
         api_base_url=os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/"),
+        public_api_url=os.getenv("PUBLIC_API_URL", "").strip().rstrip("/"),
+        trust_proxy_headers=_flag("TRUST_PROXY_HEADERS", False),
+        allow_hospital_registration=_flag("ALLOW_HOSPITAL_REGISTRATION", True),
     )

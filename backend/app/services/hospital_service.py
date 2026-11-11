@@ -11,17 +11,27 @@ hospital is online while its node keeps sending heartbeats.
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from app.database import Database
 from app.services.audit_service import AuditService
-from app.utils.errors import ConflictError, NotFoundError
+from app.utils.errors import ConflictError, NotFoundError, PermissionDenied, ValidationFailed
 from app.utils.hashing import constant_time_equal, hmac_token
 from app.utils.time import utc_now, utc_now_iso
 
 #: Nodes send a heartbeat every ~10 s; three missed beats means disconnected.
 HEARTBEAT_TIMEOUT_SECONDS = 30
+#: Hospitals created by approving a public registration. They run their own node and use a per-hospital token.
+REGISTERED = "registered"
+#: Fields of a node's local data check that may reach the coordinator (pass / fail and counts only).
+_CHECK_FIELDS = ("passed", "train_records", "val_records", "label_counts", "problems")
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class HospitalService:
@@ -146,7 +156,7 @@ class HospitalService:
             simulated = all(entry.get("simulated", False) for entry in summary.values())
             self.db.update(
                 "hospitals",
-                {"data_summary": summary, "modalities": sorted(summary), "is_simulated": simulated},
+                {"data_summary": summary, "modalities": self._eligible(hospital, summary), "is_simulated": simulated},
                 {"id": hospital_id},
             )
         if reconnected:
@@ -264,15 +274,149 @@ class HospitalService:
                 "Hospital nodes run on their own machines, so availability comes from their heartbeat. "
                 "Stop or start the node on the hospital's machine instead."
             )
-        self.get_raw(hospital_id)
+        if self.get_raw(hospital_id)["kind"] == REGISTERED:
+            raise ConflictError(
+                "A registered hospital runs its own node and joins only when this server uses external nodes "
+                "(HOSPITAL_NODES=external)."
+            )
         self.db.update("hospitals", {"online": online, "last_activity_at": utc_now_iso()}, {"id": hospital_id})
         self.audit.record("HOSPITAL_STATUS_CHANGED", actor, hospital_id=hospital_id, details={"online": online})
         return self.get(hospital_id)
 
     # ------------------------------------------------------------ node auth
     def node_token(self, hospital_id: str) -> str:
-        """The shared secret a hospital node presents in ``X-Hospital-Token``."""
+        """The HMAC token of a built-in hospital (hospital_a-d), derived from NODE_TOKEN_SECRET."""
         return hmac_token(self._node_token_secret, f"hospital-node:{hospital_id}")
 
     def verify_node_token(self, hospital_id: str, token: str) -> bool:
-        return bool(token) and constant_time_equal(self.node_token(hospital_id), token)
+        """Registered hospitals: the hash of their current, unrevoked token. Built-in ones: the HMAC token."""
+        if not token:
+            return False
+        hospital = self.db.fetch_one("SELECT kind FROM hospitals WHERE id = :id", {"id": hospital_id})
+        if hospital is not None and hospital["kind"] == REGISTERED:
+            row = self.db.fetch_one("SELECT token_hash, revoked_at FROM node_tokens WHERE hospital_id = :id", {"id": hospital_id})
+            return row is not None and row["revoked_at"] is None and constant_time_equal(row["token_hash"], _token_hash(token))
+        return constant_time_equal(self.node_token(hospital_id), token)
+
+    def issue_node_token(self, hospital_id: str, actor: str) -> Dict[str, Any]:
+        """A new random token for a registered hospital, returned once. Any earlier token stops working at once."""
+        hospital = self.get_raw(hospital_id)
+        if hospital["kind"] != REGISTERED:
+            raise ConflictError(
+                "This built-in hospital uses the token derived from the server's NODE_TOKEN_SECRET "
+                "(scripts/node_token.py on the server)."
+            )
+        token = secrets.token_urlsafe(32)
+        now = utc_now_iso()
+        values = {"token_hash": _token_hash(token), "created_by": actor, "created_at": now, "revoked_at": None}
+        replaced = self.db.fetch_one("SELECT hospital_id FROM node_tokens WHERE hospital_id = :id", {"id": hospital_id})
+        if replaced:
+            self.db.update("node_tokens", values, {"hospital_id": hospital_id})
+        else:
+            self.db.insert("node_tokens", {"hospital_id": hospital_id, **values})
+        self.audit.record(
+            "NODE_TOKEN_ISSUED", actor, hospital_id=hospital_id, details={"replaced_previous_token": bool(replaced)}
+        )
+        return {"hospital_id": hospital_id, "token": token, "created_at": now, "replaced_previous_token": bool(replaced)}
+
+    def revoke_node_token(self, hospital_id: Optional[str]) -> None:
+        if hospital_id:
+            self.db.execute(
+                "UPDATE node_tokens SET revoked_at = :now WHERE hospital_id = :id AND revoked_at IS NULL",
+                {"now": utc_now_iso(), "id": hospital_id},
+            )
+
+    def token_status(self, hospital_id: str) -> Optional[Dict[str, Any]]:
+        row = self.db.fetch_one(
+            "SELECT created_at, created_by, revoked_at FROM node_tokens WHERE hospital_id = :id", {"id": hospital_id}
+        )
+        return dict(row) if row else None
+
+    # ---------------------------------------------------- registered hospitals
+    def create_registered(self, hospital_id: str, name: str, region_id: str, declared: List[str]) -> None:
+        """An approved registration. Offline (and invited to nothing) until its own node connects."""
+        self.db.insert(
+            "hospitals",
+            {
+                "id": hospital_id,
+                "name": name,
+                "kind": REGISTERED,
+                "online": False,
+                "modalities": [],
+                "data_summary": {},
+                "is_simulated": False,
+                "region_id": region_id,
+                "declared_modalities": list(declared),
+                "data_check": {},
+                "created_at": utc_now_iso(),
+            },
+        )
+
+    def set_registered_active(self, hospital_id: Optional[str], active: bool) -> None:
+        """A revoked hospital is invited to nothing, even if a stale heartbeat is still fresh."""
+        if hospital_id and not active:
+            self.db.update("hospitals", {"modalities": [], "online": False}, {"id": hospital_id})
+            self.db.execute("DELETE FROM node_heartbeats WHERE hospital_id = :id", {"id": hospital_id})
+
+    def _eligible(self, hospital: Dict[str, Any], summary: Dict[str, Any]) -> List[str]:
+        """Modalities a hospital is invited to. A registered one: declared AND its local data check passed AND present."""
+        present = set(summary)
+        if hospital.get("kind") != REGISTERED:
+            return sorted(present)
+        declared = set(hospital.get("declared_modalities") or [])
+        passed = {m for m, c in (hospital.get("data_check") or {}).items() if c.get("passed")}
+        return sorted(present & declared & passed)
+
+    def record_data_check(self, hospital_id: str, check: Dict[str, Any]) -> Dict[str, Any]:
+        """A node's local data check: pass / fail and counts per modality. Nothing else is kept."""
+        hospital = self.get_raw(hospital_id)
+        if hospital["kind"] != REGISTERED:
+            raise ConflictError("Data checks are reported by registered hospitals only.")
+        clean: Dict[str, dict] = {}
+        for modality, entry in (check or {}).items():
+            if modality not in (hospital.get("declared_modalities") or []) or not isinstance(entry, dict):
+                continue
+            try:
+                clean[modality] = {
+                    "passed": bool(entry.get("passed")),
+                    "train_records": max(0, int(entry.get("train_records", 0))),
+                    "val_records": max(0, int(entry.get("val_records", 0))),
+                    "label_counts": {str(k)[:12]: max(0, int(v)) for k, v in (entry.get("label_counts") or {}).items()}
+                    if isinstance(entry.get("label_counts"), dict) and len(entry.get("label_counts")) <= 8
+                    else {},
+                    "problems": [str(p)[:200] for p in (entry.get("problems") or [])][:10],
+                    "checked_at": utc_now_iso(),
+                }
+            except (TypeError, ValueError) as exc:
+                raise ValidationFailed(f"Invalid data check for {modality}: {exc}") from exc
+        self.db.update("hospitals", {"data_check": clean}, {"id": hospital_id})
+        hospital = self.get_raw(hospital_id)
+        self.db.update(
+            "hospitals",
+            {"modalities": self._eligible(hospital, hospital.get("data_summary") or {})},
+            {"id": hospital_id},
+        )
+        self.audit.record(
+            "NODE_DATA_CHECK_REPORTED",
+            hospital_id,
+            hospital_id=hospital_id,
+            details={m: {"passed": c["passed"], "train_records": c["train_records"], "val_records": c["val_records"]}
+                     for m, c in clean.items()},
+        )
+        return {"hospital_id": hospital_id, "data_check": clean, "invited_modalities": self.get_raw(hospital_id)["modalities"]}
+
+    def node_profile(self, hospital_id: str) -> Dict[str, Any]:
+        """What setup_hospital.py needs to know: the hospital's name and the modalities it declared."""
+        hospital = self.get_raw(hospital_id)
+        registered = hospital["kind"] == REGISTERED
+        return {
+            "hospital_id": hospital_id,
+            "name": hospital["name"],
+            "registered": registered,
+            "region_id": hospital.get("region_id"),
+            "declared_modalities": (hospital.get("declared_modalities") or []) if registered else list(hospital["modalities"] or []),
+        }
+
+    def ensure_not_registered(self, hospital_id: str) -> None:
+        if self.get_raw(hospital_id)["kind"] == REGISTERED:
+            raise PermissionDenied("A registered hospital's availability comes from its own node.")

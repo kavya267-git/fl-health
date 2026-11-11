@@ -28,6 +28,7 @@ from app.services.auth_service import AuthService
 from app.services.hospital_service import HospitalService
 from app.services.model_registry import ModelRegistry
 from app.services.privacy_service import PrivacyService
+from app.services.registration_service import RegistrationService
 from app.utils.errors import UnavailableError
 from ml.common.datasets import local_data_summary
 from ml.common.types import MODALITIES
@@ -56,6 +57,7 @@ class AppContext:
     situation: Optional[SituationService] = None
     planning: Optional[PlanningService] = None
     deadlines: Optional[DeadlineWatcher] = None
+    registrations: Optional[RegistrationService] = None
 
     def model_backends(self) -> Dict[str, Any]:
         """Which implementation each modality is using right now."""
@@ -90,7 +92,10 @@ class AppContext:
             "simulated_label": settings.simulated_label,
             "auth_provider": settings.auth_provider,
             "demo_accounts": self.auth.demo_accounts() if settings.auth_provider == "demo" else [],
+            # The sign-in page names the demo password only while the server still uses the published default.
+            "demo_login_is_default": settings.auth_provider == "demo" and settings.demo_password == "demo-password",
             "signup_enabled": settings.allow_signup,
+            "hospital_registration_enabled": settings.allow_hospital_registration and settings.auth_provider == "demo",
             "hospital_nodes": settings.hospital_nodes,
             "ml_backend": configured_backend(),
             "database": "sqlite" if settings.is_sqlite else "postgresql",
@@ -146,6 +151,7 @@ def build_context(settings: Settings) -> AppContext:
         alerts=AlertService(db, audit, surveillance),
         situation=SituationService(db, audit, surveillance, ensemble, settings.app_version),
         planning=PlanningService(db, audit, surveillance, ensemble),
+        registrations=RegistrationService(db, audit, auth, hospitals),
     )
 
 

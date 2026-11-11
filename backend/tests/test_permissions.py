@@ -46,6 +46,8 @@ REQUESTS = {
         {"admission_rate": 0.2, "icu_share": 0.05, "length_of_stay_days": 4},
     ),
     "users_manage": ("get", "/api/users", None),
+    "registrations_manage": ("get", "/api/registrations", None),
+    "node_token_issue": ("post", "/api/my-hospital/node-token", None),
 }
 
 

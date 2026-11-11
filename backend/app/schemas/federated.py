@@ -67,6 +67,13 @@ class HeartbeatRequest(BaseModel):
     data_summary: Dict[str, Any] = Field(default_factory=dict)
 
 
+class DataCheckReport(BaseModel):
+    """Per modality: passed, train_records, val_records, label_counts, problems. Counts and notes only."""
+
+    hospital_id: str
+    modalities: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+
+
 class HeartbeatAccepted(BaseModel):
     hospital_id: str
     received_at: str

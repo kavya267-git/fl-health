@@ -24,6 +24,7 @@ from app.routers import (
     my_hospital,
     officer,
     planning,
+    registrations,
     system,
     users,
 )
@@ -97,7 +98,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         logger.exception("Unhandled error on %s %s", request.method, request.url.path)
         return JSONResponse(status_code=500, content={"detail": "The server hit an unexpected error."})
 
-    for module in (system, auth, users, hospitals, my_hospital, federated, models, analytics, audit, officer, planning):
+    for module in (
+        system, auth, users, hospitals, my_hospital, federated, models, analytics, audit, officer, planning, registrations
+    ):
         app.include_router(module.router)
 
     @app.get("/", include_in_schema=False)

@@ -64,6 +64,11 @@ PERMISSIONS: Dict[str, tuple] = {
     "capacity_write": (("hospital_manager",), "POST /api/planning/capacity"),
     "assumptions_write": (("admin",), "POST /api/planning/assumptions/{disease}"),
     "users_manage": (("admin",), "GET /api/users, POST /api/users/{id}/role"),
+    "registrations_manage": (
+        ("admin",),
+        "GET /api/registrations, /registrations/pending-count, POST /registrations/{id}/approve, /reject, /revoke",
+    ),
+    "node_token_issue": (("hospital",), "POST /api/my-hospital/node-token"),
 }
 
 #: Roles that may read the audit log (the /api/audit endpoints and the dashboard's recent activity).

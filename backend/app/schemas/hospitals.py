@@ -93,6 +93,8 @@ class MyHospital(BaseModel):
     hospital: Hospital
     metrics: HospitalMetrics
     latest_round: Optional[MyRound] = None
+    #: The "Connect your hospital" panel: token (issued / when, never the token), node, data check, invitations.
+    connection: Optional[Dict[str, Any]] = None
 
 
 class AvailabilityRequest(BaseModel):

@@ -48,9 +48,13 @@ summary are cut to those regions, and a forecast for any other region gets 403.
 | `capacity_write` | POST /api/planning/capacity | - | - | - | - | own | - | - |
 | `assumptions_write` | POST /api/planning/assumptions/{disease} | yes | - | - | - | - | - | - |
 | `users_manage` | GET /api/users, POST /api/users/{id}/role | yes | - | - | - | - | - | - |
+| `registrations_manage` | GET /api/registrations, /registrations/pending-count, POST /registrations/{id}/approve, /reject, /revoke | yes | - | - | - | - | - | - |
+| `node_token_issue` | POST /api/my-hospital/node-token | - | - | - | own | - | - | - |
 
 These need no role:
-- **Anyone:** `GET /api/health`, `GET /api/system/config` and sign-in.
+- **Anyone:** `GET /api/health`, `GET /api/system/config`, sign-in, and the hospital registration form
+  (`GET /api/registrations/regions`, `POST /api/registrations`, rate-limited per address). A registration is
+  visible only to administrators; its operator account stays disabled until an administrator approves it.
 - **Any signed-in user:** `GET /api/auth/me`.
 - **Hospital node endpoints:** these use the node's own token, not a user role.
 

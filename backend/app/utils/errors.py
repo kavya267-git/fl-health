@@ -31,6 +31,10 @@ class AuthenticationFailed(ServiceError):
     status_code = 401
 
 
+class RateLimited(ServiceError):
+    status_code = 429
+
+
 class UnavailableError(ServiceError):
     """A dependency (dataset, model, configuration) is not available."""
 

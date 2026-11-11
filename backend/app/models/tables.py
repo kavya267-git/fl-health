@@ -23,6 +23,9 @@ TABLES: Dict[str, List[Column]] = {
         ("last_login_at", "timestamp", ""),
         # Health officers: the region ids they may see (JSON list). Empty for every other role.
         ("jurisdiction", "json", ""),
+        # True for an account that may not sign in: a hospital operator whose registration is pending,
+        # rejected or revoked. NULL / false = active.
+        ("disabled", "boolean", ""),
     ],
     # Passwords of accounts created through the sign-up form (demo provider only).
     # With Supabase configured, credentials live in Supabase Auth and this stays empty.
@@ -41,6 +44,38 @@ TABLES: Dict[str, List[Column]] = {
         ("is_simulated", "boolean", "NOT NULL"),
         ("last_activity_at", "timestamp", ""),
         ("created_at", "timestamp", "NOT NULL"),
+        # Hospitals that registered through the public form (kind "registered"): the region they chose, the
+        # modalities they declared, and the node's latest local data check (pass / fail and counts only).
+        ("region_id", "text", ""),
+        ("declared_modalities", "json", ""),
+        ("data_check", "json", ""),
+    ],
+    # Requests from the public "Register your hospital" form. Organisation and contact details only:
+    # no patient-level field, ever (see analytics/privacy/validation.py).
+    "hospital_registrations": [
+        ("id", "text", "PRIMARY KEY"),
+        ("hospital_name", "text", "NOT NULL"),
+        ("region_id", "text", "NOT NULL"),
+        ("contact_name", "text", "NOT NULL"),
+        ("contact_email", "text", "NOT NULL"),
+        ("modalities", "json", "NOT NULL"),
+        ("approx_record_counts", "json", "NOT NULL"),
+        ("status", "text", "NOT NULL"),
+        ("user_id", "text", "NOT NULL"),
+        ("hospital_id", "text", ""),
+        ("reviewed_by", "text", ""),
+        ("reviewed_at", "timestamp", ""),
+        ("reason", "text", ""),
+        ("created_at", "timestamp", "NOT NULL"),
+    ],
+    # Node tokens for registered hospitals: only a SHA-256 of the token is stored; the token itself is shown
+    # once. hospital_a-d keep their HMAC tokens derived from NODE_TOKEN_SECRET and have no row here.
+    "node_tokens": [
+        ("hospital_id", "text", "PRIMARY KEY"),
+        ("token_hash", "text", "NOT NULL"),
+        ("created_by", "text", "NOT NULL"),
+        ("created_at", "timestamp", "NOT NULL"),
+        ("revoked_at", "timestamp", ""),
     ],
     "fl_rounds": [
         ("id", "text", "PRIMARY KEY"),
@@ -261,6 +296,7 @@ INDEXES = {
     "training_metrics": [("round_id",), ("modality", "scope")],
     "model_updates": [("round_id",)],
     "audit_logs": [("timestamp",), ("action",)],
+    "hospital_registrations": [("status",)],
     "surveillance_reports": [("disease", "week_start")],
 }
 
