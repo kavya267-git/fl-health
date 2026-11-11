@@ -168,20 +168,23 @@ export default function RegisterHospital() {
                   const on = kinds[kind.id] !== undefined
                   return (
                     <div key={kind.id} className="flex flex-wrap items-center gap-3">
-                      <label className="flex w-44 items-center gap-2 text-sm text-ink">
-                        <input type="checkbox" className="h-4 w-4 accent-[#24489a]" checked={on} onChange={() => toggleKind(kind.id)} />
-                        {kind.label} <span className="text-xs text-muted">({kind.hint})</span>
+                      <label className="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink sm:flex-none sm:basis-64">
+                        <input type="checkbox" className="h-4 w-4 shrink-0 accent-[#24489a]" checked={on} onChange={() => toggleKind(kind.id)} />
+                        <span className="whitespace-nowrap font-medium">{kind.label}</span>
+                        <span className="truncate text-xs text-muted">{kind.hint}</span>
                       </label>
                       {on ? (
-                        <input
-                          aria-label={`Approximate number of ${kind.label} records`}
-                          type="number"
-                          min={1}
-                          placeholder="Approx. records"
-                          className={`${inputClass} w-44`}
-                          value={kinds[kind.id]}
-                          onChange={(e) => setKinds((k) => ({ ...k, [kind.id]: e.target.value }))}
-                        />
+                        <div className="w-40">
+                          <input
+                            aria-label={`Approximate number of ${kind.label} records`}
+                            type="number"
+                            min={1}
+                            placeholder="Approx. records"
+                            className={inputClass}
+                            value={kinds[kind.id]}
+                            onChange={(e) => setKinds((k) => ({ ...k, [kind.id]: e.target.value }))}
+                          />
+                        </div>
                       ) : null}
                     </div>
                   )

@@ -53,7 +53,23 @@ coordinator or admin.
 | GET | `/api/hospitals/{id}/metrics` | Local training and validation metrics per round, and the global model's metrics on this hospital's data. 403 for a hospital operator asking about another hospital |
 | POST ✎ | `/api/hospitals/{id}/availability` | `{online: bool}` - take a node offline or bring it back (in-process nodes only) |
 | POST | `/api/hospitals/{id}/participation` | `{participating: bool}`: "Take part in future rounds". Allowed for that hospital's operator, a coordinator or an administrator. Off: the hospital is not invited, and its node declines rounds it was already invited to. Audited as `HOSPITAL_PARTICIPATION_CHANGED` |
-| GET | `/api/my-hospital` | Hospital operators only: their hospital (with node status), its metrics, and its latest round seen from its side (own status, update size, local and global F1 on its held-out data) |
+| GET | `/api/my-hospital` | Hospital operators only: their hospital (with node status), its metrics, and its latest round seen from its side (own status, update size, local and global F1 on its held-out data). `connection`: for a registered hospital, the token's creation time (never the token), the node, the local data check per modality, the invited modalities and the step (`NOT_CONNECTED`, `CONNECTED`, `DATA_CHECKED`, `INVITED`) |
+| POST | `/api/my-hospital/node-token` | The operator of a registered hospital: a new node token, returned once (only its SHA-256 is stored). Revokes the previous token. 409 for the built-in hospitals A-D. Audited as `NODE_TOKEN_ISSUED` |
+| GET | `/api/my-hospital/data-template.zip` | Column lists, ranges, made-up example rows and folder layout for the agent. No real data |
+
+## Hospital registration
+
+See docs/hospital-onboarding.md.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/registrations/regions` | Public: region ids and names for the form |
+| POST | `/api/registrations` | Public, no sign-in: `{hospital_name, region_id, contact_name, contact_email, password, password_confirm, modalities, approx_record_counts, confirm_no_patient_data}`. Unknown fields are refused (no uploads). 201 with `{id, status: PENDING}`; the operator account is created disabled. 422 for invalid input, 409 for a used email or a pending/approved name, 429 when rate-limited |
+| GET | `/api/registrations?status=` | Administrators: the requests (`PENDING`, `APPROVED`, `REJECTED`, `REVOKED`) |
+| GET | `/api/registrations/pending-count` | Administrators: `{pending}` for the nav badge |
+| POST | `/api/registrations/{id}/approve` | Administrators: create `hospital_<slug>` in the chosen region and enable its operator |
+| POST | `/api/registrations/{id}/reject` | Administrators: `{reason}`; the account stays disabled |
+| POST | `/api/registrations/{id}/revoke` | Administrators: `{reason}`; disables the account and revokes the node token at once |
 
 ## Federated learning
 
@@ -123,6 +139,9 @@ Participant statuses: `INVITED`, `JOINED`, `TRAINING`, `UPDATE_SUBMITTED`, `UPDA
 | --- | --- | --- |
 | POST | `/api/federated/node/heartbeat` | `{hospital_id, hostname, ml_backend, device, software_version, architectures, data_summary}`, sent every ~10 s. `data_summary` is reduced to counts and source names. The hospital is online while these arrive |
 | GET | `/api/federated/node/rounds?hospital_id=` | Open rounds this hospital is invited to and has not joined |
+| GET | `/api/federated/node/whoami` | The registered hospital this token belongs to (id, name, declared modalities, region). 403 for an unknown or revoked token |
+| GET | `/api/federated/node/profile?hospital_id=` | The hospital's name and declared modalities |
+| POST | `/api/federated/node/data-check` | `{hospital_id, modalities: {<modality>: {passed, train_records, val_records, label_counts, problems}}}`: the node's LOCAL data check. Only these fields are kept, and only for declared modalities. A registered hospital is invited only to modalities it declared and whose check passed |
 | POST | `/api/federated/rounds/{id}/participate` | `{hospital_id, data_summary}` - join; returns the training configuration. `data_summary` is reduced to counts and source names |
 | GET | `/api/federated/rounds/{id}/global-model?hospital_id=&which=base\|result` | Weights as an `.npz` archive (binary): the round's base model, or the aggregate for evaluation |
 | POST | `/api/federated/rounds/{id}/updates` | Multipart: `hospital_id`, `num_samples`, `metrics` (JSON), `dp_report` (JSON), `architecture_signature`, file `weights` (`.npz`). 422 with the reason if the update is rejected |
