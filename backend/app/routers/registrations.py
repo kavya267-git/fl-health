@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from app.routers.deps import get_ctx, permitted
+from app.routers.deps import client_key, get_ctx, permitted
 from app.services.context import AppContext
 
 router = APIRouter(prefix="/api/registrations", tags=["hospital registration"])
@@ -31,16 +31,6 @@ class RegistrationRequest(BaseModel):
 
 class ReasonRequest(BaseModel):
     reason: str = Field(max_length=500)
-
-
-def client_key(request: Request, ctx: AppContext) -> str:
-    """The client's address for rate limiting. Behind a trusted proxy (TRUST_PROXY_HEADERS), the first
-    X-Forwarded-For entry; otherwise the socket peer."""
-    if ctx.settings.trust_proxy_headers:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        if forwarded:
-            return forwarded[:64]
-    return request.client.host if request.client else "unknown"
 
 
 @router.get("/regions")

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
-from app.routers.deps import current_user, get_ctx
+from app.routers.deps import client_key, current_user, get_ctx
 from app.schemas.auth import DemoLoginRequest, LoginResponse, RegisterRequest, SessionResponse, User
 from app.services.context import AppContext
 
@@ -27,12 +27,12 @@ def record_session(user: Dict[str, Any] = Depends(current_user), ctx: AppContext
 
 
 @router.post("/demo-login", response_model=LoginResponse)
-def demo_login(body: DemoLoginRequest, ctx: AppContext = Depends(get_ctx)):
+def demo_login(body: DemoLoginRequest, request: Request, ctx: AppContext = Depends(get_ctx)):
     """Sign in with a built-in demo account or one created through sign-up.
 
-    Only available when Supabase is not configured.
+    Only available when Supabase is not configured. Rate-limited per client address and per account (429).
     """
-    return ctx.auth.demo_login(body.email, body.password)
+    return ctx.auth.demo_login(body.email, body.password, client_key(request, ctx))
 
 
 @router.post("/register", response_model=LoginResponse)

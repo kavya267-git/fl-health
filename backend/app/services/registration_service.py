@@ -20,17 +20,15 @@ Every step is written to the hash-chained audit log. Registrations are visible t
 from __future__ import annotations
 
 import re
-import threading
-import time
 import uuid
-from collections import defaultdict, deque
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.database import Database
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 from app.services.hospital_service import HospitalService
-from app.utils.errors import ConflictError, NotFoundError, RateLimited, ValidationFailed
+from app.services.rate_limit import RateLimiter
+from app.utils.errors import ConflictError, NotFoundError, ValidationFailed
 from app.utils.time import utc_now_iso
 from ml.common.types import MODALITIES
 
@@ -42,34 +40,6 @@ _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _SLUG_CHARS = re.compile(r"[^a-z0-9]+")
 #: hospital_a .. hospital_d are the built-in (simulated) hospitals; a registration never takes their ids.
 RESERVED_IDS = {f"hospital_{letter}" for letter in "abcd"}
-
-
-class RateLimiter:
-    """Sliding-window limit per key, plus a global cap so changing IP addresses cannot flood the queue."""
-
-    def __init__(self, per_key: int, global_limit: int, window_seconds: float, clock=time.monotonic):
-        self.per_key = per_key
-        self.global_limit = global_limit
-        self.window = window_seconds
-        self._clock = clock
-        self._hits: Dict[str, Deque[float]] = defaultdict(deque)
-        self._all: Deque[float] = deque()
-        self._lock = threading.Lock()
-
-    def _trim(self, hits: Deque[float], now: float) -> None:
-        while hits and now - hits[0] >= self.window:
-            hits.popleft()
-
-    def check(self, key: str) -> None:
-        with self._lock:
-            now = self._clock()
-            hits = self._hits[key]
-            self._trim(hits, now)
-            self._trim(self._all, now)
-            if len(hits) >= self.per_key or len(self._all) >= self.global_limit:
-                raise RateLimited("Too many registration requests. Try again in an hour.")
-            hits.append(now)
-            self._all.append(now)
 
 
 def _clean_text(value: Any, field: str, max_length: int, min_length: int = 2) -> str:
@@ -102,7 +72,9 @@ class RegistrationService:
         self.audit = audit
         self.auth = auth
         self.hospitals = hospitals
-        self.limiter = RateLimiter(per_ip_per_hour, global_per_hour, 3600.0)
+        self.limiter = RateLimiter(
+            per_ip_per_hour, 3600.0, global_per_hour, message="Too many registration requests. Try again in an hour."
+        )
 
     # --------------------------------------------------------------- public
     def regions(self) -> List[Dict[str, str]]:

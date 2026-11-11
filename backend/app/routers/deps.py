@@ -16,6 +16,16 @@ def get_ctx(request: Request) -> AppContext:
     return request.app.state.ctx
 
 
+def client_key(request: Request, ctx: AppContext) -> str:
+    """The client's address, for rate limits. Behind a trusted proxy or tunnel (TRUST_PROXY_HEADERS), the first
+    X-Forwarded-For entry; otherwise the socket peer."""
+    if ctx.settings.trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded[:64]
+    return request.client.host if request.client else "unknown"
+
+
 def bearer_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")

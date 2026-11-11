@@ -43,6 +43,7 @@ from app.services.permissions import (  # noqa: E402 - re-exported for existing 
     ROLE_LABELS,
     ROLES,
 )
+from app.services.rate_limit import RateLimiter
 from app.utils.errors import (
     AuthenticationFailed,
     ConflictError,
@@ -199,6 +200,10 @@ class AuthService:
         self.db = db
         self.audit = audit
         self.settings = settings
+        #: Sign-in limits: attempts per client address, and failed attempts per account (same message either way,
+        #: so the limit does not reveal which emails have accounts).
+        self.login_attempts = RateLimiter(30, 600.0, message="Too many sign-in attempts. Wait a few minutes and try again.")
+        self.login_failures = RateLimiter(10, 900.0, message="Too many sign-in attempts. Wait a few minutes and try again.")
         if settings.auth_provider == "supabase":
             self.provider = SupabaseAuthProvider(settings.supabase_url, settings.supabase_service_role_key)
         else:
@@ -264,14 +269,17 @@ class AuthService:
                 )
             raise AuthenticationFailed("This account is not active. Contact the platform's administrator.")
 
-    def demo_login(self, email: str, password: str) -> Dict[str, Any]:
+    def demo_login(self, email: str, password: str, client: str = "unknown") -> Dict[str, Any]:
         """Sign in with a built-in demo account or an account created through sign-up."""
         if not isinstance(self.provider, DemoAuthProvider):
             raise PermissionDenied("Demo sign-in is disabled because Supabase authentication is configured.")
         email = email.strip().lower()
+        self.login_attempts.check(client)
+        self.login_failures.ensure_open(email)
         try:
             account = self._check_password(email, password)
         except AuthenticationFailed:
+            self.login_failures.record(email)
             self.audit.record("USER_LOGIN", email[:120] or "unknown", status="FAILED", details={"provider": "demo"})
             raise
         tokens = self.provider.issue(account["id"], account["email"])

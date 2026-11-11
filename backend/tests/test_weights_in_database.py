@@ -2,9 +2,8 @@
 
 import shutil
 
-from backend_test_helpers import run_round
-
 from app.services.context import bootstrap, build_context
+from backend_test_helpers import run_round
 
 
 def test_rounds_work_and_weights_survive_losing_the_model_folder(settings):

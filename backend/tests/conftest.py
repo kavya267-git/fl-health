@@ -18,7 +18,6 @@ from app.main import create_app  # noqa: E402
 from app.services.context import bootstrap, build_context  # noqa: E402
 from backend_test_helpers import DEMO_PASSWORD, login  # noqa: E402
 
-
 #: Run the suite against PostgreSQL instead of SQLite: TEST_DATABASE_URL=postgresql://... (a throwaway database:
 #: every test starts by emptying its public schema).
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "").strip()
