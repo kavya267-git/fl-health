@@ -1,3 +1,6 @@
-"""Build-time defaults. build_agent.py rewrites DEFAULT_SERVER with the deployed API address."""
+"""The API address pre-filled in the agent's window (the operator can change it).
 
-DEFAULT_SERVER = "http://localhost:8000"
+build_agent.py --server overrides it for one build without changing this file.
+"""
+
+DEFAULT_SERVER = "https://kavya.tailb4424b.ts.net"

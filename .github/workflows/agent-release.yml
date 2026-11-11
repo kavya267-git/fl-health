@@ -1,7 +1,8 @@
 # Builds the MediFed Hospital Agent for Windows when a tag "agent-v*" is pushed, and attaches
 # MediFed-Hospital-Agent-Windows.zip to a GitHub Release for that tag.
-# The API address pre-filled in the agent comes from the repository variable MEDIFED_API_URL
-# (Settings > Secrets and variables > Actions > Variables). It is an address, not a secret.
+# The API address pre-filled in the agent is DEFAULT_SERVER in hospital_agent/medifed_agent/defaults.py.
+# The repository variable MEDIFED_API_URL (Settings > Secrets and variables > Actions > Variables), if set,
+# overrides it. It is an address, not a secret.
 name: Hospital agent release
 
 on:
@@ -30,8 +31,8 @@ jobs:
         env:
           MEDIFED_API_URL: ${{ vars.MEDIFED_API_URL }}
         run: |
-          $server = if ($env:MEDIFED_API_URL) { $env:MEDIFED_API_URL } else { "http://localhost:8000" }
-          python hospital_agent/build_agent.py --server $server
+          if ($env:MEDIFED_API_URL) { python hospital_agent/build_agent.py --server $env:MEDIFED_API_URL }
+          else { python hospital_agent/build_agent.py }
 
       - name: Smoke test the headless program
         run: |

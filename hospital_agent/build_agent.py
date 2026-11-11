@@ -1,8 +1,9 @@
 """Build the Windows agent: a one-folder PyInstaller build, zipped as MediFed-Hospital-Agent-Windows.zip.
 
-    python hospital_agent/build_agent.py --server https://<your-api>     # in a venv with hospital_agent/requirements.txt
+    python hospital_agent/build_agent.py [--server https://<your-api>]    # in a venv with hospital_agent/requirements.txt
 
-The --server value is pre-filled in the agent's window (the operator can change it). The build writes into
+The address pre-filled in the agent's window is DEFAULT_SERVER in medifed_agent/defaults.py; --server overrides it
+for this build only. The operator can still change it in the window. The build writes into
 hospital_agent/dist/ and hospital_agent/build/ (git-ignored).
 """
 
@@ -23,16 +24,17 @@ ZIP_NAME = "MediFed-Hospital-Agent-Windows.zip"
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--server", default="http://localhost:8000", help="API address pre-filled in the window")
+    parser.add_argument("--server", default=None, help="API address pre-filled in the window (default: defaults.py)")
     args = parser.parse_args()
 
     defaults = HERE / "medifed_agent" / "defaults.py"
     original = defaults.read_text(encoding="utf-8")
-    defaults.write_text(
-        '"""Build-time defaults. build_agent.py rewrites DEFAULT_SERVER with the deployed API address."""\n\n'
-        f'DEFAULT_SERVER = "{args.server.rstrip("/")}"\n',
-        encoding="utf-8",
-    )
+    if args.server:
+        defaults.write_text(
+            '"""Build-time defaults, written by build_agent.py --server for this build."""\n\n'
+            f'DEFAULT_SERVER = "{args.server.rstrip("/")}"\n',
+            encoding="utf-8",
+        )
     started = time.time()
     try:
         subprocess.run(
