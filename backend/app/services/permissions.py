@@ -58,10 +58,10 @@ PERMISSIONS: Dict[str, tuple] = {
     "alerts_read": (("admin", "coordinator", "health_officer"), "GET /api/alerts"),
     "alerts_manage": (("admin", "health_officer"), "POST /api/alerts/{id}/acknowledge, /{id}/outcome"),
     "planning_read": (
-        ("admin", "hospital_manager"),
+        ("admin", "hospital_manager", "hospital"),
         "GET /api/planning, /api/planning/capacity/history, /api/planning/assumptions",
     ),
-    "capacity_write": (("hospital_manager",), "POST /api/planning/capacity"),
+    "capacity_write": (("hospital_manager", "hospital"), "POST /api/planning/capacity"),
     "assumptions_write": (("admin",), "POST /api/planning/assumptions/{disease}"),
     "users_manage": (("admin",), "GET /api/users, POST /api/users/{id}/role"),
     "registrations_manage": (
@@ -70,6 +70,11 @@ PERMISSIONS: Dict[str, tuple] = {
     ),
     "node_token_issue": (("hospital",), "POST /api/my-hospital/node-token"),
 }
+
+#: (permission, role) pairs that also require the user's hospital to be self-registered and approved (not revoked):
+#: the operator of a hospital that joined through "Register your hospital" plans for that hospital. Operators of the
+#: built-in hospitals A-D do not; their hospital managers do.
+SELF_REGISTERED_ONLY = {("planning_read", "hospital"), ("capacity_write", "hospital")}
 
 #: Roles that may read the audit log (the /api/audit endpoints and the dashboard's recent activity).
 AUDIT_READER_ROLES = PERMISSIONS["audit_read"][0]
@@ -84,6 +89,8 @@ def require_permission(user: Dict[str, Any], permission: str) -> None:
     if user.get("role") not in roles:
         label = ROLE_LABELS.get(user.get("role"), user.get("role"))
         raise PermissionDenied(f"Your role ({label}) does not have access to this.")
+    if (permission, user.get("role")) in SELF_REGISTERED_ONLY and not user.get("self_registered"):
+        raise PermissionDenied("Resource planning is for hospitals that registered through MediFed, and their managers.")
 
 
 def ensure_hospital_scope(user: Dict[str, Any], hospital_id: str) -> None:

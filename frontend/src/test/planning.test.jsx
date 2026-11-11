@@ -2,6 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { navItemsFor } from '../components/layout/navigation'
 import ResourcePlanning, { groupSentence } from '../pages/ResourcePlanning'
 import { api } from '../services/endpoints'
 
@@ -121,5 +122,30 @@ describe('resource planning page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(api.setCapacity).toHaveBeenCalledWith({ total_beds: 40, icu_beds: 4, occupancy_percent: 75 })
     expect(api.planning).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('self-registered hospitals', () => {
+  it('shows Resource planning only to operators of self-registered hospitals, and managers', () => {
+    const paths = (user) => navItemsFor(user).map((i) => i.to)
+    expect(paths({ role: 'hospital', hospital_id: 'hospital_kavya_test', self_registered: true })).toContain('/planning')
+    expect(paths({ role: 'hospital', hospital_id: 'hospital_a', self_registered: false })).not.toContain('/planning')
+    expect(paths({ role: 'hospital_manager', hospital_id: 'hospital_a' })).toContain('/planning')
+  })
+
+  it('gives a self-registered operator their own projection and the capacity form', async () => {
+    auth.user = { email: 'ops@testcity.example', role: 'hospital', hospital_id: 'hospital_test_city', self_registered: true }
+    api.planning.mockResolvedValue(plan({ hospital: { id: 'hospital_test_city', name: 'Test City Hospital' } }))
+    render(<ResourcePlanning />)
+    expect(await screen.findByText(/Weeks 2–4: if the rest of the hospital/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Total beds')).toBeInTheDocument()
+    expect(api.planning).toHaveBeenCalledWith()
+  })
+
+  it('tells an operator of a built-in hospital that planning is not available, without calling the API', () => {
+    auth.user = { email: 'hospital_a@fl-healthcare.demo', role: 'hospital', hospital_id: 'hospital_a', self_registered: false }
+    render(<ResourcePlanning />)
+    expect(screen.getByText(/operators of hospitals that registered through MediFed/)).toBeInTheDocument()
+    expect(api.planning).not.toHaveBeenCalled()
   })
 })

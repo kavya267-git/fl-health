@@ -34,6 +34,8 @@ class User(BaseModel):
     hospital_id: Optional[str] = None
     jurisdiction: Optional[List[str]] = None
     provider: str
+    #: A hospital operator whose hospital registered through the public form and is approved (not revoked).
+    self_registered: bool = False
 
 
 class LoginResponse(BaseModel):

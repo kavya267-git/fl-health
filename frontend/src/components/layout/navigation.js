@@ -53,5 +53,6 @@ export function navItemsFor(user) {
   )
   if (user?.role === 'hospital_manager') return [PLANNING, MY_HOSPITAL, ...items]
   if (user?.role === 'admin') return [...items.slice(0, -1), PLANNING, HOSPITAL_REQUESTS, items[items.length - 1]]
-  return isHospitalOperator(user) ? [MY_HOSPITAL, ...items] : items
+  if (isHospitalOperator(user)) return user?.self_registered ? [MY_HOSPITAL, PLANNING, ...items] : [MY_HOSPITAL, ...items]
+  return items
 }

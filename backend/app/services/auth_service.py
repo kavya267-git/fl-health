@@ -437,7 +437,18 @@ class AuthService:
             "hospital_id": user["hospital_id"],
             "jurisdiction": user.get("jurisdiction") or None,
             "provider": self.provider.name,
+            "self_registered": self._self_registered(user),
         }
+
+    def _self_registered(self, user: Dict[str, Any]) -> bool:
+        """An operator whose hospital joined through "Register your hospital" and is approved (not revoked)."""
+        if user["role"] != "hospital" or not user.get("hospital_id"):
+            return False
+        return self.db.fetch_one(
+            "SELECT r.id FROM hospital_registrations r JOIN hospitals h ON h.id = r.hospital_id "
+            "WHERE r.hospital_id = :h AND r.status = 'APPROVED' AND h.kind = 'registered'",
+            {"h": user["hospital_id"]},
+        ) is not None
 
     def record_login(self, user: Dict[str, Any]) -> None:
         self.db.update("users", {"last_login_at": utc_now_iso()}, {"id": user["id"]})

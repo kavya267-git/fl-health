@@ -374,8 +374,9 @@ function AdminPlanning() {
 
 export default function ResourcePlanning() {
   const { user } = useAuth()
-  const isManager = user?.role === 'hospital_manager'
-  const plan = useApi(() => api.planning(), [], { enabled: isManager })
+  // A hospital manager, or the operator of a hospital that registered itself, plans for their own hospital only.
+  const ownHospital = user?.role === 'hospital_manager' || (user?.role === 'hospital' && Boolean(user?.self_registered))
+  const plan = useApi(() => api.planning(), [], { enabled: ownHospital })
 
   return (
     <>
@@ -384,12 +385,14 @@ export default function ResourcePlanning() {
         description="How many beds the coming weeks may need, from the regional forecast and your hospital's share of cases. A planning estimate."
         actions={<Badge tone="brand">Planning estimate</Badge>}
       />
-      {isManager ? (
+      {ownHospital ? (
         <AsyncView state={plan} what="the resource plan">
           {(data) => <Projection plan={data} isManager onCapacitySaved={() => plan.reload({ silent: true })} />}
         </AsyncView>
-      ) : (
+      ) : user?.role === 'admin' ? (
         <AdminPlanning />
+      ) : (
+        <UnavailableState reason="Resource planning is for hospital managers, and for the operators of hospitals that registered through MediFed." />
       )}
     </>
   )

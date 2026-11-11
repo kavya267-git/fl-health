@@ -150,13 +150,23 @@ class PlanningService:
                 values[index] = float(row["case_count"])
         return series
 
+    def _registered_homes(self) -> Dict[str, str]:
+        """Self-registered hospitals that are approved (not revoked) -> the district chosen at registration."""
+        rows = self.db.fetch_all(
+            "SELECT h.id, h.region_id FROM hospitals h JOIN hospital_registrations r ON r.hospital_id = h.id "
+            "WHERE h.kind = 'registered' AND r.status = 'APPROVED' AND h.region_id IS NOT NULL"
+        )
+        return {row["id"]: row["region_id"] for row in rows}
+
     def _home_catchment(self, hospital_id: str, names: Dict[str, str]) -> Optional[Dict[str, Any]]:
-        """With configured home districts (DEMO_HOSPITAL_REGIONS): the hospital's catchment is its home district
-        only, split equally between the hospitals that share it. None = the share comes from the reports."""
-        home = self.home_regions.get(hospital_id)
+        """The hospital's catchment is its home district only, split equally between every active hospital with the
+        same home district. Home districts: DEMO_HOSPITAL_REGIONS for the built-in hospitals, the registration
+        district for a self-registered hospital (revoked ones drop out). None = the share comes from the reports."""
+        homes = {**self.home_regions, **self._registered_homes()}
+        home = homes.get(hospital_id)
         if home is None:
             return None
-        sharing = sum(1 for region in self.home_regions.values() if region == home)
+        sharing = sum(1 for region in homes.values() if region == home)
         return {"basis": "home_district", "region_id": home, "region_name": names.get(home, home), "share": 1.0 / sharing,
                 "hospitals_sharing": sharing}
 

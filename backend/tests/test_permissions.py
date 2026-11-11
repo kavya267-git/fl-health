@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.permissions import PERMISSIONS, ROLE_LABELS, ROLES
+from app.services.permissions import PERMISSIONS, ROLE_LABELS, ROLES, SELF_REGISTERED_ONLY
 from backend_test_helpers import login
 
 DOCS = Path(__file__).resolve().parents[2] / "docs" / "permissions.md"
@@ -74,7 +74,8 @@ def test_each_role_is_refused_exactly_where_the_table_says(client, as_role, perm
     allowed = PERMISSIONS[permission][0]
     for role in ROLES:
         response = getattr(client, method)(path, headers=as_role(role), **({"json": body} if body else {}))
-        if role in allowed:
+        # The "hospital" account here operates built-in hospital A, so self-registered-only access is refused.
+        if role in allowed and (permission, role) not in SELF_REGISTERED_ONLY:
             assert response.status_code != 403, (permission, role, response.text)
         else:
             assert response.status_code == 403, (permission, role, response.status_code)

@@ -24,7 +24,8 @@ their roles.
 ## Permissions
 
 `yes` = allowed. `-` = refused with 403. `own` = only for the user's own hospital; another hospital's id gets
-403. `jurisdiction` = only regions in the user's jurisdiction. Region lists, hotspot maps and the hotspot
+403. `self-registered` = only an operator whose hospital joined through "Register your hospital" and is approved
+(not revoked); the operators of the built-in hospitals A-D get 403. `jurisdiction` = only regions in the user's jurisdiction. Region lists, hotspot maps and the hotspot
 summary are cut to those regions, and a forecast for any other region gets 403.
 
 | Permission | Endpoints | Administrator | FL coordinator | Viewer | Hospital operator | Hospital manager | Health officer | Researcher |
@@ -44,8 +45,8 @@ summary are cut to those regions, and a forecast for any other region gets 403.
 | `situation_report` | GET /api/officer/situation, /situation.csv, /situation.pdf, /forecast-status | yes | yes | - | - | - | jurisdiction | - |
 | `alerts_read` | GET /api/alerts | yes | yes | - | - | - | jurisdiction | - |
 | `alerts_manage` | POST /api/alerts/{id}/acknowledge, /{id}/outcome | yes | - | - | - | - | jurisdiction | - |
-| `planning_read` | GET /api/planning, /api/planning/capacity/history, /api/planning/assumptions | yes | - | - | - | own | - | - |
-| `capacity_write` | POST /api/planning/capacity | - | - | - | - | own | - | - |
+| `planning_read` | GET /api/planning, /api/planning/capacity/history, /api/planning/assumptions | yes | - | - | own, self-registered | own | - | - |
+| `capacity_write` | POST /api/planning/capacity | - | - | - | own, self-registered | own | - | - |
 | `assumptions_write` | POST /api/planning/assumptions/{disease} | yes | - | - | - | - | - | - |
 | `users_manage` | GET /api/users, POST /api/users/{id}/role | yes | - | - | - | - | - | - |
 | `registrations_manage` | GET /api/registrations, /registrations/pending-count, POST /registrations/{id}/approve, /reject, /revoke | yes | - | - | - | - | - | - |
@@ -62,6 +63,10 @@ These need no role:
 
 - **Own hospital.** An operator or manager sees per-hospital round results only for their own hospital. The
   results of other hospitals in the same round are removed, and the global figures stay.
+- **Resource planning for a self-registered hospital.** Its operator enters that hospital's capacity and sees its
+  bed projection, never another hospital's. The catchment is the district chosen at registration, split equally
+  with every active hospital whose home district is the same (the built-in hospitals' home districts come from
+  `DEMO_HOSPITAL_REGIONS`); a revoked hospital drops out of the split and loses access.
 - **Jurisdiction.** Hotspot detection always runs on every region, so a region's status is the same whoever
   asks. The health officer's response is then cut to their regions. A region's list of flagged neighbours
   keeps only neighbours inside the jurisdiction.

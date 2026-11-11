@@ -240,3 +240,89 @@ def test_hospitals_sharing_a_home_district_split_it(settings):
         assert result["catchment"]["share"] == 0.5 and result["catchment"]["hospitals_sharing"] == 2
     finally:
         ctx.close()
+
+
+# ------------------------------------------------------------------ self-registered hospitals
+REGISTRATION = {
+    "hospital_name": "Test City Hospital",
+    "region_id": "R03",
+    "contact_name": "Asha Rao",
+    "contact_email": "ops@testcity.example",
+    "password": "city-hospital-pass",
+    "password_confirm": "city-hospital-pass",
+    "modalities": ["ecg"],
+    "approx_record_counts": {"ecg": 500},
+    "confirm_no_patient_data": True,
+}
+
+
+@pytest.fixture()
+def shared_district(settings):
+    """Hospital A's home district is R03; a self-registered hospital registers in R03 too."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    with TestClient(create_app(settings.model_copy(update={"demo_hospital_regions": {"hospital_a": "R03"}}))) as client:
+        receipt = client.post("/api/registrations", json=REGISTRATION)
+        admin = login(client, "admin@fl-healthcare.demo")
+        approved = client.post(f"/api/registrations/{receipt.json()['id']}/approve", headers=admin).json()
+        token = client.post(
+            "/api/auth/demo-login", json={"email": REGISTRATION["contact_email"], "password": REGISTRATION["password"]}
+        ).json()["access_token"]
+        store_forecast(client.app.state.ctx)
+        yield client, {"Authorization": f"Bearer {token}"}, approved["hospital_id"], receipt.json()["id"], admin
+
+
+def test_self_registered_operator_plans_for_its_own_hospital_only(shared_district):
+    client, operator, hospital_id, _, _ = shared_district
+    me = client.get("/api/auth/me", headers=operator).json()
+    assert me["role"] == "hospital" and me["self_registered"] is True
+
+    saved = client.post("/api/planning/capacity", headers=operator, json={"total_beds": 100, "icu_beds": 15, "occupancy_percent": 70})
+    assert saved.status_code == 200 and saved.json()["hospital_id"] == hospital_id
+    plan = client.get("/api/planning", headers=operator).json()
+    assert plan["hospital"]["id"] == hospital_id and plan["available"] is True
+    # Another hospital's id is refused, never served.
+    for path in ("/api/planning", "/api/planning/capacity/history"):
+        assert client.get(path, params={"hospital_id": "hospital_a"}, headers=operator).status_code == 403
+    assert client.get("/api/planning/capacity/history", headers=operator).json()[0]["hospital_id"] == hospital_id
+
+
+def test_a_shared_home_district_is_split_equally(shared_district):
+    client, operator, hospital_id, _, _ = shared_district
+    client.post("/api/planning/capacity", headers=operator, json={"total_beds": 100, "icu_beds": 15, "occupancy_percent": 70})
+    mine = client.get("/api/planning", headers=operator).json()
+    assert mine["catchment"] == {
+        "basis": "home_district", "region_id": "R03", "region_name": mine["catchment"]["region_name"], "share": 0.5,
+        "hospitals_sharing": 2,
+    }
+    assert all([(r["region_id"], r["share"]) for r in d["regions"]] == [("R03", 0.5)] for d in mine["diseases"])
+
+    manager = login(client, "manager_a@fl-healthcare.demo")
+    client.post("/api/planning/capacity", headers=manager, json={"total_beds": 140, "icu_beds": 24, "occupancy_percent": 75})
+    assert client.get("/api/planning", headers=manager).json()["catchment"]["share"] == 0.5
+
+
+def test_operators_of_built_in_hospitals_are_still_refused(shared_district):
+    client = shared_district[0]
+    operator_a = login(client, "hospital_a@fl-healthcare.demo")
+    assert client.get("/api/auth/me", headers=operator_a).json()["self_registered"] is False
+    assert client.get("/api/planning", headers=operator_a).status_code == 403
+    assert client.post(
+        "/api/planning/capacity", headers=operator_a, json={"total_beds": 10, "icu_beds": 1, "occupancy_percent": 50}
+    ).status_code == 403
+    manager = login(client, "manager_a@fl-healthcare.demo")  # the manager role is unchanged
+    assert client.get("/api/planning", headers=manager).status_code == 200
+
+
+def test_a_revoked_hospital_loses_access_and_drops_out_of_the_split(shared_district):
+    client, operator, _, registration_id, admin = shared_district
+    assert client.get("/api/planning", headers=operator).status_code == 200
+    revoked = client.post(f"/api/registrations/{registration_id}/revoke", headers=admin, json={"reason": "left the network"})
+    assert revoked.status_code == 200
+    assert client.get("/api/planning", headers=operator).status_code in (401, 403)
+
+    manager = login(client, "manager_a@fl-healthcare.demo")
+    client.post("/api/planning/capacity", headers=manager, json={"total_beds": 140, "icu_beds": 24, "occupancy_percent": 75})
+    assert client.get("/api/planning", headers=manager).json()["catchment"]["share"] == 1.0
